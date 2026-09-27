@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hotel Reservation and Guest Services Management System (HRGSMS)
+-- Hotel Reservation and Guest Services Management System
 -- SkyNest Hotels - Group 36 - CS3043 Database Systems
 -- ============================================================================
 -- This schema matches the team's approved ER Diagram (docs/ERD.png) exactly:
@@ -14,9 +14,10 @@
 -- "Password".
 -- ============================================================================
 
-DROP DATABASE IF EXISTS hrgsms;
-CREATE DATABASE hrgsms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE hrgsms;
+
+DROP DATABASE IF EXISTS SkyNest_Hotels;
+CREATE DATABASE SkyNest_Hotels CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE SkyNest_Hotels;
 
 SET FOREIGN_KEY_CHECKS = 0;
 

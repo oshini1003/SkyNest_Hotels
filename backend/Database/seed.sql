@@ -1,7 +1,7 @@
 -- ============================================================================
--- HRGSMS - Sample seed data
+-- SkyNest Hotels - Sample seed data
 -- ============================================================================
-USE hrgsms;
+USE SkyNest_Hotels;
 
 -- BRANCH
 INSERT INTO BRANCH (Name, Location, ContactNumber) VALUES
