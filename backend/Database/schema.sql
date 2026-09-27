@@ -1,29 +1,11 @@
--- ============================================================================
--- Hotel Reservation and Guest Services Management System
--- SkyNest Hotels - Group 36 - CS3043 Database Systems
--- ============================================================================
--- This schema matches the team's approved ER Diagram (docs/ERD.png) exactly:
---   BRANCH, ROOM_TYPE, AMENITY, ROOM_TYPE_AMENITY, ROOM, GUEST, GUEST_ACCOUNT,
---   STAFF, STAFF_ACCOUNT, BOOKING, BOOKED_ROOMS, SERVICE_CATALOGUE,
---   SERVICE_USAGE, BILL, PAYMENT
---
--- One deliberate deviation from the diagram: the "Password" column on
--- GUEST_ACCOUNT / STAFF_ACCOUNT is implemented as PasswordHash (bcrypt hash
--- only). Storing plaintext passwords was flagged as a security risk earlier
--- in review and is never acceptable, even though the diagram labels it
--- "Password".
--- ============================================================================
-
-
 DROP DATABASE IF EXISTS SkyNest_Hotels;
 CREATE DATABASE SkyNest_Hotels CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE SkyNest_Hotels;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ----------------------------------------------------------------------------
 -- BRANCH
--- ----------------------------------------------------------------------------
+
 CREATE TABLE BRANCH (
     BranchID        INT AUTO_INCREMENT PRIMARY KEY,
     Name            VARCHAR(100) NOT NULL,
@@ -31,9 +13,8 @@ CREATE TABLE BRANCH (
     ContactNumber   VARCHAR(20)  NOT NULL
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- ROOM_TYPE
--- ----------------------------------------------------------------------------
+
 CREATE TABLE ROOM_TYPE (
     RoomTypeID   INT AUTO_INCREMENT PRIMARY KEY,
     Name         VARCHAR(20)   NOT NULL,
@@ -41,9 +22,8 @@ CREATE TABLE ROOM_TYPE (
     DailyRate    DECIMAL(10,2) NOT NULL CHECK (DailyRate >= 0)
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
--- AMENITY  +  ROOM_TYPE_AMENITY (many-to-many junction)
--- ----------------------------------------------------------------------------
+-- AMENITY  +  ROOM_TYPE_AMENITY
+
 CREATE TABLE AMENITY (
     AmenityID    INT AUTO_INCREMENT PRIMARY KEY,
     AmenityName  VARCHAR(100) NOT NULL UNIQUE
@@ -57,9 +37,8 @@ CREATE TABLE ROOM_TYPE_AMENITY (
     FOREIGN KEY (AmenityID)  REFERENCES AMENITY(AmenityID)   ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- ROOM
--- ----------------------------------------------------------------------------
+
 CREATE TABLE ROOM (
     RoomID       INT AUTO_INCREMENT PRIMARY KEY,
     BranchID     INT NOT NULL,
@@ -71,9 +50,9 @@ CREATE TABLE ROOM (
     FOREIGN KEY (RoomTypeID) REFERENCES ROOM_TYPE(RoomTypeID)
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
--- GUEST  +  GUEST_ACCOUNT (1-to-1 login extension)
--- ----------------------------------------------------------------------------
+
+-- GUEST  +  GUEST_ACCOUNT
+
 CREATE TABLE GUEST (
     GuestID         INT AUTO_INCREMENT PRIMARY KEY,
     Name            VARCHAR(100) NOT NULL,
@@ -90,9 +69,8 @@ CREATE TABLE GUEST_ACCOUNT (
     FOREIGN KEY (GuestID) REFERENCES GUEST(GuestID) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- STAFF  +  STAFF_ACCOUNT (1-to-1 login extension)
--- ----------------------------------------------------------------------------
+
 CREATE TABLE STAFF (
     StaffID   INT AUTO_INCREMENT PRIMARY KEY,
     BranchID  INT NULL,   -- NULL allowed for Admin/Manager overseeing all branches
@@ -109,9 +87,8 @@ CREATE TABLE STAFF_ACCOUNT (
     FOREIGN KEY (StaffID) REFERENCES STAFF(StaffID) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- SERVICE_CATALOGUE
--- ----------------------------------------------------------------------------
+
 CREATE TABLE SERVICE_CATALOGUE (
     ServiceID     INT AUTO_INCREMENT PRIMARY KEY,
     ServiceName   VARCHAR(100)  NOT NULL,
@@ -120,9 +97,8 @@ CREATE TABLE SERVICE_CATALOGUE (
     IsActive      BOOLEAN       NOT NULL DEFAULT TRUE
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- BOOKING  (BookingStatus lives here; per-room stay dates live on BOOKED_ROOMS)
--- ----------------------------------------------------------------------------
+
 CREATE TABLE BOOKING (
     BookingID              INT AUTO_INCREMENT PRIMARY KEY,
     GuestID                INT NOT NULL,
@@ -135,10 +111,10 @@ CREATE TABLE BOOKING (
     FOREIGN KEY (StaffID) REFERENCES STAFF(StaffID)
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
+
 -- BOOKED_ROOMS  (bridge table: a booking can span multiple rooms; each row
 --                carries the actual stay window and headcount for that room)
--- ----------------------------------------------------------------------------
+
 CREATE TABLE BOOKED_ROOMS (
     BookedRoomID     INT AUTO_INCREMENT PRIMARY KEY,
     BookingID        INT NOT NULL,
@@ -151,9 +127,8 @@ CREATE TABLE BOOKED_ROOMS (
     FOREIGN KEY (RoomID)    REFERENCES ROOM(RoomID)
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- SERVICE_USAGE
--- ----------------------------------------------------------------------------
+
 CREATE TABLE SERVICE_USAGE (
     UsageID        INT AUTO_INCREMENT PRIMARY KEY,
     BookingID      INT NOT NULL,
@@ -165,9 +140,8 @@ CREATE TABLE SERVICE_USAGE (
     FOREIGN KEY (ServiceID) REFERENCES SERVICE_CATALOGUE(ServiceID)
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- BILL  (one immutable snapshot per booking, generated at checkout)
--- ----------------------------------------------------------------------------
+
 CREATE TABLE BILL (
     BillID          INT AUTO_INCREMENT PRIMARY KEY,
     BookingID       INT NOT NULL UNIQUE,
@@ -181,9 +155,8 @@ CREATE TABLE BILL (
     FOREIGN KEY (StaffID)   REFERENCES STAFF(StaffID)
 ) ENGINE=InnoDB;
 
--- ----------------------------------------------------------------------------
 -- PAYMENT
--- ----------------------------------------------------------------------------
+
 CREATE TABLE PAYMENT (
     PaymentID       INT AUTO_INCREMENT PRIMARY KEY,
     BookingID       INT NOT NULL,
@@ -198,9 +171,8 @@ CREATE TABLE PAYMENT (
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- ============================================================================
 -- INDEXES (support the SRS's most frequent queries)
--- ============================================================================
+
 CREATE INDEX idx_bookedrooms_room_dates ON BOOKED_ROOMS(RoomID, CheckInDateTime, CheckOutDateTime);
 CREATE INDEX idx_bookedrooms_booking    ON BOOKED_ROOMS(BookingID);
 CREATE INDEX idx_booking_status         ON BOOKING(BookingStatus);
@@ -211,13 +183,8 @@ CREATE INDEX idx_payment_booking        ON PAYMENT(BookingID);
 CREATE INDEX idx_payment_bill           ON PAYMENT(BillID);
 CREATE INDEX idx_payment_date           ON PAYMENT(PaymentDate);
 
--- ============================================================================
--- FUNCTIONS
--- ============================================================================
-DELIMITER //
-
--- Room charges for a booking = sum over its booked rooms of
 -- (nights stayed in that room x that room type's daily rate)
+
 CREATE FUNCTION fn_calculate_room_charges(p_booking_id INT)
 RETURNS DECIMAL(10,2) DETERMINISTIC READS SQL DATA
 BEGIN
@@ -262,9 +229,8 @@ END //
 
 DELIMITER ;
 
--- ============================================================================
--- TRIGGERS
--- ============================================================================
+--Triggers
+
 DELIMITER //
 
 -- Prevent overlapping bookings for the same room (checked on BOOKED_ROOMS
@@ -346,9 +312,8 @@ END //
 
 DELIMITER ;
 
--- ============================================================================
 -- PROCEDURES
--- ============================================================================
+
 DELIMITER //
 
 -- Make a booking for one room (call once per room for multi-room bookings)
@@ -405,15 +370,7 @@ proc_body: BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only a Booked reservation can be checked in.';
     END IF;
 
-    -- NOTE: CheckInDateTime/CheckOutDateTime on BOOKED_ROOMS are the
-    -- *reserved* stay window set when the booking was made, and billing is
-    -- always based on that window. They are deliberately NOT overwritten
-    -- with NOW() here: doing so would let the room charge shrink or grow
-    -- just because staff processed the check-in a little early or late,
-    -- and (worse) recomputing it again at checkout time could let an
-    -- unpaid balance slip through if checkout is retried later than the
-    -- original checkout time. Actual arrival is recorded by this status
-    -- transition itself (BOOKING.BookingStatus + row update timestamp).
+    -- Update the booking status to Checked-In
     UPDATE BOOKING SET BookingStatus = 'Checked-In' WHERE BookingID = p_booking_id;
     -- trg_room_status_sync marks the room(s) Occupied
 
@@ -515,10 +472,7 @@ proc_body: BEGIN
     COMMIT;
 END //
 
--- Record a payment against a booking's bill (full or partial). BillID is
--- looked up internally (BILL.BookingID is unique) so the caller only needs
--- the BookingID - this keeps BookingID and BillID from ever drifting apart
--- on the PAYMENT row.
+
 CREATE PROCEDURE sp_process_payment(
     IN p_booking_id INT,
     IN p_amount DECIMAL(10,2),
