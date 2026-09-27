@@ -9,6 +9,8 @@ import {
 } from "react-router";
 import GuestLogin from "./pages/GuestLogin";
 import GuestRegister from "./pages/GuestRegister";
+import RoomSearch from "./pages/RoomSearch";
+import ServiceCatalogue from "./pages/ServiceCatalogue";
 import {
   readGuestSession,
   saveGuestSession,
@@ -90,6 +92,7 @@ function handleLogout() {
                 Home
               </NavLink>
               <NavLink to="/branches">Branches</NavLink>
+              <NavLink to="/rooms">Rooms</NavLink>
               <NavLink to="/services">Services</NavLink>
 
               <NavLink to={session ? "/guest" : "/guest/login"}>
@@ -113,20 +116,8 @@ function handleLogout() {
               }
             />
 
-            <Route
-              path="/services"
-              element={
-                <ListingPage
-                  title="Guest services"
-                  items={[
-                    "Room service",
-                    "Spa treatments",
-                    "Laundry",
-                    "Minibar",
-                  ]}
-                />
-              }
-            />
+            <Route path="/services" element={<ServiceCatalogue />} />
+            
             <Route
               path="/guest/login"
               element={
@@ -170,6 +161,9 @@ function handleLogout() {
                 )
               }
             />
+
+            <Route path="/rooms" element={<RoomSearch />} />
+
 
             <Route path="*" element={<NotFound />} />
           </Routes>
