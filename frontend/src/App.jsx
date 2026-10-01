@@ -10,6 +10,7 @@ import {
 import GuestLogin from "./pages/GuestLogin";
 import GuestRegister from "./pages/GuestRegister";
 import RoomSearch from "./pages/RoomSearch";
+import MakeBooking from "./pages/MakeBooking"; 
 import ServiceCatalogue from "./pages/ServiceCatalogue";
 import {
   readGuestSession,
@@ -163,6 +164,7 @@ function handleLogout() {
             />
 
             <Route path="/rooms" element={<RoomSearch />} />
+            <Route path="/make-booking" element={<MakeBooking />} /> 
 
 
             <Route path="*" element={<NotFound />} />
