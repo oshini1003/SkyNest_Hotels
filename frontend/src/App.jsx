@@ -11,6 +11,20 @@ import GuestLogin from "./pages/GuestLogin";
 import GuestRegister from "./pages/GuestRegister";
 import RoomSearch from "./pages/RoomSearch";
 import ServiceCatalogue from "./pages/ServiceCatalogue";
+import GuestBookings from "./pages/GuestBookings";
+import { demoBookings } from "./data/demoBookings";
+import StaffLogin from "./pages/StaffLogin";
+import StaffHome from "./pages/StaffHome";
+import StaffBookings from "./pages/StaffBookings";
+import { demoStaffBookings } from "./data/demoStaffBookings";
+import ServiceUsagePreview from "./pages/ServiceUsagePreview";
+
+import {
+  readStaffSession,
+  saveStaffSession,
+  clearStaffSession,
+} from "./services/staffAuth";
+
 import {
   readGuestSession,
   saveGuestSession,
@@ -18,7 +32,7 @@ import {
 } from "./services/auth";
 import "./App.css";
 
-
+const showPreviews = import.meta.env.DEV;
 function Home() {
   return (
     <section className="hero">
@@ -67,6 +81,8 @@ function NotFound() {
 function App() {
 
 const [session, setSession] = useState(readGuestSession);
+const [staffSession, setStaffSession] =
+  useState(readStaffSession);
 
 function handleLogin(newSession) {
   saveGuestSession(newSession);
@@ -76,6 +92,16 @@ function handleLogin(newSession) {
 function handleLogout() {
   clearGuestSession();
   setSession(null);
+}
+
+function handleStaffLogin(newSession) {
+  saveStaffSession(newSession);
+  setStaffSession(newSession);
+}
+
+function handleStaffLogout() {
+  clearStaffSession();
+  setStaffSession(null);
 }
 
   return (
@@ -94,6 +120,11 @@ function handleLogout() {
               <NavLink to="/branches">Branches</NavLink>
               <NavLink to="/rooms">Rooms</NavLink>
               <NavLink to="/services">Services</NavLink>
+              {showPreviews && (
+                <NavLink to="/preview/bookings">
+                  Booking preview
+                </NavLink>
+              )}
 
               <NavLink to={session ? "/guest" : "/guest/login"}>
                 {session ? "My Account" : "Guest Login"}
@@ -117,7 +148,35 @@ function handleLogout() {
             />
 
             <Route path="/services" element={<ServiceCatalogue />} />
-            
+            {showPreviews && (
+              <>
+                <Route
+                  path="/preview/bookings"
+                  element={
+                    <GuestBookings
+                      bookings={demoBookings}
+                      isPreview={true}
+                    />
+                  }
+                />
+
+                <Route
+                  path="/preview/staff/bookings"
+                  element={
+                    <StaffBookings
+                      bookings={demoStaffBookings}
+                      isPreview={true}
+                    />
+                  }
+                />
+                
+                <Route
+                  path="/preview/staff/bookings/:bookingReference/services"
+                  element={<ServiceUsagePreview />}
+                />
+              </>
+            )}
+
             <Route
               path="/guest/login"
               element={
@@ -128,6 +187,7 @@ function handleLogout() {
                 )
               }
             />
+
 
             <Route
               path="/guest"
@@ -164,13 +224,54 @@ function handleLogout() {
 
             <Route path="/rooms" element={<RoomSearch />} />
 
+            <Route
+              path="/staff/login"
+              element={
+                staffSession ? (
+                  <Navigate to="/staff" replace />
+                ) : (
+                  <StaffLogin onLogin={handleStaffLogin} />
+                )
+              }
+            />
+
+            <Route
+              path="/staff"
+              element={
+                staffSession ? (
+                  <StaffHome
+                    staff={staffSession.staff}
+                    onLogout={handleStaffLogout}
+                  />
+                ) : (
+                  <Navigate to="/staff/login" replace />
+                )
+              }
+            />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
 
         <footer className="site-footer">
-          SkyNest Hotels · Colombo, Kandy and Galle
+          <p>
+            SkyNest Hotels · Colombo, Kandy and Galle
+          </p>
+
+          <div className="footer-links">
+            <Link className="staff-entry-link" to="/staff">
+              Staff access
+            </Link>
+
+            {showPreviews && (
+              <Link
+                className="staff-entry-link"
+                to="/preview/staff/bookings"
+              >
+                Staff booking preview
+              </Link>
+            )}
+          </div>
         </footer>
       </div>
     </BrowserRouter>
