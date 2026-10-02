@@ -1,41 +1,16 @@
-# HRGSMS Frontend
+# React + Vite
 
-Plain HTML/CSS/JS web client for SkyNest Hotels, served by a small Express
-static server (no build step / framework required).
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-## Setup
+Currently, two official plugins are available:
 
-```bash
-npm install
-cp .env.example .env
-npm start        # http://localhost:3000
-```
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-If your backend isn't running at `http://localhost:5000/api`, edit
-`public/js/config.js`:
+## React Compiler
 
-```js
-const HRGSMS_API_BASE = 'http://localhost:5000/api';
-```
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## Pages
+## Expanding the Oxlint configuration
 
-| Page | Who it's for |
-|---|---|
-| `index.html` | Landing page — choose guest or staff |
-| `guest-login.html` / `guest-register.html` | Guest authentication |
-| `guest-portal.html` | Search & book rooms, view bookings, request services, view bill |
-| `staff-login.html` | Staff authentication |
-| `staff-dashboard.html` | Front desk: find booking, check-in/out, log services, record payments |
-| `manager-dashboard.html` | Manager/Admin: reports, manage rooms/room types/services |
-
-## Structure
-
-```
-public/
-├── css/style.css     Shared design system
-├── js/config.js      Backend API base URL
-├── js/api.js         Fetch wrapper + auth/session helpers (localStorage-based)
-└── *.html            One file per page - no build step
-server.js             Express static file server
-```
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
