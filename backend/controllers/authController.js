@@ -100,7 +100,7 @@ const loginStaff = asyncHandler(async (req, res) => {
   });
 });
 
-// POST /api/auth/staff/register  (Admin only - see routes/authRoutes.js)
+// POST /api/auth/staff/register
 const registerStaff = asyncHandler(async (req, res) => {
   const { branchId, name, role, email, username, password } = req.body;
   const validRoles = ['Admin', 'Manager', 'Receptionist', 'ServiceStaff'];

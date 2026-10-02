@@ -1,10 +1,5 @@
 const jwt = require('jsonwebtoken');
 
-/**
- * Verifies the Bearer JWT on every protected request. Stateless by design -
- * no server-side session store - so multiple front desk terminals / guest
- * devices can authenticate concurrently without conflicting.
- */
 function authenticate(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -22,7 +17,6 @@ function authenticate(req, res, next) {
   }
 }
 
-/** Restricts a route to one or more staff roles, e.g. requireRole('Manager','Admin') */
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user || req.user.type !== 'staff' || !roles.includes(req.user.role)) {
