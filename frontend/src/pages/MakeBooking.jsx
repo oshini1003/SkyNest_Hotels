@@ -1,5 +1,55 @@
 import { useState } from "react";
+import { Link, useLocation } from "react-router";
+import { demoRooms } from "../data/demoRooms";
 
+const money = new Intl.NumberFormat("en-LK", {
+  style: "currency",
+  currency: "LKR",
+  currencyDisplay: "code",
+});
+
+function getPreviewStay(selection) {
+  if (!selection) return null;
+
+  const room = demoRooms.find((item) => item.id === selection.roomId);
+  const { checkin, checkout, guests } = selection;
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  if (
+    !room ||
+    typeof checkin !== "string" ||
+    typeof checkout !== "string" ||
+    !datePattern.test(checkin) ||
+    !datePattern.test(checkout)
+  ) {
+    return null;
+  }
+
+  const arrival = Date.parse(`${checkin}T00:00:00Z`);
+  const departure = Date.parse(`${checkout}T00:00:00Z`);
+  const nights = (departure - arrival) / 86400000;
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  if (
+    !Number.isInteger(nights) ||
+    nights < 1 ||
+    new Date(arrival).toISOString().slice(0, 10) !== checkin ||
+    new Date(departure).toISOString().slice(0, 10) !== checkout ||
+    checkin < today ||
+    !Number.isInteger(guests) ||
+    guests < 1 ||
+    guests > room.capacity
+  ) {
+    return null;
+  }
+
+  return { room, checkin, checkout, guests, nights };
+}
 
 const initialGuestData = {
   name: "",
@@ -11,11 +61,42 @@ const initialGuestData = {
 };
 
 export default function MakeBooking() {
+  const { state } = useLocation();
+  const stay = getPreviewStay(state?.stay);
+
+  if (!stay) {
+    return (
+      <section>
+        <h1>Select a room first</h1>
+        <p>Choose a sample room and valid stay dates to open the booking preview.</p>
+        <Link className="button" to="/rooms">Find a room</Link>
+      </section>
+    );
+  }
+
+  return (
+    <BookingPreviewForm
+      key={`${stay.room.id}:${stay.checkin}:${stay.checkout}:${stay.guests}`}
+      stay={stay}
+    />
+  );
+}
+
+function BookingPreviewForm({ stay }) {
   const [formData, setFormData] = useState(initialGuestData);
   const [bookingStatus, setBookingStatus] = useState("");
+  const [error, setError] = useState("");
 
   function handleChange(event) {
     const { name, value } = event.target;
+    setBookingStatus("");
+    setError("");
+
+    if (name === "contactNumber" && !/^\+?[0-9 -]*$/.test(value)) {
+      setError("Contact number can contain digits, spaces, hyphens, and an optional + at the start.");
+      return;
+    }
+
     setFormData((current) => ({
       ...current,
       [name]: value,
@@ -24,16 +105,46 @@ export default function MakeBooking() {
 
   function handleSubmit(event) {
     event.preventDefault();
-    // ඉස්සරහට Backend API එකට ඩේටා යවන්නේ මේ තැනින්
-    console.log("Booking Data Submitted: ", formData);
-    setBookingStatus("Booking successfully placed! (This is a preview)");
+    setBookingStatus("");
+    setError("");
+
+    if (!formData.name.trim() || !formData.idNumber.trim()) {
+      setError("Please complete all required fields.");
+      return;
+    }
+
+    const contactNumber = formData.contactNumber.trim().replace(/[ -]/g, "");
+    if (!/^\+?[0-9]{7,15}$/.test(contactNumber)) {
+      setError("Enter a contact number with 7–15 digits, for example 0712345678 or +94712345678.");
+      return;
+    }
+
+    setBookingStatus("Details checked for this preview. No booking has been created and no payment has been taken.");
   }
 
   return (
     <section aria-labelledby="make-booking-heading">
-      <p className="eyebrow">GUEST DETAILS</p>
-      <h2 id="make-booking-heading">Complete Your Booking</h2>
-      <p>Please enter your details to finalize the reservation.</p>
+      <p className="eyebrow">GUEST DETAILS PREVIEW</p>
+      <h1 id="make-booking-heading">Booking preview</h1>
+      <p className="room-demo-note">
+        Sample data only. This form does not save your details, reserve a room,
+        or take a payment. Use sample guest details while testing.
+      </p>
+
+      <h2>Your selected stay</h2>
+      <dl className="stay-details">
+        <div><dt>Branch</dt><dd>{stay.room.branch}</dd></div>
+        <div><dt>Room</dt><dd>{stay.room.number} · {stay.room.roomType}</dd></div>
+        <div><dt>Check-in</dt><dd>{stay.checkin}</dd></div>
+        <div><dt>Check-out</dt><dd>{stay.checkout}</dd></div>
+        <div><dt>Guests</dt><dd>{stay.guests}</dd></div>
+        <div><dt>Nights</dt><dd>{stay.nights}</dd></div>
+      </dl>
+      <p className="room-price">
+        Estimated room charge: {money.format(stay.room.pricePerNight * stay.nights)}
+      </p>
+      <p className="room-charge-note">Services and other charges are excluded.</p>
+      <p><Link to="/rooms">Choose another stay</Link></p>
 
       <form className="room-search-form" onSubmit={handleSubmit}>
         
@@ -44,6 +155,8 @@ export default function MakeBooking() {
             id="guest-name"
             name="name"
             type="text"
+            autoComplete="name"
+            maxLength={100}
             value={formData.name}
             onChange={handleChange}
             required
@@ -57,6 +170,8 @@ export default function MakeBooking() {
             id="guest-contact"
             name="contactNumber"
             type="tel"
+            autoComplete="tel"
+            maxLength={20}
             value={formData.contactNumber}
             onChange={handleChange}
             required
@@ -65,11 +180,13 @@ export default function MakeBooking() {
 
         {/* Email Field */}
         <div className="form-field">
-          <label htmlFor="guest-email">Email Address</label>
+          <label htmlFor="guest-email">Email Address (optional)</label>
           <input
             id="guest-email"
             name="email"
             type="email"
+            autoComplete="email"
+            maxLength={150}
             value={formData.email}
             onChange={handleChange}
           />
@@ -82,6 +199,7 @@ export default function MakeBooking() {
             id="guest-id"
             name="idNumber"
             type="text"
+            maxLength={30}
             value={formData.idNumber}
             onChange={handleChange}
             required
@@ -90,14 +208,15 @@ export default function MakeBooking() {
 
         {/* Address Field */}
         <div className="form-field">
-          <label htmlFor="guest-address">Address</label>
+          <label htmlFor="guest-address">Address (optional)</label>
           <textarea
             id="guest-address"
             name="address"
+            autoComplete="street-address"
+            maxLength={255}
             value={formData.address}
             onChange={handleChange}
             style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ccc" }}
-            required
           />
         </div>
 
@@ -116,8 +235,10 @@ export default function MakeBooking() {
           </select>
         </div>
 
+        {error && <p className="form-error" role="alert">{error}</p>}
+
         <button className="button" type="submit" style={{ marginTop: "1rem" }}>
-          Confirm Booking
+          Check preview details
         </button>
       </form>
 

@@ -366,9 +366,20 @@ function handleClearSelection() {
       <button
         className="button"
         type="button"
-        onClick={() => navigate("/make-booking")}
+        onClick={() =>
+          navigate("/make-booking", {
+            state: {
+              stay: {
+                roomId: selectedRoom.id,
+                checkin: result.checkin,
+                checkout: result.checkout,
+                guests: result.guests,
+              },
+            },
+          })
+        }
       >
-        Proceed to Book
+        Continue to booking preview
       </button>
     </div>
   </section>
