@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchGuestProfile, updateGuestProfile } from "../services/guestApi";
+import { changeGuestPassword } from "../services/passwordApi";
+import ChangePasswordForm from "./ChangePasswordForm";
 
 function ProfileAvatar({ name }) {
   const initials = (name || "G")
@@ -220,6 +222,8 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
             </form>
           </div>
         )}
+
+        <ChangePasswordForm onChangePassword={changeGuestPassword} />
       </div>
     </section>
   );

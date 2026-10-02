@@ -1239,3 +1239,70 @@
     width: 100%;
   }
 }
+
+/* Change Password Section */
+.change-password-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #deded5;
+}
+
+.change-password-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid #deded5;
+  border-radius: 8px;
+  background: #f7f8f6;
+  color: #163b35;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.change-password-toggle:hover {
+  border-color: #9caea5;
+  background: #eceee9;
+}
+
+.change-password-form {
+  display: grid;
+  gap: 16px;
+  max-width: 400px;
+  margin-top: 20px;
+  padding: 24px;
+  background: #f7f8f6;
+  border: 1px solid #eceee9;
+  border-radius: 10px;
+}
+
+.change-password-form .form-field input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #9caea5;
+  border-radius: 8px;
+  background: #fff;
+  color: #183831;
+  font: inherit;
+}
+
+.change-password-form .form-field input:focus {
+  border-color: #163b35;
+  outline: 3px solid rgba(22, 59, 53, 0.12);
+  outline-offset: 0;
+}
+
+.change-password-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.change-password-actions .button {
+  margin-top: 0;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
