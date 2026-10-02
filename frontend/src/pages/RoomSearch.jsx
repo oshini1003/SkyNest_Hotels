@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   demoBranches,
   demoRoomTypes,
@@ -29,6 +30,7 @@ function getLocalToday() {
 }
 
 export default function RoomSearch() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState(initialFilters);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -350,14 +352,25 @@ function handleClearSelection() {
     <p className="room-demo-note">
       Sample preview only. No room has been reserved.
     </p>
+    
 
-    <button
-      className="button"
-      type="button"
-      onClick={handleClearSelection}
-    >
-      Clear selection
-    </button>
+    <div style={{ display: "flex", gap: "10px", marginTop: "1rem" }}>
+      <button
+        className="button"
+        type="button"
+        onClick={handleClearSelection}
+      >
+        Clear selection
+      </button>
+
+      <button
+        className="button"
+        type="button"
+        onClick={() => navigate("/make-booking")}
+      >
+        Proceed to Book
+      </button>
+    </div>
   </section>
 )}
     </section>
