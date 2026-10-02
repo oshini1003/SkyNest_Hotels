@@ -17,7 +17,7 @@ CREATE TABLE BRANCH (
 
 CREATE TABLE ROOM_TYPE (
     RoomTypeID   INT AUTO_INCREMENT PRIMARY KEY,
-    Name         VARCHAR(20)   NOT NULL,
+    Name         VARCHAR(100)   NOT NULL,
     Capacity     INT           NOT NULL CHECK (Capacity > 0),
     DailyRate    DECIMAL(10,2) NOT NULL CHECK (DailyRate >= 0)
 ) ENGINE=InnoDB;
@@ -233,84 +233,6 @@ DELIMITER ;
 
 DELIMITER //
 
--- Prevent overlapping bookings for the same room (checked on BOOKED_ROOMS
--- itself, since per-room stay windows live here, not on BOOKING)
-CREATE TRIGGER trg_prevent_overlap_booking
-BEFORE INSERT ON BOOKED_ROOMS
-FOR EACH ROW
-BEGIN
-    DECLARE v_conflict INT DEFAULT 0;
-
-    SELECT COUNT(*) INTO v_conflict
-    FROM BOOKED_ROOMS br
-    JOIN BOOKING b ON b.BookingID = br.BookingID
-    WHERE br.RoomID = NEW.RoomID
-      AND b.BookingStatus IN ('Booked','Checked-In')
-      AND NEW.CheckInDateTime < br.CheckOutDateTime
-      AND NEW.CheckOutDateTime > br.CheckInDateTime;
-
-    IF v_conflict > 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Room is already booked for an overlapping period.';
-    END IF;
-END //
-
--- Room status synchronisation on booking status change
-CREATE TRIGGER trg_room_status_sync
-AFTER UPDATE ON BOOKING
-FOR EACH ROW
-BEGIN
-    IF NEW.BookingStatus = 'Checked-In' AND OLD.BookingStatus != 'Checked-In' THEN
-        UPDATE ROOM r
-        JOIN BOOKED_ROOMS br ON br.RoomID = r.RoomID
-        SET r.RoomStatus = 'Occupied'
-        WHERE br.BookingID = NEW.BookingID;
-    ELSEIF NEW.BookingStatus IN ('Checked-Out','Cancelled') AND OLD.BookingStatus != NEW.BookingStatus THEN
-        UPDATE ROOM r
-        JOIN BOOKED_ROOMS br ON br.RoomID = r.RoomID
-        SET r.RoomStatus = 'Available'
-        WHERE br.BookingID = NEW.BookingID
-          AND r.RoomID NOT IN (
-              -- don't free a room still actively occupied by a different booking
-              SELECT br2.RoomID FROM BOOKED_ROOMS br2
-              JOIN BOOKING b2 ON b2.BookingID = br2.BookingID
-              WHERE b2.BookingStatus IN ('Booked','Checked-In')
-                AND b2.BookingID != NEW.BookingID
-          );
-    END IF;
-END //
-
--- Prevent checkout while an outstanding balance remains
-CREATE TRIGGER trg_prevent_checkout_with_due
-BEFORE UPDATE ON BOOKING
-FOR EACH ROW
-BEGIN
-    IF NEW.BookingStatus = 'Checked-Out' AND OLD.BookingStatus != 'Checked-Out' THEN
-        IF fn_calculate_outstanding_balance(OLD.BookingID) > 0 THEN
-            SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Cannot check out: outstanding balance is not settled.';
-        END IF;
-    END IF;
-END //
-
--- After each payment, recompute BILL.BillStatus (Unpaid / Partially Paid / Paid)
-CREATE TRIGGER trg_update_bill_status_after_payment
-AFTER INSERT ON PAYMENT
-FOR EACH ROW
-BEGIN
-    DECLARE v_balance DECIMAL(10,2);
-    SET v_balance = fn_calculate_outstanding_balance(NEW.BookingID);
-
-    UPDATE BILL
-    SET BillStatus = CASE
-            WHEN v_balance <= 0 THEN 'Paid'
-            WHEN v_balance < TotalAmount THEN 'Partially Paid'
-            ELSE 'Unpaid'
-        END
-    WHERE BillID = NEW.BillID;
-END //
-
-DELIMITER ;
 
 -- PROCEDURES
 
