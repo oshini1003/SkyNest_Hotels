@@ -19,6 +19,7 @@ import StaffHome from "./pages/StaffHome";
 import StaffBookings from "./pages/StaffBookings";
 import StaffBillDetails from "./pages/StaffBillDetails";
 import StaffPayment from "./pages/StaffPayment";
+import ManagerReports from "./pages/ManagerReports";
 import { demoStaffBookings } from "./data/demoStaffBookings";
 import ServiceUsagePreview from "./pages/ServiceUsagePreview";
 
@@ -229,6 +230,7 @@ function handleStaffLogout() {
             <Route path="/make-booking" element={<MakeBooking />} /> 
             <Route path="/staff/bill-details" element={<StaffBillDetails />} />
             <Route path="/staff/record-payment" element={<StaffPayment />} />
+            <Route path="/staff/manager-reports" element={<ManagerReports />} />
             <Route
               path="/staff/login"
               element={
