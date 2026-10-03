@@ -184,6 +184,7 @@ CREATE INDEX idx_payment_bill           ON PAYMENT(BillID);
 CREATE INDEX idx_payment_date           ON PAYMENT(PaymentDate);
 
 -- (nights stayed in that room x that room type's daily rate)
+DELIMITER //
 
 CREATE FUNCTION fn_calculate_room_charges(p_booking_id INT)
 RETURNS DECIMAL(10,2) DETERMINISTIC READS SQL DATA
