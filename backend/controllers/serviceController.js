@@ -64,7 +64,21 @@ const logServiceUsage = asyncHandler(async (req, res) => {
 
 // GET /api/service-usage/:bookingId
 const listServiceUsageForBooking = asyncHandler(async (req, res) => {
-  const { bookingId } = req.params;
+  const rawBookingId = req.params.bookingId;
+  if (typeof rawBookingId !== 'string' || !/^[1-9]\d*$/.test(rawBookingId)
+      || Number(rawBookingId) > 2147483647) {
+    return res.status(400).json({ error: 'bookingId must be a positive whole number no greater than 2147483647.' });
+  }
+  const bookingId = Number(rawBookingId);
+
+  if (req.user.type === 'guest') {
+    const [[booking]] = await pool.execute(
+      `SELECT BookingID FROM BOOKING WHERE BookingID = ? AND GuestID = ?`,
+      [bookingId, req.user.id]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  }
+
   const [rows] = await pool.execute(
     `SELECT su.*, sc.ServiceName
      FROM SERVICE_USAGE su JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID

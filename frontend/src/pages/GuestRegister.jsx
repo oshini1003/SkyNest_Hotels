@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router";
+import { guestReturnDestination, guestSignInState } from "../services/bookingIntent";
 import { registerGuest } from "../services/auth";
 
 const initialForm = {
@@ -49,6 +50,11 @@ const fields = [
 ];
 
 export default function GuestRegister({ onLogin }) {
+  const { state } = useLocation();
+  const destination = guestReturnDestination(state);
+  const returnState = guestSignInState(destination.pathname, destination.state);
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,11 +127,11 @@ export default function GuestRegister({ onLogin }) {
 
     try {
       const session = await registerGuest(details);
-      onLogin(session);
+      if (active.current) onLogin(session);
     } catch (err) {
-      setError(err.message || "Unable to create your account.");
+      if (active.current) setError(err.message || "Unable to create your account.");
     } finally {
-      setIsSubmitting(false);
+      if (active.current) setIsSubmitting(false);
     }
   }
 
@@ -136,7 +142,7 @@ export default function GuestRegister({ onLogin }) {
     >
       <p className="eyebrow">GUEST REGISTRATION</p>
       <h1 id="register-heading">Create your account</h1>
-      <p>Enter your details to get started with SkyNest Hotels.</p>
+      <p>{destination.pathname === "/make-booking" ? "Create an account to continue with your selected stay." : "Enter your details to get started with SkyNest Hotels."}</p>
 
       <form
         className="auth-form registration-form"
@@ -180,7 +186,7 @@ export default function GuestRegister({ onLogin }) {
 
       <p className="auth-switch">
         Already have an account?{" "}
-        <Link to="/guest/login">Sign in</Link>
+        <Link to="/guest/login" state={returnState}>Sign in</Link>
       </p>
     </section>
   );

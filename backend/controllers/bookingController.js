@@ -1,148 +1,161 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { positiveInteger, validateBooking, validateBookingFilters } = require('../utils/bookingValidation');
 
-// POST /api/bookings  (Guest self-service OR Front Desk on the guest's behalf)
-// body: { guestId, roomId, checkin, checkout, guestCount, paymentMethod }
-// staffId comes from the authenticated staff user if a staff member is booking;
-// null if the guest booked it themselves online.
-const makeBooking = asyncHandler(async (req, res) => {
-  const { guestId, roomId, checkin, checkout, guestCount, paymentMethod } = req.body;
-  const staffId = req.user.type === 'staff' ? req.user.id : null;
-  const effectiveGuestId = req.user.type === 'guest' ? req.user.id : guestId;
+const bookingRoles = new Set(['Admin', 'Manager', 'Receptionist']);
+const forbidden = res => res.status(403).json({ error: 'You do not have permission to perform this action.' });
+const notFound = res => res.status(404).json({ error: 'Booking not found.' });
+const validUser = user => user && ['guest', 'staff'].includes(user.type) && positiveInteger(user.id) !== null;
+const canManage = user => validUser(user) && (user.type === 'guest' || bookingRoles.has(user.role));
 
-  if (!effectiveGuestId || !roomId || !checkin || !checkout || !paymentMethod) {
-    return res.status(400).json({ error: 'guestId, roomId, checkin, checkout and paymentMethod are required.' });
+function conflictResponse(err, res) {
+  if (err.sqlState === '45000') {
+    res.status(409).json({ error: err.sqlMessage || 'The booking cannot be changed in its current state.' });
+    return true;
   }
+  if (['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT'].includes(err.code)) {
+    res.status(409).json({ error: 'Another booking action is in progress. Please refresh and try again.' });
+    return true;
+  }
+  if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+    res.status(409).json({ error: 'The guest, staff account or room is no longer available. Please refresh and try again.' });
+    return true;
+  }
+  return false;
+}
 
+const roomSelect = `SELECT br.*, r.RoomNumber, r.BranchID, bh.Name AS BranchName,
+                          rt.Name AS RoomTypeName, rt.Capacity, rt.DailyRate,
+                          DATE_FORMAT(br.CheckInDateTime, '%Y-%m-%d') AS CheckInDate,
+                          DATE_FORMAT(br.CheckOutDateTime, '%Y-%m-%d') AS CheckOutDate
+                   FROM BOOKED_ROOMS br
+                   JOIN ROOM r ON r.RoomID = br.RoomID
+                   JOIN BRANCH bh ON bh.BranchID = r.BranchID
+                   JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID`;
+
+// POST /api/bookings. The stored procedure owns the booking transaction and
+// room locks. A preferred payment method does not create a payment or bill.
+const makeBooking = asyncHandler(async (req, res) => {
+  if (!canManage(req.user)) return forbidden(res);
+  const parsed = validateBooking(req.body, req.user);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const { guestId, roomId, checkin, checkout, guestCount, paymentMethod } = parsed.value;
+  const staffId = req.user.type === 'staff' ? positiveInteger(req.user.id) : null;
   const conn = await pool.getConnection();
   try {
     await conn.query('SET @p_booking_id = NULL');
-    await conn.execute(
-      `CALL sp_make_booking(?, ?, ?, ?, ?, ?, ?, @p_booking_id)`,
-      [effectiveGuestId, staffId, roomId, checkin, checkout, guestCount || 1, paymentMethod]
-    );
+    await conn.execute('CALL sp_make_booking(?, ?, ?, ?, ?, ?, ?, @p_booking_id)',
+      [guestId, staffId, roomId, checkin, checkout, guestCount, paymentMethod]);
     const [[{ '@p_booking_id': bookingId }]] = await conn.query('SELECT @p_booking_id');
     res.status(201).json({ bookingId, status: 'Booked' });
   } catch (err) {
-    if (err.sqlState === '45000') {
-      return res.status(409).json({ error: err.sqlMessage });
-    }
+    if (conflictResponse(err, res)) return;
     throw err;
   } finally {
     conn.release();
   }
 });
 
-// PATCH /api/bookings/:id/cancel
+// Ownership and status are checked in the same conditional UPDATE. A concurrent
+// check-in or second cancellation cannot pass an earlier, stale status check.
 const cancelBooking = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const [[booking]] = await pool.execute(`SELECT BookingStatus FROM BOOKING WHERE BookingID = ?`, [id]);
-  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-  if (booking.BookingStatus !== 'Booked') {
+  if (!canManage(req.user)) return forbidden(res);
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
+  const ownerCondition = req.user.type === 'guest' ? ' AND GuestID = ?' : '';
+  const params = req.user.type === 'guest' ? [id, positiveInteger(req.user.id)] : [id];
+  try {
+    const [result] = await pool.execute(
+      `UPDATE BOOKING SET BookingStatus = 'Cancelled' WHERE BookingID = ?${ownerCondition} AND BookingStatus = 'Booked'`, params);
+    if (result.affectedRows === 1) return res.json({ bookingId: id, status: 'Cancelled' });
+    const [[booking]] = await pool.execute(
+      `SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${ownerCondition}`, params);
+    if (!booking) return notFound(res);
     return res.status(409).json({ error: 'Only a Booked reservation can be cancelled.' });
+  } catch (err) {
+    if (conflictResponse(err, res)) return;
+    throw err;
   }
-  await pool.execute(`UPDATE BOOKING SET BookingStatus = 'Cancelled' WHERE BookingID = ?`, [id]);
-  res.json({ bookingId: id, status: 'Cancelled' });
 });
 
-// POST /api/bookings/:id/check-in   (Front Desk only)
+// Front desk actions are also protected by requireRole in bookingRoutes.
 const checkIn = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  if (!validUser(req.user) || req.user.type !== 'staff' || !bookingRoles.has(req.user.role)) return forbidden(res);
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   try {
-    await pool.execute(`CALL sp_check_in(?)`, [id]);
+    await pool.execute('CALL sp_check_in(?)', [id]);
     res.json({ bookingId: id, status: 'Checked-In' });
   } catch (err) {
-    if (err.sqlState === '45000') return res.status(409).json({ error: err.sqlMessage });
+    if (conflictResponse(err, res)) return;
     throw err;
   }
 });
 
-// POST /api/bookings/:id/check-out  (Front Desk only)
 const checkOut = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const staffId = req.user.id;
+  if (!validUser(req.user) || req.user.type !== 'staff' || !bookingRoles.has(req.user.role)) return forbidden(res);
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   try {
-    await pool.execute(`CALL sp_check_out(?, ?)`, [id, staffId]);
-    const [[bill]] = await pool.execute(`SELECT * FROM BILL WHERE BookingID = ?`, [id]);
+    await pool.execute('CALL sp_check_out(?, ?)', [id, positiveInteger(req.user.id)]);
+    const [[bill]] = await pool.execute('SELECT * FROM BILL WHERE BookingID = ?', [id]);
     res.json({ bookingId: id, status: 'Checked-Out', bill });
   } catch (err) {
-    if (err.sqlState === '45000') return res.status(409).json({ error: err.sqlMessage });
+    if (conflictResponse(err, res)) return;
     throw err;
   }
 });
 
-// GET /api/bookings/:id  - full booking detail (rooms, guest, staff, status)
+// Guest ownership is part of the lookup: foreign and nonexistent bookings
+// produce the same 404 response, before reading any booked-room information.
 const getBooking = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  if (!validUser(req.user)) return forbidden(res);
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
+  const own = req.user.type === 'guest';
   const [[booking]] = await pool.execute(
     `SELECT b.*, g.Name AS GuestName, g.ContactNumber AS GuestContact, s.Name AS StaffName
-     FROM BOOKING b
-     JOIN GUEST g ON g.GuestID = b.GuestID
+     FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
      LEFT JOIN STAFF s ON s.StaffID = b.StaffID
-     WHERE b.BookingID = ?`,
-    [id]
-  );
-  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-
-  const [rooms] = await pool.execute(
-    `SELECT br.*, r.RoomNumber, r.BranchID, bh.Name AS BranchName, rt.Name AS RoomTypeName, rt.DailyRate
-     FROM BOOKED_ROOMS br
-     JOIN ROOM r ON r.RoomID = br.RoomID
-     JOIN BRANCH bh ON bh.BranchID = r.BranchID
-     JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID
-     WHERE br.BookingID = ?`,
-    [id]
-  );
-
+     WHERE b.BookingID = ?${own ? ' AND b.GuestID = ?' : ''}`,
+    own ? [id, positiveInteger(req.user.id)] : [id]);
+  if (!booking) return notFound(res);
+  const [rooms] = await pool.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
   res.json({ ...booking, rooms });
 });
 
-// GET /api/bookings?guestId=&status=&branchId=  - search/list bookings
+// Two queries fetch the headers and all their rooms; adding bookings does not
+// cause a separate database round trip for each one.
 const listBookings = asyncHandler(async (req, res) => {
-  const { guestId, status, branchId, guestName, idNumber } = req.query;
+  if (!validUser(req.user)) return forbidden(res);
+  const parsed = validateBookingFilters(req.query, req.user);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const { guestId, status, branchId, guestName, idNumber } = parsed.value;
   const conditions = [];
   const params = [];
-
-  // A logged-in guest can only ever see their own bookings
-  if (req.user.type === 'guest') {
+  if (req.user.type === 'guest' || guestId !== undefined) {
     conditions.push('b.GuestID = ?');
-    params.push(req.user.id);
-  } else if (guestId) {
-    conditions.push('b.GuestID = ?');
-    params.push(guestId);
+    params.push(req.user.type === 'guest' ? positiveInteger(req.user.id) : guestId);
   }
-
-  if (status) {
-    conditions.push('b.BookingStatus = ?');
-    params.push(status);
-  }
-  if (branchId) {
-    conditions.push('br.BranchID = ?');
-    params.push(branchId);
-  }
-  if (guestName) {
-    conditions.push('g.Name LIKE ?');
-    params.push(`%${guestName}%`);
-  }
-  if (idNumber) {
-    conditions.push('g.IDNumber = ?');
-    params.push(idNumber);
-  }
-
+  if (status !== undefined) { conditions.push('b.BookingStatus = ?'); params.push(status); }
+  if (branchId !== undefined) { conditions.push('r.BranchID = ?'); params.push(branchId); }
+  if (guestName !== undefined) { conditions.push('g.Name LIKE ?'); params.push(`%${guestName}%`); }
+  if (idNumber !== undefined) { conditions.push('g.IDNumber = ?'); params.push(idNumber); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
   const [rows] = await pool.query(
-    `SELECT DISTINCT b.BookingID, b.BookingStatus, b.BookingDate, b.PreferredPaymentMethod,
+    `SELECT DISTINCT b.BookingID, b.BookingStatus, b.BookingDate, b.CreatedDate, b.PreferredPaymentMethod,
             g.GuestID, g.Name AS GuestName, g.IDNumber
-     FROM BOOKING b
-     JOIN GUEST g ON g.GuestID = b.GuestID
+     FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
      LEFT JOIN BOOKED_ROOMS br ON br.BookingID = b.BookingID
-     ${where}
-     ORDER BY b.CreatedDate DESC
-     LIMIT 200`,
-    params
-  );
-  res.json(rows);
+     LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+     ${where} ORDER BY b.CreatedDate DESC, b.BookingID DESC LIMIT 200`, params);
+  if (!rows.length) return res.json([]);
+  const ids = rows.map(row => row.BookingID);
+  const [rooms] = await pool.execute(
+    `${roomSelect} WHERE br.BookingID IN (${ids.map(() => '?').join(', ')}) ORDER BY br.BookingID, br.BookedRoomID`, ids);
+  const roomsByBooking = new Map(ids.map(id => [id, []]));
+  for (const room of rooms) roomsByBooking.get(room.BookingID)?.push(room);
+  res.json(rows.map(row => ({ ...row, rooms: roomsByBooking.get(row.BookingID) })));
 });
 
 module.exports = { makeBooking, cancelBooking, checkIn, checkOut, getBooking, listBookings };

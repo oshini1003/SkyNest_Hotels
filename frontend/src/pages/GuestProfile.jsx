@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { fetchGuestProfile, updateGuestProfile } from "../services/guestApi";
 import { changeGuestPassword } from "../services/passwordApi";
 import ChangePasswordForm from "./ChangePasswordForm";
@@ -163,6 +164,8 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
           </button>
         </div>
       </div>
+
+      <p><Link className="button" to="/guest/bookings">My bookings</Link></p>
 
       {/* ─── Profile Content ─── */}
       <div className="profile-tab-content">

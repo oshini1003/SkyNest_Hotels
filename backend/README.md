@@ -54,8 +54,9 @@ After starting the backend against the integration database, set
 and logout. The test exits unsuccessfully if any assertion fails and prints no tokens.
 
 Lakshan's billing/payment/report layouts are labelled development previews under
-`/preview/staff/...`. Payment simulation does not save or collect money. Real
-booking, service and billing frontend integration remains the next project stage.
+`/preview/staff/...`. Payment simulation does not save or collect money. Guest
+reservations are connected to the live API; staff workflows, services and billing
+frontend integration remain later project stages.
 
 | Endpoint | Method | Access | Description |
 |---|---|---|---|
@@ -98,10 +99,10 @@ A currently occupied room can appear for a non-overlapping future stay. Without
 dates, this endpoint lists matching rooms but does not establish availability.
 
 The frontend `/rooms` page reads live options and availability from these public
-endpoints. `/make-booking` rechecks the selected room and price but remains a
-preview: it does not create bookings, save guest details or record payments.
-Changing a search filter clears previous results and the selected stay. API
-failures show an error and retry action rather than sample rooms.
+endpoints. `/make-booking` rechecks the selected room and price, asks the guest to
+sign in, and creates a reservation only after confirmation. Changing a search
+filter clears previous results and the selected stay. API failures show an error
+and retry action rather than sample rooms.
 
 Run `node tests/room-search-regression.cjs` from `backend` for validation and
 controller contract checks with a mocked database pool. Then check the running
@@ -111,16 +112,65 @@ These changes need no schema import or seed rerun on an existing database.
 
 ## Bookings
 
-All require authentication (guest or staff).
+All require authentication. A guest's identity comes from the verified access
+token, never from a submitted `guestId`. Guests can list, view and cancel only
+their own reservations. Foreign or missing booking details/cancellations return
+404. Staff creation/cancellation is limited to Receptionist, Manager and Admin.
 
-| Endpoint | Method | Description |
-|---|---|---|
+| Endpoint | Description |
+|---|---|
 | `GET /api/bookings` | List/search bookings (`?guestName=&idNumber=&status=&branchId=`). Guests only ever see their own. |
 | `GET /api/bookings/:id` | Full booking detail incl. rooms |
 | `POST /api/bookings` | Make a booking — `{ roomId, checkin, checkout, guestCount, paymentMethod }` |
 | `PATCH /api/bookings/:id/cancel` | Cancel a Booked reservation |
 | `POST /api/bookings/:id/check-in` | Front desk only |
 | `POST /api/bookings/:id/check-out` | Front desk only |
+
+Creation requires one room, positive integer guest count, valid date-only
+`checkin`/`checkout`, and a payment preference of `Cash`, `Card` or `Bank Transfer`.
+The existing `sp_make_booking` procedure locks the room and checks capacity and
+overlap inside its own transaction. HTTP 201 returns `{ bookingId, status }`;
+validation failures return 400 and unavailable/conflicting stays return 409.
+Cancellation locks and checks the booking before changing a `Booked` reservation
+to `Cancelled`. It preserves the record and releases those dates for room search.
+
+List/detail responses include a `rooms` array. Each room includes date-only
+`CheckInDate` and `CheckOutDate` strings for display without a browser timezone
+shift, together with room, branch, room type and guest-count fields. Lists are
+limited to the latest 200 matching reservations.
+
+The frontend `/guest/bookings` page loads the signed-in guest's reservations.
+Sign-in or registration preserves the selected stay for review; it never submits
+a booking automatically. The booking account supplies the guest identity. The
+confirmation page records a payment preference only: no card details are taken,
+and no bill or payment is created before the later staff workflow. Lost creation
+responses must be checked in My bookings before another attempt. Sample booking
+pages remain separate under `/preview/...` during development.
+
+### Booking checks
+
+From `backend`, run these database-free regression checks:
+
+```bash
+node tests/booking-regression.cjs
+node tests/service-ownership-regression.cjs
+```
+
+With the local backend running against the integration database, set
+`TEST_GUEST_USERNAME`, `TEST_GUEST_PASSWORD`, `TEST_OTHER_GUEST_USERNAME` and
+`TEST_OTHER_GUEST_PASSWORD` to two different test guests. Then run:
+
+```bash
+node test-guest-bookings.js
+```
+
+This live API test chooses a room for a future stay, submits concurrent booking
+attempts, verifies overlap rejection, ownership, dates, lists, service access,
+absence of payment, cancellation and restored availability. It cancels only
+reservations created by that run, leaving their history as `Cancelled`. If a
+creation response is lost or cleanup cannot be confirmed, inspect My bookings
+before repeating the test. Test sessions are signed out afterwards. No schema
+import, database reset or seed rerun is required for this update.
 
 ## Services
 

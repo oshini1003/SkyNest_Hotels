@@ -387,7 +387,7 @@ export default function RoomSearch() {
           })
         }
       >
-        Continue to booking preview
+        Continue to booking review
       </button>
     </div>
   </section>

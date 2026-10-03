@@ -6,11 +6,14 @@ import {
   NavLink,
   Route,
   Routes,
+  useLocation,
 } from "react-router";
 import GuestLogin from "./pages/GuestLogin";
 import GuestRegister from "./pages/GuestRegister";
 import RoomSearch from "./pages/RoomSearch";
-import MakeBooking from "./pages/MakeBooking"; 
+import MakeBooking from "./pages/MakeBooking";
+import MyBookings from "./pages/MyBookings";
+import { guestReturnDestination, guestSignInState } from "./services/bookingIntent";
 import ServiceCatalogue from "./pages/ServiceCatalogue";
 import GuestBookings from "./pages/GuestBookings";
 import GuestProfile from "./pages/GuestProfile";
@@ -86,6 +89,17 @@ function NotFound() {
   );
 }
 
+function SignedInGuestRedirect() {
+  const { state } = useLocation();
+  const destination = guestReturnDestination(state);
+  return <Navigate to={destination.pathname} state={destination.state} replace />;
+}
+
+function GuestOnly({ session, children }) {
+  const { pathname, state } = useLocation();
+  return session ? children : <Navigate to="/guest/login" state={guestSignInState(pathname, state)} replace />;
+}
+
 function App() {
 
 const [session, setSession] = useState(readGuestSession);
@@ -144,10 +158,11 @@ function handleStaffLogout() {
               <NavLink to="/services">Services</NavLink>
               {showPreviews && (
                 <NavLink to="/preview/bookings">
-                  Booking preview
+                  Sample bookings
                 </NavLink>
               )}
 
+              {session && <NavLink to="/guest/bookings">My bookings</NavLink>}
               <NavLink to={session ? "/guest" : "/guest/login"}>
                 {session ? "My Account" : "Guest Login"}
               </NavLink>
@@ -206,7 +221,7 @@ function handleStaffLogout() {
               path="/guest/login"
               element={
                 session ? (
-                  <Navigate to="/guest" replace />
+                  <SignedInGuestRedirect />
                 ) : (
                   <GuestLogin onLogin={handleLogin} />
                 )
@@ -219,6 +234,7 @@ function handleStaffLogout() {
               element={
                 session ? (
                   <GuestProfile
+                    key={session.token}
                     session={session}
                     onLogout={handleLogout}
                     onProfileUpdate={(newName) => {
@@ -240,7 +256,7 @@ function handleStaffLogout() {
               path="/guest/register"
               element={
                 session ? (
-                  <Navigate to="/guest" replace />
+                  <SignedInGuestRedirect />
                 ) : (
                   <GuestRegister onLogin={handleLogin} />
                 )
@@ -248,7 +264,14 @@ function handleStaffLogout() {
             />
 
             <Route path="/rooms" element={<RoomSearch />} />
-            <Route path="/make-booking" element={<MakeBooking />} /> 
+            <Route
+              path="/make-booking"
+              element={<GuestOnly session={session}><MakeBooking session={session} /></GuestOnly>}
+            />
+            <Route
+              path="/guest/bookings"
+              element={<GuestOnly session={session}><MyBookings key={session?.token} session={session} /></GuestOnly>}
+            />
             <Route
               path="/staff/login"
               element={
