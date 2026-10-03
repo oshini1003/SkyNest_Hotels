@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
-import { demoRooms } from "../data/demoRooms";
+import { searchRooms, validateStay } from "../services/roomApi";
 
 const money = new Intl.NumberFormat("en-LK", {
   style: "currency",
@@ -8,47 +8,17 @@ const money = new Intl.NumberFormat("en-LK", {
   currencyDisplay: "code",
 });
 
-function getPreviewStay(selection) {
-  if (!selection) return null;
-
-  const room = demoRooms.find((item) => item.id === selection.roomId);
-  const { checkin, checkout, guests } = selection;
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
+function getPreviewSelection(selection) {
   if (
-    !room ||
-    typeof checkin !== "string" ||
-    typeof checkout !== "string" ||
-    !datePattern.test(checkin) ||
-    !datePattern.test(checkout)
-  ) {
+    !selection ||
+    !Number.isSafeInteger(selection.roomId) || selection.roomId < 1 ||
+    !Number.isSafeInteger(selection.guests) || selection.guests < 1
+  ) return null;
+  try {
+    return { ...validateStay(selection), roomId: selection.roomId };
+  } catch {
     return null;
   }
-
-  const arrival = Date.parse(`${checkin}T00:00:00Z`);
-  const departure = Date.parse(`${checkout}T00:00:00Z`);
-  const nights = (departure - arrival) / 86400000;
-  const now = new Date();
-  const today = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-
-  if (
-    !Number.isInteger(nights) ||
-    nights < 1 ||
-    new Date(arrival).toISOString().slice(0, 10) !== checkin ||
-    new Date(departure).toISOString().slice(0, 10) !== checkout ||
-    checkin < today ||
-    !Number.isInteger(guests) ||
-    guests < 1 ||
-    guests > room.capacity
-  ) {
-    return null;
-  }
-
-  return { room, checkin, checkout, guests, nights };
 }
 
 const initialGuestData = {
@@ -62,24 +32,81 @@ const initialGuestData = {
 
 export default function MakeBooking() {
   const { state } = useLocation();
-  const stay = getPreviewStay(state?.stay);
+  const selection = getPreviewSelection(state?.stay);
 
-  if (!stay) {
+  if (!selection) {
     return (
       <section>
         <h1>Select a room first</h1>
-        <p>Choose a sample room and valid stay dates to open the booking preview.</p>
+        <p>Choose a room and valid stay dates to open the booking preview.</p>
         <Link className="button" to="/rooms">Find a room</Link>
       </section>
     );
   }
 
   return (
-    <BookingPreviewForm
-      key={`${stay.room.id}:${stay.checkin}:${stay.checkout}:${stay.guests}`}
-      stay={stay}
+    <AvailableStayPreview
+      key={`${selection.roomId}:${selection.checkin}:${selection.checkout}:${selection.guests}`}
+      selection={selection}
     />
   );
+}
+
+function AvailableStayPreview({ selection }) {
+  const { roomId, checkin, checkout, guests } = selection;
+  const [attempt, setAttempt] = useState(0);
+  const [status, setStatus] = useState({ loading: true, error: "", room: null });
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    searchRooms({ roomId, checkin, checkout, guests }, controller.signal)
+      .then((rooms) => {
+        if (!active) return;
+        const room = rooms.find((item) => item.id === roomId && item.capacity >= guests) || null;
+        setStatus({ loading: false, error: "", room });
+      })
+      .catch((failure) => {
+        if (active && failure.name !== "AbortError") {
+          setStatus({ loading: false, error: failure.message, room: null });
+        }
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [roomId, checkin, checkout, guests, attempt]);
+
+  function retryAvailability() {
+    setStatus({ loading: true, error: "", room: null });
+    setAttempt((current) => current + 1);
+  }
+
+  if (status.loading || status.error || !status.room) {
+    return (
+      <section aria-labelledby="booking-availability-heading">
+        <h1 id="booking-availability-heading">Booking preview</h1>
+        {status.loading ? (
+          <p role="status">Checking your selected room and its current price…</p>
+        ) : status.error ? (
+          <p className="form-error" role="alert">{status.error}</p>
+        ) : (
+          <p role="status">This room is no longer available for the selected dates and guest count.</p>
+        )}
+        <p>No room has been reserved.</p>
+        {!status.loading && (
+          <p>
+            <button className="button" type="button" onClick={retryAvailability}>
+              Check availability again
+            </button>
+          </p>
+        )}
+        <Link className="button" to="/rooms">Find a room</Link>
+      </section>
+    );
+  }
+
+  return <BookingPreviewForm stay={{ ...selection, room: status.room }} />;
 }
 
 function BookingPreviewForm({ stay }) {
@@ -108,6 +135,13 @@ function BookingPreviewForm({ stay }) {
     setBookingStatus("");
     setError("");
 
+    try {
+      validateStay(stay);
+    } catch (failure) {
+      setError(`${failure.message} Please choose another stay.`);
+      return;
+    }
+
     if (!formData.name.trim() || !formData.idNumber.trim()) {
       setError("Please complete all required fields.");
       return;
@@ -127,8 +161,9 @@ function BookingPreviewForm({ stay }) {
       <p className="eyebrow">GUEST DETAILS PREVIEW</p>
       <h1 id="make-booking-heading">Booking preview</h1>
       <p className="room-demo-note">
-        Sample data only. This form does not save your details, reserve a room,
-        or take a payment. Use sample guest details while testing.
+        The room details and prices below come from the hotel database.
+        This preview does not save your details, reserve a room, or take a payment.
+        Availability can change. Use sample guest details while testing.
       </p>
 
       <h2>Your selected stay</h2>

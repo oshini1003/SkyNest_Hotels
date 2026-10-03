@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import {
-  demoBranches,
-  demoRoomTypes,
-  demoRooms,
-} from "../data/demoRooms";
+import { getLocalToday, loadRoomOptions, searchRooms, validateStay } from "../services/roomApi";
 
 const initialFilters = {
   branch: "",
@@ -20,120 +16,118 @@ const money = new Intl.NumberFormat("en-LK", {
   currencyDisplay: "code",
 });
 
-function getLocalToday() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
 export default function RoomSearch() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(initialFilters);
+  const [options, setOptions] = useState({ branches: [], roomTypes: [] });
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [optionsError, setOptionsError] = useState("");
+  const [optionsAttempt, setOptionsAttempt] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
-
+  const [selectedRoomId, setSelectedRoomId] = useState(null);
+  const searchRequest = useRef(null);
+  const searchVersion = useRef(0);
+  const reviewRef = useRef(null);
+  const selectedButtonRef = useRef(null);
   const today = getLocalToday();
-  const [selectedRoomId, setSelectedRoomId] = useState("");
-const reviewRef = useRef(null);
-const selectedButtonRef = useRef(null);
+  const selectedRoom = result?.rooms.find((room) => room.id === selectedRoomId);
 
-const selectedRoom = result?.rooms.find(
-  (room) => room.id === selectedRoomId
-);
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    loadRoomOptions(controller.signal)
+      .then((data) => { if (active) setOptions(data); })
+      .catch((failure) => {
+        if (active && failure.name !== "AbortError") setOptionsError(failure.message);
+      })
+      .finally(() => { if (active) setOptionsLoading(false); });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [optionsAttempt]);
 
-useEffect(() => {
-  if (selectedRoomId && reviewRef.current) {
-    reviewRef.current.focus({ preventScroll: true });
-    reviewRef.current.scrollIntoView({ block: "start" });
+  useEffect(() => () => {
+    searchVersion.current += 1;
+    searchRequest.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    if (selectedRoomId && reviewRef.current) {
+      reviewRef.current.focus({ preventScroll: true });
+      reviewRef.current.scrollIntoView({ block: "start" });
+    }
+  }, [selectedRoomId]);
+
+  function retryOptions() {
+    setOptionsLoading(true);
+    setOptionsError("");
+    setOptionsAttempt((attempt) => attempt + 1);
   }
-}, [selectedRoomId]);
 
-function handleSelectRoom(roomId, event) {
-  selectedButtonRef.current = event.currentTarget;
-
-  if (selectedRoomId === roomId) {
-    reviewRef.current?.focus({ preventScroll: true });
-    reviewRef.current?.scrollIntoView({ block: "start" });
-    return;
+  function handleSelectRoom(roomId, event) {
+    selectedButtonRef.current = event.currentTarget;
+    if (selectedRoomId === roomId) {
+      reviewRef.current?.focus({ preventScroll: true });
+      reviewRef.current?.scrollIntoView({ block: "start" });
+      return;
+    }
+    setSelectedRoomId(roomId);
   }
 
-  setSelectedRoomId(roomId);
-}
+  function handleClearSelection() {
+    selectedButtonRef.current?.focus();
+    setSelectedRoomId(null);
+  }
 
-function handleClearSelection() {
-  selectedButtonRef.current?.focus();
-  setSelectedRoomId("");
-}
+  function clearSearch() {
+    searchVersion.current += 1;
+    searchRequest.current?.abort();
+    searchRequest.current = null;
+    setLoading(false);
+    setError("");
+    setResult(null);
+    setSelectedRoomId(null);
+    selectedButtonRef.current = null;
+  }
 
   function handleChange(event) {
     const { name, value } = event.target;
-
-    setFilters((current) => ({
-      ...current,
-      [name]: value,
-    }));
-
-    setError("");
-    setResult(null);
-    setSelectedRoomId("");
+    clearSearch();
+    setFilters((current) => ({ ...current, [name]: value }));
   }
 
-  function handleSearch(event) {
-    event.preventDefault();
-    setError("");
-    setResult(null);
-    setSelectedRoomId("");
-
-    if (!filters.checkin || !filters.checkout) {
-      setError("Please choose your check-in and check-out dates.");
+  async function handleSearch(event) {
+    event?.preventDefault();
+    clearSearch();
+    let stay;
+    try {
+      stay = validateStay(filters);
+    } catch (failure) {
+      setError(failure.message);
       return;
     }
-
-    if (filters.checkin < getLocalToday()) {
-      setError("Check-in cannot be earlier than today.");
-      return;
+    const controller = new AbortController();
+    const version = searchVersion.current;
+    searchRequest.current = controller;
+    setLoading(true);
+    try {
+      const rooms = await searchRooms({
+        ...stay,
+        branchId: filters.branch,
+        roomTypeId: filters.roomType,
+      }, controller.signal);
+      if (version === searchVersion.current) setResult({ ...stay, rooms });
+    } catch (failure) {
+      if (version === searchVersion.current && failure.name !== "AbortError") setError(failure.message);
+    } finally {
+      if (version === searchVersion.current) {
+        setLoading(false);
+        searchRequest.current = null;
+      }
     }
-
-    // UTC midnight keeps the calculation based on whole calendar days.
-    const arrival = Date.parse(`${filters.checkin}T00:00:00Z`);
-    const departure = Date.parse(`${filters.checkout}T00:00:00Z`);
-    const nights = (departure - arrival) / 86400000;
-
-    if (!Number.isInteger(nights) || nights < 1) {
-      setError("Check-out must be after check-in.");
-      return;
-    }
-
-    const guests = Number(filters.guests);
-
-    if (!Number.isInteger(guests) || guests < 1) {
-      setError("Enter a whole number of guests, starting from 1.");
-      return;
-    }
-
-    const matchingRooms = demoRooms.filter((room) => {
-      const matchesBranch =
-        filters.branch === "" || room.branch === filters.branch;
-
-      const matchesType =
-        filters.roomType === "" ||
-        room.roomType === filters.roomType;
-
-      const fitsGuests = room.capacity >= guests;
-
-      return matchesBranch && matchesType && fitsGuests;
-    });
-
-    setResult({
-    rooms: matchingRooms,
-    nights,
-    checkin: filters.checkin,
-    checkout: filters.checkout,
-    guests,
-    });
   }
 
   return (
@@ -143,9 +137,19 @@ function handleClearSelection() {
       <p>Choose your destination, dates and number of guests.</p>
 
       <p className="room-demo-note">
-        Preview: rooms and prices are sample data. Dates are used
-        to estimate room charges; actual availability is not checked.
+        Room availability and prices are checked for your selected dates.
+        Selecting a room does not reserve it.
       </p>
+
+      {optionsLoading && <p role="status">Loading branches and room types…</p>}
+      {optionsError && (
+        <div>
+          <p className="form-error" role="alert">{optionsError}</p>
+          <button className="button" type="button" onClick={retryOptions}>
+            Retry loading filters
+          </button>
+        </div>
+      )}
 
       <form className="room-search-form" onSubmit={handleSearch}>
         <div className="form-field">
@@ -153,13 +157,14 @@ function handleClearSelection() {
           <select
             id="room-branch"
             name="branch"
+            disabled={optionsLoading || Boolean(optionsError)}
             value={filters.branch}
             onChange={handleChange}
           >
             <option value="">All branches</option>
-            {demoBranches.map((branch) => (
-              <option key={branch} value={branch}>
-                {branch}
+            {options.branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
               </option>
             ))}
           </select>
@@ -170,13 +175,14 @@ function handleClearSelection() {
           <select
             id="room-type"
             name="roomType"
+            disabled={optionsLoading || Boolean(optionsError)}
             value={filters.roomType}
             onChange={handleChange}
           >
             <option value="">All room types</option>
-            {demoRoomTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
+            {options.roomTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
               </option>
             ))}
           </select>
@@ -228,23 +234,25 @@ function handleClearSelection() {
           </p>
         )}
 
-        <button className="button" type="submit">
-          Search sample rooms
+        <button className="button" type="submit" disabled={loading || optionsLoading || Boolean(optionsError)}>
+          {loading ? "Searching…" : error ? "Try search again" : "Search rooms"}
         </button>
       </form>
 
       <p className="room-search-summary" role="status">
-        {result === null
-          ? "Submit your search to view matching sample rooms."
-          : `${result.rooms.length} sample room(s) match your search for ${
+        {loading
+          ? "Checking room availability…"
+          : result === null
+          ? "Submit your search to view rooms available for your stay."
+          : `${result.rooms.length} room(s) available for ${
               result.nights
             } night${result.nights === 1 ? "" : "s"}.`}
       </p>
 
       {result && result.rooms.length === 0 && (
         <p>
-          No sample rooms match these filters. Try another branch,
-          room type or guest count.
+          No rooms are available for these filters and dates. Try another branch,
+          room type, date range or guest count.
         </p>
       )}
 
@@ -350,7 +358,7 @@ function handleClearSelection() {
     </p>
 
     <p className="room-demo-note">
-      Sample preview only. No room has been reserved.
+      No room has been reserved. Availability and prices can change before a booking is confirmed.
     </p>
     
 

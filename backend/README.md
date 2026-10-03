@@ -78,9 +78,36 @@ booking, service and billing frontend integration remains the next project stage
 | `/api/room-types` | POST | Admin/Manager | Create a room type |
 | `/api/amenities` | GET | Public | List amenities |
 | `/api/amenities` | POST | Admin/Manager | Create an amenity |
-| `/api/rooms` | GET | Public | Search rooms — `?branchId=&roomTypeId=&checkin=&checkout=` |
+| `/api/rooms` | GET | Public | Search rooms by optional `roomId`, `branchId`, `roomTypeId`, `guestCount`, `checkin` and `checkout` |
 | `/api/rooms` | POST | Admin/Manager | Create a room |
 | `/api/rooms/:id/status` | PATCH | Admin/Manager/Receptionist | Update room status |
+
+For an availability search, supply both dates in `YYYY-MM-DD` format. Check-in
+must be today or later in the backend server's local time; check-out must be
+later than check-in. IDs and guest count must be positive whole numbers. Omit
+unused filters instead of sending empty values. Invalid filters return HTTP 400.
+
+```text
+GET /api/rooms?branchId=1&guestCount=2&checkin=2026-10-04&checkout=2026-10-06
+```
+
+Use future dates when running the example later. Results exclude maintenance
+rooms, rooms below the requested capacity, and rooms with overlapping `Booked`
+or `Checked-In` reservations. One stay can begin at another stay's checkout.
+A currently occupied room can appear for a non-overlapping future stay. Without
+dates, this endpoint lists matching rooms but does not establish availability.
+
+The frontend `/rooms` page reads live options and availability from these public
+endpoints. `/make-booking` rechecks the selected room and price but remains a
+preview: it does not create bookings, save guest details or record payments.
+Changing a search filter clears previous results and the selected stay. API
+failures show an error and retry action rather than sample rooms.
+
+Run `node tests/room-search-regression.cjs` from `backend` for validation and
+controller contract checks with a mocked database pool. Then check the running
+frontend against MySQL: capacity and branch filters, an overlapping seeded stay,
+an adjacent stay, selection clearing, preview navigation and API outage/retry.
+These changes need no schema import or seed rerun on an existing database.
 
 ## Bookings
 

@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { validateRoomSearch } = require('../utils/roomSearchValidation');
 
 // ---------- BRANCH ----------
 
@@ -76,37 +77,49 @@ const createAmenity = asyncHandler(async (req, res) => {
 
 // ---------- ROOM ----------
 
-// GET /api/rooms  - list all rooms, or search availability with ?branchId&roomTypeId&checkin&checkout
+// GET /api/rooms: without dates this is a catalogue, not an availability guarantee.
+// Date searches support roomId, branchId, roomTypeId and guestCount filters.
 const searchRooms = asyncHandler(async (req, res) => {
-  const { branchId, roomTypeId, checkin, checkout } = req.query;
+  const search = validateRoomSearch(req.query);
+  if (search.error) return res.status(400).json({ error: search.error });
+  const { roomId, branchId, roomTypeId, guestCount, checkin, checkout } = search.value;
 
-  const conditions = [];
+  const conditions = [`r.RoomStatus != 'Maintenance'`];
   const params = [];
 
-  if (branchId) {
+  if (roomId !== undefined) {
+    conditions.push('r.RoomID = ?');
+    params.push(roomId);
+  }
+  if (branchId !== undefined) {
     conditions.push('r.BranchID = ?');
     params.push(branchId);
   }
-  if (roomTypeId) {
+  if (roomTypeId !== undefined) {
     conditions.push('r.RoomTypeID = ?');
     params.push(roomTypeId);
   }
-  conditions.push(`r.RoomStatus != 'Maintenance'`);
+  if (guestCount !== undefined) {
+    conditions.push('rt.Capacity >= ?');
+    params.push(guestCount);
+  }
 
-  // Exclude rooms with an overlapping active booking, if a date range was given
+  // A room occupied now can still be reserved for non-overlapping future dates.
+  // Strict inequalities allow a new stay to begin at another stay's checkout.
   if (checkin && checkout) {
-    conditions.push(`r.RoomID NOT IN (
-      SELECT br.RoomID FROM BOOKED_ROOMS br
-      JOIN BOOKING b ON b.BookingID = br.BookingID
-      WHERE b.BookingStatus IN ('Booked','Checked-In')
-        AND ? < br.CheckOutDateTime AND ? > br.CheckInDateTime
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM BOOKED_ROOMS booked_room
+      JOIN BOOKING b ON b.BookingID = booked_room.BookingID
+      WHERE booked_room.RoomID = r.RoomID
+        AND b.BookingStatus IN ('Booked','Checked-In')
+        AND ? < booked_room.CheckOutDateTime AND ? > booked_room.CheckInDateTime
     )`);
     params.push(checkin, checkout);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = `WHERE ${conditions.join(' AND ')}`;
 
-  const [rows] = await pool.query(
+  const [rows] = await pool.execute(
     `SELECT r.RoomID, r.RoomNumber, r.RoomStatus, r.BranchID, br.Name AS BranchName,
             rt.RoomTypeID, rt.Name AS RoomTypeName, rt.Capacity, rt.DailyRate
      FROM ROOM r
