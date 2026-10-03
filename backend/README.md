@@ -55,8 +55,9 @@ and logout. The test exits unsuccessfully if any assertion fails and prints no t
 
 Lakshan's billing/payment/report layouts are labelled development previews under
 `/preview/staff/...`. Payment simulation does not save or collect money. Guest
-reservations are connected to the live API; staff workflows, services and billing
-frontend integration remain later project stages.
+reservations and staff booking search/details/check-in are connected to the live
+API. Services, billing, payment and checkout frontend integration remain later
+project stages.
 
 | Endpoint | Method | Access | Description |
 |---|---|---|---|
@@ -119,7 +120,7 @@ their own reservations. Foreign or missing booking details/cancellations return
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/bookings` | List/search bookings (`?guestName=&idNumber=&status=&branchId=`). Guests only ever see their own. |
+| `GET /api/bookings` | List/search bookings (`?bookingId=&guestName=&idNumber=&status=&branchId=`). Guests only ever see their own. |
 | `GET /api/bookings/:id` | Full booking detail incl. rooms |
 | `POST /api/bookings` | Make a booking — `{ roomId, checkin, checkout, guestCount, paymentMethod }` |
 | `PATCH /api/bookings/:id/cancel` | Cancel a Booked reservation |
@@ -171,6 +172,48 @@ reservations created by that run, leaving their history as `Cancelled`. If a
 creation response is lost or cleanup cannot be confirmed, inspect My bookings
 before repeating the test. Test sessions are signed out afterwards. No schema
 import, database reset or seed rerun is required for this update.
+
+### Staff search and check-in
+
+Sign in through `/staff/login`, then open `/staff/bookings` from the staff home.
+The list searches the live API by exact booking reference, guest name, identity
+number, branch and status. Open `/staff/bookings/:id` for the guest and room
+details. Staff return destinations after login are restricted to these local
+routes. Sample staff pages remain separate under `/preview/staff/...`.
+
+Receptionist, Manager and Admin accounts can confirm check-in. ServiceStaff can
+view these booking pages but cannot check in a guest. The backend enforces the
+role independently of the page controls. Booking detail responses include
+`GuestIDNumber`, `GuestEmail`, each room's `RoomStatus`, and
+`checkInEligibility: { allowed, reason, today }`.
+
+Eligibility uses MySQL's current date: the booking must be `Booked`, have at least
+one room, and every room's stay must include today (arrival inclusive, departure
+exclusive). Every room must currently be `Available`. The check-in endpoint
+rechecks these conditions before calling `sp_check_in`. The existing procedure
+and room-status trigger perform the final status/occupancy checks under database
+locks, set `Checked-In`/`Occupied`, open an `Unpaid` bill and commit together.
+No payment is recorded. Date-window validation is enforced by the API; direct
+calls to the unchanged stored procedure do not include that date preflight.
+
+If the browser loses a check-in response, reload the booking status before
+attempting another action. Do not automatically repeat the POST.
+
+Run `node tests/staff-booking-regression.cjs` for database-free controller checks.
+For the local MySQL check, first create a new guest reservation starting today
+and ending tomorrow, then check it in through the staff page. Set
+`TEST_STAFF_USERNAME`, `TEST_STAFF_PASSWORD`, and `TEST_STAFF_BOOKING_ID` (the new
+reference, digits only), then run:
+
+```bash
+node test-staff-checkin.js
+```
+
+This signs in a test staff session and reads the booking, room status and bill.
+It checks `Checked-In`, `Occupied`, correct room charges, an `Unpaid` bill and no
+service charges/payments. It does not create, cancel, pay or check out the stay.
+Keep this reservation checked in for the services and billing stage. As with
+other checks, remove the temporary test credentials from your shell afterwards.
 
 ## Services
 

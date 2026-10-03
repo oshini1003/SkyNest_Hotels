@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readSessionNotice } from "../services/session";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { loginStaff } from "../services/staffAuth";
+import { staffReturnDestination } from "../services/staffIntent";
 
 export default function StaffLogin({ onLogin }) {
+  const { state } = useLocation();
+  const destination = staffReturnDestination(state);
+  const active = useRef(true);
+  const busy = useRef(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [notice] = useState(() => readSessionNotice("staff"));
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -13,7 +19,7 @@ export default function StaffLogin({ onLogin }) {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (isSubmitting) {
+    if (busy.current) {
       return;
     }
 
@@ -26,6 +32,7 @@ export default function StaffLogin({ onLogin }) {
       return;
     }
 
+    busy.current = true;
     setIsSubmitting(true);
 
     try {
@@ -34,16 +41,18 @@ export default function StaffLogin({ onLogin }) {
         password
       );
 
-      onLogin(session);
+      if (!active.current) return;
       setPassword("");
+      onLogin(session);
     } catch (error) {
-      setError(
+      if (active.current) setError(
         error instanceof Error
           ? error.message
           : "Unable to sign in. Please try again."
       );
     } finally {
-      setIsSubmitting(false);
+      busy.current = false;
+      if (active.current) setIsSubmitting(false);
     }
   }
 
@@ -56,7 +65,7 @@ export default function StaffLogin({ onLogin }) {
 
       <h1 id="staff-login-heading">Staff login</h1>
 
-      <p>Sign in with your hotel staff account.</p>
+      <p>{destination === "/staff" ? "Sign in with your hotel staff account." : "Sign in with your staff account to continue to the requested booking page."}</p>
 
       {notice && <p role="status">{notice}</p>}
 

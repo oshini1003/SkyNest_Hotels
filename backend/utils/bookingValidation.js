@@ -35,7 +35,7 @@ function validateBooking(body, user, now = new Date()) {
 function validateBookingFilters(query, user) {
   if (!query || typeof query !== 'object' || Array.isArray(query)) return { error: 'Invalid booking filters.' };
   const value = {};
-  for (const field of ['guestId', 'branchId']) {
+  for (const field of ['bookingId', 'guestId', 'branchId']) {
     if (field === 'guestId' && user.type === 'guest') continue;
     if (query[field] === undefined) continue;
     // Query parameters must be canonical strings, unlike JSON body integers.
@@ -55,4 +55,25 @@ function validateBookingFilters(query, user) {
   return { value };
 }
 
-module.exports = { positiveInteger, validateBooking, validateBookingFilters };
+// Use the database calendar date, not the browser/server JavaScript timezone.
+// This is an arrival-window rule; time-of-day policies are not configured here.
+function checkInEligibility(booking, rooms, today) {
+  let reason = null;
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+  if (booking.BookingStatus !== 'Booked') {
+    reason = 'Only a Booked reservation can be checked in.';
+  } else if (!rooms.length) {
+    reason = 'This booking has no rooms.';
+  } else if (!isoDate.test(today) || rooms.some(room => !isoDate.test(room.CheckInDate) || !isoDate.test(room.CheckOutDate))) {
+    reason = 'The stay dates could not be verified. Please refresh and try again.';
+  } else if (rooms.some(room => today < room.CheckInDate)) {
+    reason = 'Check-in is available from the reserved arrival date.';
+  } else if (rooms.some(room => today >= room.CheckOutDate)) {
+    reason = 'The reserved stay has ended. Check-in must be before the checkout date.';
+  } else if (rooms.some(room => room.RoomStatus !== 'Available')) {
+    reason = 'Every room must be Available before check-in.';
+  }
+  return { allowed: reason === null, reason, today };
+}
+
+module.exports = { positiveInteger, validateBooking, validateBookingFilters, checkInEligibility };

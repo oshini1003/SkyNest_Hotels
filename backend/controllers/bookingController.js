@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
-const { positiveInteger, validateBooking, validateBookingFilters } = require('../utils/bookingValidation');
+const { positiveInteger, validateBooking, validateBookingFilters, checkInEligibility } = require('../utils/bookingValidation');
 
 const bookingRoles = new Set(['Admin', 'Manager', 'Receptionist']);
 const forbidden = res => res.status(403).json({ error: 'You do not have permission to perform this action.' });
@@ -24,7 +24,7 @@ function conflictResponse(err, res) {
   return false;
 }
 
-const roomSelect = `SELECT br.*, r.RoomNumber, r.BranchID, bh.Name AS BranchName,
+const roomSelect = `SELECT br.*, r.RoomNumber, r.RoomStatus, r.BranchID, bh.Name AS BranchName,
                           rt.Name AS RoomTypeName, rt.Capacity, rt.DailyRate,
                           DATE_FORMAT(br.CheckInDateTime, '%Y-%m-%d') AS CheckInDate,
                           DATE_FORMAT(br.CheckOutDateTime, '%Y-%m-%d') AS CheckOutDate
@@ -84,6 +84,14 @@ const checkIn = asyncHandler(async (req, res) => {
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   try {
+    const [[booking]] = await pool.execute(
+      "SELECT BookingStatus, DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday FROM BOOKING WHERE BookingID = ?", [id]);
+    if (!booking) return notFound(res);
+    const [rooms] = await pool.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
+    const eligibility = checkInEligibility(booking, rooms, booking.ServerToday);
+    if (!eligibility.allowed) return res.status(409).json({ error: eligibility.reason });
+    // The procedure owns its transaction. Its booking lock and room-status
+    // trigger recheck state after these reads, including concurrent check-ins.
     await pool.execute('CALL sp_check_in(?)', [id]);
     res.json({ bookingId: id, status: 'Checked-In' });
   } catch (err) {
@@ -114,14 +122,18 @@ const getBooking = asyncHandler(async (req, res) => {
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   const own = req.user.type === 'guest';
   const [[booking]] = await pool.execute(
-    `SELECT b.*, g.Name AS GuestName, g.ContactNumber AS GuestContact, s.Name AS StaffName
+    `SELECT b.*, g.Name AS GuestName, g.ContactNumber AS GuestContact,
+            g.IDNumber AS GuestIDNumber, g.Email AS GuestEmail, s.Name AS StaffName,
+            DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday
      FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
      LEFT JOIN STAFF s ON s.StaffID = b.StaffID
      WHERE b.BookingID = ?${own ? ' AND b.GuestID = ?' : ''}`,
     own ? [id, positiveInteger(req.user.id)] : [id]);
   if (!booking) return notFound(res);
   const [rooms] = await pool.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
-  res.json({ ...booking, rooms });
+  const { ServerToday, ...details } = booking;
+  res.json({ ...details, rooms,
+    ...(own ? {} : { checkInEligibility: checkInEligibility(booking, rooms, ServerToday) }) });
 });
 
 // Two queries fetch the headers and all their rooms; adding bookings does not
@@ -130,13 +142,14 @@ const listBookings = asyncHandler(async (req, res) => {
   if (!validUser(req.user)) return forbidden(res);
   const parsed = validateBookingFilters(req.query, req.user);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
-  const { guestId, status, branchId, guestName, idNumber } = parsed.value;
+  const { bookingId, guestId, status, branchId, guestName, idNumber } = parsed.value;
   const conditions = [];
   const params = [];
   if (req.user.type === 'guest' || guestId !== undefined) {
     conditions.push('b.GuestID = ?');
     params.push(req.user.type === 'guest' ? positiveInteger(req.user.id) : guestId);
   }
+  if (bookingId !== undefined) { conditions.push('b.BookingID = ?'); params.push(bookingId); }
   if (status !== undefined) { conditions.push('b.BookingStatus = ?'); params.push(status); }
   if (branchId !== undefined) { conditions.push('r.BranchID = ?'); params.push(branchId); }
   if (guestName !== undefined) { conditions.push('g.Name LIKE ?'); params.push(`%${guestName}%`); }

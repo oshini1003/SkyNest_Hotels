@@ -20,6 +20,9 @@ import GuestProfile from "./pages/GuestProfile";
 import { demoBookings } from "./data/demoBookings";
 import StaffLogin from "./pages/StaffLogin";
 import StaffHome from "./pages/StaffHome";
+import StaffBookingList from "./pages/StaffBookingList";
+import StaffBookingDetails from "./pages/StaffBookingDetails";
+import { staffReturnDestination, staffSignInState } from "./services/staffIntent";
 import StaffBookings from "./pages/StaffBookings";
 import StaffBillDetails from "./pages/StaffBillDetails";
 import StaffPayment from "./pages/StaffPayment";
@@ -98,6 +101,16 @@ function SignedInGuestRedirect() {
 function GuestOnly({ session, children }) {
   const { pathname, state } = useLocation();
   return session ? children : <Navigate to="/guest/login" state={guestSignInState(pathname, state)} replace />;
+}
+
+function SignedInStaffRedirect() {
+  const { state } = useLocation();
+  return <Navigate to={staffReturnDestination(state)} replace />;
+}
+
+function StaffOnly({ session, children }) {
+  const { pathname } = useLocation();
+  return session ? children : <Navigate to="/staff/login" state={staffSignInState(pathname)} replace />;
 }
 
 function App() {
@@ -276,7 +289,7 @@ function handleStaffLogout() {
               path="/staff/login"
               element={
                 staffSession ? (
-                  <Navigate to="/staff" replace />
+                  <SignedInStaffRedirect />
                 ) : (
                   <StaffLogin onLogin={handleStaffLogin} />
                 )
@@ -288,6 +301,7 @@ function handleStaffLogout() {
               element={
                 staffSession ? (
                   <StaffHome
+                    key={staffSession.token}
                     staff={staffSession.staff}
                     onLogout={handleStaffLogout}
                   />
@@ -295,6 +309,15 @@ function handleStaffLogout() {
                   <Navigate to="/staff/login" replace />
                 )
               }
+            />
+
+            <Route
+              path="/staff/bookings"
+              element={<StaffOnly session={staffSession}><StaffBookingList key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/bookings/:id"
+              element={<StaffOnly session={staffSession}><StaffBookingDetails key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
 
             <Route path="*" element={<NotFound />} />
