@@ -1,24 +1,61 @@
 # HRGSMS Backend
 
-Node.js + Express REST API for SkyNest Hotels, backed by MySQL/MariaDB.
+Node.js + Express REST API for SkyNest Hotels, backed by MySQL.
 
 ## Setup
 
+Run these commands from the `backend` folder. Install dependencies with `npm ci`.
+Copy `.env.example` to `.env` and set your local database credentials. Generate
+two different random values for `JWT_SECRET` and `JWT_REFRESH_SECRET`, each at
+least 32 characters. Keep the real `.env` private; it is ignored by Git.
+
+For a **new, separate local integration database**, keep a name such as
+`SkyNest_Integration_20261002`, then run:
+
 ```bash
-npm install
-cp .env.example .env   # fill in DB_USER, DB_PASSWORD, JWT_SECRET
-npm start               # or: npm run dev  (nodemon)
+node Database/setupIntegrationDb.js
+npm run dev
 ```
 
-Requires the database to already be set up — see `../database/README.md`.
+The setup command refuses to touch an existing database. It loads `schema.sql`
+and `seed.sql` into the configured integration database, ignoring their default
+`SkyNest_Hotels` selection. It verifies 16 tables, 4 functions, 6 procedures and
+4 triggers. An import failure leaves the new database intact for inspection;
+do not rerun the seed on an existing database.
+
+The sample booking starts tomorrow, avoiding expired fixed dates. Seed accounts
+are for local coursework tests only; their credentials are documented in `seed.sql`.
+
+`GET /api/health` checks the HTTP server. `GET /api/branches` also checks database
+access and should return three seeded branches. The default CORS allowlist covers
+frontend development on ports 5173/5174 and build preview on port 4173. Add your
+exact frontend origin to `CORS_ORIGIN` if you use another port.
 
 ## Authentication
 
-JWT, stateless (no server-side session store). Send the token as:
+Access JWTs authorize requests; rotating refresh tokens are recorded as SHA-256
+digests in `REFRESH_TOKEN`. Access and refresh tokens have separate secrets and
+purposes. Send the **access token** as:
 
 ```
 Authorization: Bearer <token>
 ```
+
+The frontend currently asks users to sign in again when their access token
+expires. Automatic refresh is not implemented. Sign-out revokes its refresh token
+when the backend is reachable and clears the browser session immediately. Password
+changes revoke all refresh tokens for that account. Already issued access tokens
+remain valid until their short expiry.
+
+For local regression checks without MySQL, run `node tests/auth-regression.cjs`.
+After starting the backend against the integration database, set
+`TEST_GUEST_USERNAME` and `TEST_GUEST_PASSWORD` in your terminal and run
+`node test-tokens.js` to test login, token-purpose checks, rotation, replay rejection
+and logout. The test exits unsuccessfully if any assertion fails and prints no tokens.
+
+Lakshan's billing/payment/report layouts are labelled development previews under
+`/preview/staff/...`. Payment simulation does not save or collect money. Real
+booking, service and billing frontend integration remains the next project stage.
 
 | Endpoint | Method | Access | Description |
 |---|---|---|---|
@@ -88,7 +125,7 @@ All require authentication (guest or staff).
 ## Project layout
 
 ```
-src/
+backend/
 ├── config/db.js         MySQL connection pool
 ├── middleware/auth.js   JWT verification + role guards
 ├── controllers/         Route handlers (one per resource)

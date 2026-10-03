@@ -30,6 +30,7 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Form fields
   const [name, setName] = useState("");
@@ -38,17 +39,26 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
   const [address, setAddress] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
     fetchGuestProfile()
       .then((data) => {
+        if (cancelled) return;
         setProfile(data);
         setName(data.Name || "");
         setContactNumber(data.ContactNumber || "");
         setEmail(data.Email || "");
         setAddress(data.Address || "");
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [session.token, loadAttempt]);
 
   function handleCancel() {
     if (profile) {
@@ -64,19 +74,35 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (saving) return;
     setError("");
     setSuccess("");
+
+    const cleanedName = name.trim();
+    const cleanedContact = contactNumber.replace(/[\s-]/g, "");
+    if (!cleanedName || cleanedName.length > 100) {
+      setError("Enter a name of 1 to 100 characters.");
+      return;
+    }
+    if (!/^\+?[0-9]{7,15}$/.test(cleanedContact)) {
+      setError("Enter a contact number with 7 to 15 digits, optionally starting with +. Letters are not allowed.");
+      return;
+    }
     setSaving(true);
 
     try {
       const result = await updateGuestProfile({
-        name,
-        contactNumber,
-        email,
-        address,
+        name: cleanedName,
+        contactNumber: cleanedContact,
+        email: email.trim(),
+        address: address.trim(),
       });
 
       setProfile(result.guest);
+      setName(result.guest.Name || "");
+      setContactNumber(result.guest.ContactNumber || "");
+      setEmail(result.guest.Email || "");
+      setAddress(result.guest.Address || "");
       setSuccess("Profile updated successfully!");
       setEditing(false);
 
@@ -97,6 +123,18 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
           <div className="profile-loading-spinner" />
           <p>Loading your profile…</p>
         </div>
+      </section>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <section className="profile-page">
+        <h1>Your profile</h1>
+        <p className="form-error" role="alert">{error || "Unable to load your profile."}</p>
+        <button className="button" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>
+          Try again
+        </button>
       </section>
     );
   }
@@ -128,8 +166,8 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
 
       {/* ─── Profile Content ─── */}
       <div className="profile-tab-content">
-        {error && <p className="form-error">{error}</p>}
-        {success && <p className="form-success">{success}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {success && <p className="form-success" role="status">{success}</p>}
 
         {!editing ? (
           /* ── View Mode ── */
@@ -165,6 +203,9 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
                 <input
                   id="pf-name"
                   type="text"
+                  maxLength={100}
+                  disabled={saving}
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
@@ -176,12 +217,17 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
                 <label htmlFor="pf-phone">Contact Number</label>
                 <input
                   id="pf-phone"
-                  type="text"
+                  type="tel"
+                  autoComplete="tel"
+                  maxLength={30}
+                  disabled={saving}
+                  aria-describedby="pf-phone-help"
                   value={contactNumber}
                   onChange={(e) => setContactNumber(e.target.value)}
                   required
                   placeholder="e.g. 0771234567"
                 />
+                <small id="pf-phone-help">7–15 digits; an optional + prefix, spaces and hyphens are accepted.</small>
               </div>
 
               <div className="form-field">
@@ -189,6 +235,9 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
                 <input
                   id="pf-email"
                   type="email"
+                  autoComplete="email"
+                  maxLength={150}
+                  disabled={saving}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. guest@example.com"
@@ -200,6 +249,9 @@ export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
                 <input
                   id="pf-address"
                   type="text"
+                  autoComplete="street-address"
+                  maxLength={255}
+                  disabled={saving}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="e.g. Colombo, Sri Lanka"

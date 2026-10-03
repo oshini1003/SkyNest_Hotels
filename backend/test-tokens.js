@@ -1,68 +1,57 @@
-const API = 'http://localhost:5000/api';
+// Run against the local test database after starting the backend.
+// Set TEST_GUEST_USERNAME and TEST_GUEST_PASSWORD in your shell first.
+const assert = require('node:assert/strict');
+const API = process.env.TEST_API_URL || 'http://localhost:5000/api';
+
+async function request(path, options = {}) {
+  return fetch(`${API}${path}`, { ...options, signal: AbortSignal.timeout(10000) });
+}
+const post = (path, body) => request(path, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+});
 
 async function run() {
-  console.log('Testing JWT Refresh Tokens & Authentication...\n');
+  const username = process.env.TEST_GUEST_USERNAME;
+  const password = process.env.TEST_GUEST_PASSWORD;
+  if (!username || !password) throw new Error('Set TEST_GUEST_USERNAME and TEST_GUEST_PASSWORD for a test guest account.');
+  let currentRefresh;
+  try {
+    const login = await post('/auth/guest/login', { username, password });
+    assert.equal(login.status, 200, 'Guest login failed');
+    const first = await login.json();
+    assert.equal(typeof first.accessToken, 'string', 'Access token missing');
+    assert.equal(typeof first.refreshToken, 'string', 'Refresh token missing');
+    currentRefresh = first.refreshToken;
 
-  // 1. Login
-  console.log('1. Logging in as guest (oshini)...');
-  const loginRes = await fetch(`${API}/auth/guest/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'oshini', password: 'guest123' }),
-  });
-  const loginData = await loginRes.json();
-  console.log('   Status:', loginRes.status);
-  console.log('   Access Token received:', !!loginData.accessToken);
-  console.log('   Refresh Token received:', !!loginData.refreshToken);
+    const wrongPurpose = await request('/guests/me', { headers: { Authorization: `Bearer ${first.refreshToken}` } });
+    assert.equal(wrongPurpose.status, 401, 'Refresh token must not authorize a protected route');
+    const accessAsRefresh = await post('/auth/refresh', { refreshToken: first.accessToken });
+    assert.equal(accessAsRefresh.status, 401, 'Access token must not be accepted as a refresh token');
 
-  const refreshToken1 = loginData.refreshToken;
+    const refresh = await post('/auth/refresh', { refreshToken: first.refreshToken });
+    assert.equal(refresh.status, 200, 'Token refresh failed');
+    const second = await refresh.json();
+    assert.equal(typeof second.accessToken, 'string', 'New access token missing');
+    assert.equal(typeof second.refreshToken, 'string', 'New refresh token missing');
+    assert.ok(second.refreshToken !== first.refreshToken, 'Refresh token did not rotate');
+    currentRefresh = second.refreshToken;
 
-  // 2. Refresh Token
-  console.log('\n2. Refreshing token (POST /api/auth/refresh)...');
-  const refreshRes = await fetch(`${API}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: refreshToken1 }),
-  });
-  const refreshData = await refreshRes.json();
-  console.log('   Status:', refreshRes.status);
-  console.log('   New Access Token received:', !!refreshData.accessToken);
-  console.log('   New Rotated Refresh Token received:', !!refreshData.refreshToken);
-
-  const refreshToken2 = refreshData.refreshToken;
-
-  // 3. Test Rotation (Reusing old token should fail)
-  console.log('\n3. Testing Token Rotation (Reusing old refresh token)...');
-  const reuseRes = await fetch(`${API}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: refreshToken1 }),
-  });
-  const reuseData = await reuseRes.json();
-  console.log('   Status:', reuseRes.status, '(Expected 401)');
-  console.log('   Response:', reuseData.error);
-
-  // 4. Test Protected Route with new access token
-  console.log('\n4. Accessing protected profile with new access token...');
-  const profileRes = await fetch(`${API}/guests/me`, {
-    headers: { Authorization: `Bearer ${refreshData.accessToken}` },
-  });
-  const profileData = await profileRes.json();
-  console.log('   Status:', profileRes.status);
-  console.log('   Guest Name:', profileData.Name);
-
-  // 5. Logout
-  console.log('\n5. Logging out (POST /api/auth/logout)...');
-  const logoutRes = await fetch(`${API}/auth/logout`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: refreshToken2 }),
-  });
-  const logoutData = await logoutRes.json();
-  console.log('   Status:', logoutRes.status);
-  console.log('   Response:', logoutData.message);
-
-  console.log('\nAll refresh token checks completed successfully! 🎉');
+    const reuse = await post('/auth/refresh', { refreshToken: first.refreshToken });
+    assert.equal(reuse.status, 401, 'Used refresh token was accepted again');
+    const profile = await request('/guests/me', { headers: { Authorization: `Bearer ${second.accessToken}` } });
+    assert.equal(profile.status, 200, 'Access token could not fetch the guest profile');
+    const logout = await post('/auth/logout', { refreshToken: second.refreshToken });
+    assert.equal(logout.status, 200, 'Logout failed');
+    const revoked = await post('/auth/refresh', { refreshToken: second.refreshToken });
+    assert.equal(revoked.status, 401, 'Logged-out refresh token was accepted');
+    currentRefresh = null;
+    console.log('PASS: login, token-purpose checks, rotation, replay rejection, profile access and logout.');
+  } finally {
+    if (currentRefresh) await post('/auth/logout', { refreshToken: currentRefresh }).catch(() => {});
+  }
 }
 
-run().catch(console.error);
+run().catch((error) => {
+  console.error(`FAIL: ${error.message}`);
+  process.exitCode = 1;
+});

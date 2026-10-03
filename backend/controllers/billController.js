@@ -25,9 +25,9 @@ const getBill = asyncHandler(async (req, res) => {
 
   res.json({
     bookingId: Number(bookingId),
-    roomCharges: roomCharges.RoomCharges,
-    serviceCharges: serviceCharges.ServiceCharges,
-    totalAmount: roomCharges.RoomCharges + serviceCharges.ServiceCharges,
+    roomCharges: bill ? bill.RoomCharges : roomCharges.RoomCharges,
+    serviceCharges: bill ? bill.ServiceCharges : serviceCharges.ServiceCharges,
+    totalAmount: bill ? bill.TotalAmount : roomCharges.RoomCharges + serviceCharges.ServiceCharges,
     outstandingBalance: balance.OutstandingBalance,
     bill: bill || null,
     payments,

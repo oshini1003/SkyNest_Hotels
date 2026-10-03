@@ -60,5 +60,5 @@ INSERT INTO SERVICE_CATALOGUE (ServiceName, Description, UnitPrice, IsActive) VA
 ('Minibar',        'Per item',              500.00,  TRUE);
 
 -- A sample booking via the stored procedure (Room 1, Colombo, 2 nights)
-CALL sp_make_booking(1, 3, 1, '2026-09-20 14:00:00', '2026-09-22 12:00:00', 1, 'Card', @booking_id);
+CALL sp_make_booking(1, 3, 1, DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(CURDATE(), INTERVAL 3 DAY), 1, 'Card', @booking_id);
 SELECT @booking_id AS SampleBookingID;

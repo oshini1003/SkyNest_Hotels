@@ -19,6 +19,7 @@ export default function ChangePasswordForm({ onChangePassword }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (loading) return;
     setError("");
     setSuccess("");
 
@@ -28,6 +29,10 @@ export default function ChangePasswordForm({ onChangePassword }) {
     }
     if (newPassword.length < 6) {
       setError("New password must be at least 6 characters.");
+      return;
+    }
+    if (new TextEncoder().encode(newPassword).length > 72) {
+      setError("New password must be at most 72 bytes. Some characters use more than one byte.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -42,10 +47,7 @@ export default function ChangePasswordForm({ onChangePassword }) {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setTimeout(() => {
-        setOpen(false);
-        setSuccess("");
-      }, 1800);
+
     } catch (err) {
       setError(err.message || "Failed to change password.");
     } finally {
@@ -63,20 +65,23 @@ export default function ChangePasswordForm({ onChangePassword }) {
           if (open) reset();
         }}
         aria-expanded={open}
+        disabled={loading}
       >
         🔒 {open ? "Cancel" : "Change Password"}
       </button>
 
       {open && (
         <form className="change-password-form" onSubmit={handleSubmit}>
-          {error && <p className="form-error">{error}</p>}
-          {success && <p className="form-success">{success}</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}
+          {success && <p className="form-success" role="status">{success}</p>}
 
           <div className="form-field">
             <label htmlFor="cp-current">Current Password</label>
             <input
               id="cp-current"
               type="password"
+              required
+              disabled={loading}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
@@ -88,6 +93,8 @@ export default function ChangePasswordForm({ onChangePassword }) {
             <input
               id="cp-new"
               type="password"
+              required
+              disabled={loading}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
@@ -99,6 +106,8 @@ export default function ChangePasswordForm({ onChangePassword }) {
             <input
               id="cp-confirm"
               type="password"
+              required
+              disabled={loading}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               autoComplete="new-password"

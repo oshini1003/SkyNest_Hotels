@@ -3,354 +3,185 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../config/auth');
+const { validateGuestRegistration, validateStaffRegistration, validateCredentials, validatePasswordChange } = require('../utils/guestValidation');
 
-function signAccessToken(payload) {
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || process.env.JWT_EXPIRES_IN || '15m',
-  });
+const tokenDigest = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+async function transaction(work) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await work(conn);
+    await conn.commit();
+    return result;
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 }
 
-function signRefreshToken(payload) {
-  return jwt.sign(
-    { ...payload, jti: crypto.randomUUID() },
-    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-    }
+async function createTokens(conn, payload) {
+  const token = signAccessToken(payload);
+  const refreshToken = signRefreshToken(payload.type, payload.id);
+  const expiresAt = new Date(jwt.decode(refreshToken).exp * 1000);
+  // Store only a digest, so a database token row cannot be used as a credential.
+  await conn.execute(
+    'INSERT INTO REFRESH_TOKEN (UserType, UserID, Token, ExpiresAt) VALUES (?, ?, ?, ?)',
+    [payload.type, payload.id, tokenDigest(refreshToken), expiresAt]
   );
+  return { token, accessToken: token, refreshToken };
 }
 
-async function createAndStoreRefreshToken(userType, userId, username, extraPayload = {}) {
-  const payload = { type: userType, id: userId, username, ...extraPayload };
-  const refreshToken = signRefreshToken(payload);
-  const decoded = jwt.decode(refreshToken);
-  const expiresAt = new Date(decoded.exp * 1000);
-
-  await pool.execute(
-    `INSERT INTO REFRESH_TOKEN (UserType, UserID, Token, ExpiresAt) VALUES (?, ?, ?, ?)`,
-    [userType, userId, refreshToken, expiresAt]
-  );
-
-  return refreshToken;
+// Account rows are locked before refresh-token rows in all authentication transactions.
+async function findAccount(conn, type, column, value) {
+  const sql = type === 'guest'
+    ? `SELECT ga.GuestID, ga.Username, ga.PasswordHash, g.Name
+       FROM GUEST_ACCOUNT ga JOIN GUEST g ON g.GuestID = ga.GuestID
+       WHERE ga.${column === 'id' ? 'GuestID' : 'Username'} = ? FOR UPDATE`
+    : `SELECT sa.StaffID, sa.Username, sa.PasswordHash, s.Name, s.Role, s.BranchID
+       FROM STAFF_ACCOUNT sa JOIN STAFF s ON s.StaffID = sa.StaffID
+       WHERE sa.${column === 'id' ? 'StaffID' : 'Username'} = ? FOR UPDATE`;
+  const [rows] = await conn.execute(sql, [value]);
+  return rows[0];
 }
 
-const signToken = signAccessToken;
+function accountPayload(type, account) {
+  if (type === 'guest') return { type, id: account.GuestID, username: account.Username };
+  return { type, id: account.StaffID, username: account.Username, role: account.Role, branchId: account.BranchID };
+}
 
 // POST /api/auth/guest/register
 const registerGuest = asyncHandler(async (req, res) => {
-  const { name, contactNumber, email, idNumber, address, username, password } = req.body;
-  if (!name || !contactNumber || !idNumber || !username || !password) {
-    return res.status(400).json({ error: 'name, contactNumber, idNumber, username and password are required.' });
-  }
-
-  const conn = await pool.getConnection();
+  const parsed = validateGuestRegistration(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const { name, contactNumber, email, idNumber, address, username, password } = parsed.value;
+  const passwordHash = await bcrypt.hash(password, 10);
   try {
-    await conn.beginTransaction();
-
-    const [guestResult] = await conn.execute(
-      `INSERT INTO GUEST (Name, ContactNumber, Email, IDNumber, Address) VALUES (?, ?, ?, ?, ?)`,
-      [name, contactNumber, email || null, idNumber, address || null]
-    );
-    const guestId = guestResult.insertId;
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    await conn.execute(
-      `INSERT INTO GUEST_ACCOUNT (GuestID, Username, PasswordHash) VALUES (?, ?, ?)`,
-      [guestId, username, passwordHash]
-    );
-
-    await conn.commit();
-
-    const token = signAccessToken({ type: 'guest', id: guestId, username });
-    const refreshToken = await createAndStoreRefreshToken('guest', guestId, username);
-    res.status(201).json({
-      token,
-      accessToken: token,
-      refreshToken,
-      guest: { guestId, name, username },
+    const result = await transaction(async (conn) => {
+      const [guest] = await conn.execute(
+        'INSERT INTO GUEST (Name, ContactNumber, Email, IDNumber, Address) VALUES (?, ?, ?, ?, ?)',
+        [name, contactNumber, email, idNumber, address]
+      );
+      const guestId = guest.insertId;
+      await conn.execute('INSERT INTO GUEST_ACCOUNT (GuestID, Username, PasswordHash) VALUES (?, ?, ?)', [guestId, username, passwordHash]);
+      const tokens = await createTokens(conn, { type: 'guest', id: guestId, username });
+      return { ...tokens, guest: { guestId, name, username } };
     });
-  } catch (err) {
-    await conn.rollback();
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Username or ID number already registered.' });
-    }
-    throw err;
-  } finally {
-    conn.release();
+    return res.status(201).json(result);
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Username or ID number already registered.' });
+    throw error;
   }
 });
 
-// POST /api/auth/guest/login
-const loginGuest = asyncHandler(async (req, res) => {
-  const { username, password } = req.body;
-  const [rows] = await pool.execute(
-    `SELECT ga.GuestID, ga.Username, ga.PasswordHash, g.Name
-     FROM GUEST_ACCOUNT ga JOIN GUEST g ON g.GuestID = ga.GuestID
-     WHERE ga.Username = ?`,
-    [username]
-  );
-  if (rows.length === 0) return res.status(401).json({ error: 'Invalid username or password.' });
-
-  const account = rows[0];
-  const ok = await bcrypt.compare(password || '', account.PasswordHash);
-  if (!ok) return res.status(401).json({ error: 'Invalid username or password.' });
-
-  const token = signAccessToken({ type: 'guest', id: account.GuestID, username: account.Username });
-  const refreshToken = await createAndStoreRefreshToken('guest', account.GuestID, account.Username);
-  res.json({
-    token,
-    accessToken: token,
-    refreshToken,
-    guest: { guestId: account.GuestID, name: account.Name, username: account.Username },
+function login(type) {
+  return asyncHandler(async (req, res) => {
+    const parsed = validateCredentials(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const { username, password } = parsed.value;
+    const result = await transaction(async (conn) => {
+      const account = await findAccount(conn, type, 'username', username);
+      if (!account || !(await bcrypt.compare(password, account.PasswordHash))) return null;
+      const tokens = await createTokens(conn, accountPayload(type, account));
+      const identity = type === 'guest'
+        ? { guestId: account.GuestID, name: account.Name, username: account.Username }
+        : { staffId: account.StaffID, name: account.Name, username: account.Username, role: account.Role, branchId: account.BranchID };
+      return { ...tokens, [type]: identity };
+    });
+    if (!result) return res.status(401).json({ error: 'Invalid username or password.' });
+    return res.json(result);
   });
-});
+}
+const loginGuest = login('guest');
+const loginStaff = login('staff');
 
-// POST /api/auth/staff/login
-const loginStaff = asyncHandler(async (req, res) => {
-  const { username, password } = req.body;
-  const [rows] = await pool.execute(
-    `SELECT sa.StaffID, sa.Username, sa.PasswordHash, s.Name, s.Role, s.BranchID
-     FROM STAFF_ACCOUNT sa JOIN STAFF s ON s.StaffID = sa.StaffID
-     WHERE sa.Username = ?`,
-    [username]
-  );
-  if (rows.length === 0) return res.status(401).json({ error: 'Invalid username or password.' });
-
-  const account = rows[0];
-  const ok = await bcrypt.compare(password || '', account.PasswordHash);
-  if (!ok) return res.status(401).json({ error: 'Invalid username or password.' });
-
-  const accessPayload = {
-    type: 'staff',
-    id: account.StaffID,
-    username: account.Username,
-    role: account.Role,
-    branchId: account.BranchID,
-  };
-  const token = signAccessToken(accessPayload);
-  const refreshToken = await createAndStoreRefreshToken('staff', account.StaffID, account.Username, {
-    role: account.Role,
-    branchId: account.BranchID,
-  });
-  res.json({
-    token,
-    accessToken: token,
-    refreshToken,
-    staff: {
-      staffId: account.StaffID,
-      name: account.Name,
-      role: account.Role,
-      branchId: account.BranchID,
-      username: account.Username,
-    },
-  });
-});
-
-// POST /api/auth/staff/register
+// POST /api/auth/staff/register (Admin role is enforced by the route)
 const registerStaff = asyncHandler(async (req, res) => {
-  const { branchId, name, role, email, username, password } = req.body;
-  const validRoles = ['Admin', 'Manager', 'Receptionist', 'ServiceStaff'];
-  if (!name || !role || !username || !password || !validRoles.includes(role)) {
-    return res.status(400).json({ error: 'name, a valid role, username and password are required.' });
-  }
-
-  const conn = await pool.getConnection();
+  const parsed = validateStaffRegistration(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const { branchId, name, role, email, username, password } = parsed.value;
+  const passwordHash = await bcrypt.hash(password, 10);
   try {
-    await conn.beginTransaction();
-
-    const [staffResult] = await conn.execute(
-      `INSERT INTO STAFF (BranchID, Name, Role, Email) VALUES (?, ?, ?, ?)`,
-      [branchId || null, name, role, email || null]
-    );
-    const staffId = staffResult.insertId;
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    await conn.execute(
-      `INSERT INTO STAFF_ACCOUNT (StaffID, Username, PasswordHash) VALUES (?, ?, ?)`,
-      [staffId, username, passwordHash]
-    );
-
-    await conn.commit();
-    res.status(201).json({ staffId, name, role, username });
-  } catch (err) {
-    await conn.rollback();
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Username already taken.' });
-    }
-    throw err;
-  } finally {
-    conn.release();
+    const result = await transaction(async (conn) => {
+      const [staff] = await conn.execute('INSERT INTO STAFF (BranchID, Name, Role, Email) VALUES (?, ?, ?, ?)', [branchId, name, role, email]);
+      await conn.execute('INSERT INTO STAFF_ACCOUNT (StaffID, Username, PasswordHash) VALUES (?, ?, ?)', [staff.insertId, username, passwordHash]);
+      return { staffId: staff.insertId, name, role, username };
+    });
+    return res.status(201).json(result);
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Username already taken.' });
+    if (error.code === 'ER_NO_REFERENCED_ROW_2') return res.status(400).json({ error: 'Select an existing branch.' });
+    throw error;
   }
 });
 
-// PUT /api/auth/guest/password
-const changeGuestPassword = asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'currentPassword and newPassword are required.' });
-  }
-  if (newPassword.length < 6) {
-    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
-  }
-
-  const [rows] = await pool.execute(
-    `SELECT PasswordHash FROM GUEST_ACCOUNT WHERE GuestID = ?`,
-    [req.user.id]
-  );
-  if (rows.length === 0) return res.status(404).json({ error: 'Account not found.' });
-
-  const ok = await bcrypt.compare(currentPassword, rows[0].PasswordHash);
-  if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
-
-  const passwordHash = await bcrypt.hash(newPassword, 10);
-  await pool.execute(
-    `UPDATE GUEST_ACCOUNT SET PasswordHash = ? WHERE GuestID = ?`,
-    [passwordHash, req.user.id]
-  );
-
-  // Invalidate any active refresh tokens for this guest
-  await pool.execute(
-    `UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE UserType = 'guest' AND UserID = ? AND RevokedAt IS NULL`,
-    [req.user.id]
-  );
-
-  res.json({ message: 'Password changed successfully.' });
-});
-
-// PUT /api/auth/staff/password
-const changeStaffPassword = asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'currentPassword and newPassword are required.' });
-  }
-  if (newPassword.length < 6) {
-    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
-  }
-
-  const [rows] = await pool.execute(
-    `SELECT PasswordHash FROM STAFF_ACCOUNT WHERE StaffID = ?`,
-    [req.user.id]
-  );
-  if (rows.length === 0) return res.status(404).json({ error: 'Account not found.' });
-
-  const ok = await bcrypt.compare(currentPassword, rows[0].PasswordHash);
-  if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
-
-  const passwordHash = await bcrypt.hash(newPassword, 10);
-  await pool.execute(
-    `UPDATE STAFF_ACCOUNT SET PasswordHash = ? WHERE StaffID = ?`,
-    [passwordHash, req.user.id]
-  );
-
-  // Invalidate any active refresh tokens for this staff member
-  await pool.execute(
-    `UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE UserType = 'staff' AND UserID = ? AND RevokedAt IS NULL`,
-    [req.user.id]
-  );
-
-  res.json({ message: 'Password changed successfully.' });
-});
+function changePassword(type) {
+  return asyncHandler(async (req, res) => {
+    const parsed = validatePasswordChange(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const { currentPassword, newPassword } = parsed.value;
+    const result = await transaction(async (conn) => {
+      const account = await findAccount(conn, type, 'id', req.user.id);
+      if (!account) return { status: 404, error: 'Account not found.' };
+      // A wrong current password is a form error, not an expired login session.
+      if (!(await bcrypt.compare(currentPassword, account.PasswordHash))) return { status: 400, error: 'Current password is incorrect.' };
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      const sql = type === 'guest'
+        ? 'UPDATE GUEST_ACCOUNT SET PasswordHash = ? WHERE GuestID = ?'
+        : 'UPDATE STAFF_ACCOUNT SET PasswordHash = ? WHERE StaffID = ?';
+      await conn.execute(sql, [passwordHash, req.user.id]);
+      await conn.execute('UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE UserType = ? AND UserID = ? AND RevokedAt IS NULL', [type, req.user.id]);
+      return null;
+    });
+    if (result) return res.status(result.status).json({ error: result.error });
+    // Existing access tokens expire at their normal short expiry; refresh tokens are revoked.
+    return res.json({ message: 'Password changed successfully. Please sign in again.' });
+  });
+}
+const changeGuestPassword = changePassword('guest');
+const changeStaffPassword = changePassword('staff');
 
 // POST /api/auth/refresh
 const refreshToken = asyncHandler(async (req, res) => {
-  const { refreshToken: token } = req.body;
-  if (!token) {
-    return res.status(400).json({ error: 'Refresh token is required.' });
+  const token = req.body?.refreshToken;
+  if (typeof token !== 'string' || !token || token.length > 2000) {
+    return res.status(400).json({ error: 'A valid refresh token is required.' });
   }
-
   let payload;
-  try {
-    payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired refresh token.' });
-  }
+  try { payload = verifyRefreshToken(token); }
+  catch { return res.status(401).json({ error: 'Invalid or expired refresh token.' }); }
 
-  const [rows] = await pool.execute(
-    `SELECT TokenID, UserType, UserID FROM REFRESH_TOKEN
-     WHERE Token = ? AND RevokedAt IS NULL AND ExpiresAt > NOW()`,
-    [token]
-  );
-
-  if (rows.length === 0) {
-    return res.status(401).json({ error: 'Invalid, expired, or revoked refresh token.' });
-  }
-
-  const currentRecord = rows[0];
-
-  // Token rotation: Revoke the used refresh token
-  await pool.execute(
-    `UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE TokenID = ?`,
-    [currentRecord.TokenID]
-  );
-
-  let accessPayload;
-  let refreshExtra = {};
-
-  if (currentRecord.UserType === 'guest') {
-    const [gRows] = await pool.execute(
-      `SELECT GuestID, Username FROM GUEST_ACCOUNT WHERE GuestID = ?`,
-      [currentRecord.UserID]
+  const result = await transaction(async (conn) => {
+    const account = await findAccount(conn, payload.type, 'id', payload.id);
+    if (!account) return null;
+    const [rows] = await conn.execute(
+      `SELECT TokenID, UserType, UserID FROM REFRESH_TOKEN
+       WHERE Token = ? AND RevokedAt IS NULL AND ExpiresAt > NOW() FOR UPDATE`,
+      [tokenDigest(token)]
     );
-    if (gRows.length === 0) {
-      return res.status(401).json({ error: 'Guest account no longer exists.' });
-    }
-    accessPayload = { type: 'guest', id: gRows[0].GuestID, username: gRows[0].Username };
-  } else if (currentRecord.UserType === 'staff') {
-    const [sRows] = await pool.execute(
-      `SELECT sa.StaffID, sa.Username, s.Role, s.BranchID
-       FROM STAFF_ACCOUNT sa JOIN STAFF s ON s.StaffID = sa.StaffID
-       WHERE sa.StaffID = ?`,
-      [currentRecord.UserID]
-    );
-    if (sRows.length === 0) {
-      return res.status(401).json({ error: 'Staff account no longer exists.' });
-    }
-    accessPayload = {
-      type: 'staff',
-      id: sRows[0].StaffID,
-      username: sRows[0].Username,
-      role: sRows[0].Role,
-      branchId: sRows[0].BranchID,
-    };
-    refreshExtra = { role: sRows[0].Role, branchId: sRows[0].BranchID };
-  } else {
-    return res.status(401).json({ error: 'Invalid account type.' });
-  }
-
-  const newAccessToken = signAccessToken(accessPayload);
-  const newRefreshToken = await createAndStoreRefreshToken(
-    currentRecord.UserType,
-    currentRecord.UserID,
-    accessPayload.username,
-    refreshExtra
-  );
-
-  res.json({
-    token: newAccessToken,
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
+    const current = rows[0];
+    if (!current || current.UserType !== payload.type || current.UserID !== payload.id) return null;
+    await conn.execute('UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE TokenID = ?', [current.TokenID]);
+    // If issuing/inserting the replacement fails, rollback restores the old token.
+    return createTokens(conn, accountPayload(payload.type, account));
   });
+  if (!result) return res.status(401).json({ error: 'Invalid, expired, or revoked refresh token.' });
+  return res.json(result);
 });
 
-// POST /api/auth/logout
+// POST /api/auth/logout — idempotent revocation of the supplied refresh token.
 const logout = asyncHandler(async (req, res) => {
-  const { refreshToken: token } = req.body;
-  if (token) {
-    await pool.execute(
-      `UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE Token = ?`,
-      [token]
-    );
+  const token = req.body?.refreshToken;
+  if (token !== undefined && (typeof token !== 'string' || token.length > 2000)) {
+    return res.status(400).json({ error: 'Invalid refresh token.' });
   }
-  res.json({ message: 'Logged out successfully.' });
+  if (token) {
+    await pool.execute('UPDATE REFRESH_TOKEN SET RevokedAt = NOW() WHERE Token = ? AND RevokedAt IS NULL', [tokenDigest(token)]);
+  }
+  return res.json({ message: 'Logged out successfully.' });
 });
 
-module.exports = {
-  registerGuest,
-  loginGuest,
-  loginStaff,
-  registerStaff,
-  changeGuestPassword,
-  changeStaffPassword,
-  refreshToken,
-  logout,
-};
+module.exports = { registerGuest, loginGuest, loginStaff, registerStaff, changeGuestPassword, changeStaffPassword, refreshToken, logout };

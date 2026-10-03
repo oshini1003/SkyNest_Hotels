@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { validateGuestProfile } = require('../utils/guestValidation');
 
 // GET /api/guests/me — return the authenticated guest's profile
 const getProfile = asyncHandler(async (req, res) => {
@@ -20,31 +21,15 @@ const getProfile = asyncHandler(async (req, res) => {
 
 // PUT /api/guests/me — update the authenticated guest's profile
 const updateProfile = asyncHandler(async (req, res) => {
-  const { name, contactNumber, email, address } = req.body;
+  const parsed = validateGuestProfile(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
 
-  if (!name && !contactNumber && (email === undefined) && (address === undefined)) {
-    return res.status(400).json({ error: 'Provide at least one field to update (name, contactNumber, email, address).' });
-  }
-
-  // Build dynamic SET clause — only update the fields that were sent
+  const columns = { name: 'Name', contactNumber: 'ContactNumber', email: 'Email', address: 'Address' };
   const fields = [];
   const values = [];
-
-  if (name) {
-    fields.push('Name = ?');
-    values.push(name);
-  }
-  if (contactNumber) {
-    fields.push('ContactNumber = ?');
-    values.push(contactNumber);
-  }
-  if (email !== undefined) {
-    fields.push('Email = ?');
-    values.push(email || null);
-  }
-  if (address !== undefined) {
-    fields.push('Address = ?');
-    values.push(address || null);
+  for (const [key, value] of Object.entries(parsed.value)) {
+    fields.push(`${columns[key]} = ?`);
+    values.push(value);
   }
 
   values.push(req.user.id); // WHERE clause
@@ -63,6 +48,7 @@ const updateProfile = asyncHandler(async (req, res) => {
     [req.user.id]
   );
 
+  if (!rows.length) return res.status(404).json({ error: 'Guest not found.' });
   res.json({ message: 'Profile updated successfully.', guest: rows[0] });
 });
 

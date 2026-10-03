@@ -1,106 +1,119 @@
 import { useState } from "react";
 import { Link } from "react-router";
+import { demoBill as bill, formatLkr } from "../data/demoBilling";
+
+const paymentMethods = ["Cash", "Card", "Bank Transfer"];
 
 export default function StaffPayment() {
-  const [bill, setBill] = useState({
-    bookingId: "SKN-8492",
-    guestName: "Lakshan Gamage",
-    totalAmount: 14500,
-    paymentsReceived: 10000
-  });
-
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [simulation, setSimulation] = useState(null);
+  const [error, setError] = useState("");
+  const balanceCents = Math.round((bill.totalAmount - bill.paymentsReceived) * 100);
 
-  const outstandingBalance = bill.totalAmount - bill.paymentsReceived;
-
-  function handleRecordPayment(e) {
-    e.preventDefault();
-    const amountNum = parseFloat(paymentAmount);
-
-    if (!amountNum || amountNum <= 0) {
-      alert("Please enter a valid payment amount.");
-      return;
-    }
-
-    if (amountNum > outstandingBalance) {
-      alert("Payment amount cannot exceed the outstanding balance.");
-      return;
-    }
-
-   
-    const updatedPaid = bill.paymentsReceived + amountNum;
-    setBill({
-      ...bill,
-      paymentsReceived: updatedPaid
-    });
-
-    setSuccessMessage(`Successfully recorded LKR ${amountNum.toLocaleString()}.00 via ${paymentMethod}!`);
-    setPaymentAmount("");
+  function clearResult() {
+    setSimulation(null);
+    setError("");
   }
 
-  const currentBalance = bill.totalAmount - bill.paymentsReceived;
+  function handleSimulatePayment(event) {
+    event.preventDefault();
+    clearResult();
+    const amount = Number(paymentAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter a payment amount greater than zero.");
+      return;
+    }
+    if (!/^\d+(?:\.\d{1,2})?$/.test(paymentAmount)) {
+      setError("Enter an amount with no more than two decimal places.");
+      return;
+    }
+
+    const amountCents = Math.round(amount * 100);
+    if (amountCents > balanceCents) {
+      setError("The payment cannot exceed the sample outstanding balance.");
+      return;
+    }
+    if (!paymentMethods.includes(paymentMethod)) {
+      setError("Choose a payment method from the list.");
+      return;
+    }
+
+    setSimulation({
+      amount: amountCents / 100,
+      method: paymentMethod,
+      remaining: (balanceCents - amountCents) / 100,
+    });
+  }
 
   return (
     <section>
-      <p className="eyebrow">STAFF BILLING PORTAL</p>
-      <h1>Record a Payment</h1>
+      <p className="eyebrow">STAFF PAYMENT PREVIEW</p>
+      <h1>Simulate a payment</h1>
+      <p className="booking-notice">
+        Development preview using fictional data. No money is collected and no
+        payment is saved. Each simulation starts from the same sample balance.
+      </p>
 
-      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "1.5rem" }}>
-        <h2>Reservation ID: {bill.bookingId}</h2>
-        <p><strong>Guest Name:</strong> {bill.guestName}</p>
-        <p>Total Bill Amount: LKR {bill.totalAmount.toLocaleString()}.00</p>
-        <p>Total Paid So Far: <span style={{ color: "green", fontWeight: "bold" }}>LKR {bill.paymentsReceived.toLocaleString()}.00</span></p>
-        <p>Current Outstanding Balance: <span style={{ color: currentBalance > 0 ? "red" : "green", fontWeight: "bold" }}>LKR {currentBalance.toLocaleString()}.00</span></p>
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>Sample reservation: {bill.bookingId}</h2>
+        <p><strong>Guest:</strong> {bill.guestName}</p>
+        <p>Sample total: {formatLkr(bill.totalAmount)}</p>
+        <p>Sample amount paid: {formatLkr(bill.paymentsReceived)}</p>
+        <p><strong>Sample outstanding balance: {formatLkr(balanceCents / 100)}</strong></p>
 
-        <hr style={{ margin: "1.5rem 0", borderColor: "#e2d9cc" }} />
-
-        {successMessage && (
-          <div style={{ background: "#d4edda", color: "#155724", padding: "10px", borderRadius: "4px", marginBottom: "1.5rem", border: "1px solid #c3e6cb" }}>
-            {successMessage}
+        <form onSubmit={handleSimulatePayment} className="auth-form" style={{ maxWidth: "400px" }}>
+          <div className="form-field">
+            <label htmlFor="preview-payment-amount">Payment amount (LKR)</label>
+            <input
+              id="preview-payment-amount"
+              name="amount"
+              type="number"
+              min="0.01"
+              max={balanceCents / 100}
+              step="0.01"
+              required
+              value={paymentAmount}
+              onChange={(event) => {
+                setPaymentAmount(event.target.value);
+                clearResult();
+              }}
+            />
           </div>
-        )}
+          <div className="form-field">
+            <label htmlFor="preview-payment-method">Payment method</label>
+            <select
+              id="preview-payment-method"
+              name="paymentMethod"
+              value={paymentMethod}
+              onChange={(event) => {
+                setPaymentMethod(event.target.value);
+                clearResult();
+              }}
+              style={{ padding: "12px", borderRadius: "6px", font: "inherit" }}
+            >
+              {paymentMethods.map((method) => (
+                <option key={method} value={method}>{method}</option>
+              ))}
+            </select>
+          </div>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button className="button" type="submit">Simulate payment</button>
+          <div aria-live="polite">
+            {simulation && (
+              <p className="booking-notice">
+                Simulation only: {formatLkr(simulation.amount)} via {simulation.method}
+                {" "}would leave {formatLkr(simulation.remaining)} outstanding.
+                {" "}<strong>No payment was recorded.</strong>
+              </p>
+            )}
+          </div>
+        </form>
 
-        {currentBalance > 0 ? (
-          <form onSubmit={handleRecordPayment} style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Payment Amount (LKR):</label>
-              <input
-                type="number"
-                placeholder="Enter amount"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Payment Method:</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
-              >
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-              </select>
-            </div>
-
-            <button className="button" type="submit" style={{ marginTop: "10px" }}>
-              Confirm & Record Payment
-            </button>
-          </form>
-        ) : (
-          <p style={{ color: "green", fontWeight: "bold" }}>This bill is fully settled! No outstanding balance.</p>
-        )}
-
-        <div style={{ marginTop: "2rem", display: "flex", gap: "1rem" }}>
-          <Link className="button" style={{ background: "#6c757d" }} to="/staff/bill-details">
-            Back to Bill Details
-          </Link>
-        </div>
+        <Link className="button" to="/preview/staff/bill-details" style={{ marginTop: "2rem" }}>
+          Back to sample bill
+        </Link>
       </div>
     </section>
   );

@@ -1,5 +1,4 @@
-const API_BASE = "http://localhost:5000/api";
-const SESSION_KEY = "skynest_guest_session";
+import { API_BASE, readSession, saveSession, clearSession } from "./session";
 
 async function requestGuestSession(path, body) {
   let response;
@@ -50,24 +49,25 @@ export function registerGuest(details) {
 }
 
 export function readGuestSession() {
-  try {
-    const session = JSON.parse(sessionStorage.getItem(SESSION_KEY));
-    return session?.token && session?.guest?.guestId ? session : null;
-  } catch {
-    return null;
-  }
+  const session = readSession("guest");
+  return session?.guest?.guestId ? session : null;
 }
 
 export function saveGuestSession(session) {
-  sessionStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({
+  if (!session?.token || !session?.guest?.guestId) {
+    throw new Error("Unable to save this guest session.");
+  }
+  try {
+    saveSession("guest", {
       token: session.token,
+      refreshToken: session.refreshToken,
       guest: session.guest,
-    })
-  );
+    });
+  } catch {
+    throw new Error("Your browser could not save the guest session. Please check its storage settings.");
+  }
 }
 
 export function clearGuestSession() {
-  sessionStorage.removeItem(SESSION_KEY);
+  clearSession("guest");
 }

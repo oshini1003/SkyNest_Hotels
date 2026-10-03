@@ -1,46 +1,18 @@
-const API_BASE = "http://localhost:5000/api";
+import { authenticatedRequest, clearSession } from "./session";
 
-function getToken(sessionKey) {
-  try {
-    const session = JSON.parse(sessionStorage.getItem(sessionKey));
-    return session?.token || null;
-  } catch {
-    return null;
-  }
+async function changePassword(kind, currentPassword, newPassword) {
+  const result = await authenticatedRequest(kind, `/auth/${kind}/password`, {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  clearSession(kind, "Password changed. Please sign in with your new password.");
+  return result;
 }
 
-export async function changeGuestPassword(currentPassword, newPassword) {
-  const token = getToken("skynest_guest_session");
-  const response = await fetch(`${API_BASE}/auth/guest/password`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ currentPassword, newPassword }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new Error(data?.error || "Failed to change password.");
-  }
-  return response.json();
+export function changeGuestPassword(currentPassword, newPassword) {
+  return changePassword("guest", currentPassword, newPassword);
 }
 
-export async function changeStaffPassword(currentPassword, newPassword) {
-  const token = getToken("skynest_staff_session");
-  const response = await fetch(`${API_BASE}/auth/staff/password`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ currentPassword, newPassword }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new Error(data?.error || "Failed to change password.");
-  }
-  return response.json();
+export function changeStaffPassword(currentPassword, newPassword) {
+  return changePassword("staff", currentPassword, newPassword);
 }

@@ -1,65 +1,48 @@
-import { useState } from "react";
 import { Link } from "react-router";
+import { demoBill as bill, formatLkr } from "../data/demoBilling";
 
 export default function StaffBillDetails() {
-  // සාම්පල් බිල් සහ ගෙවීම් විස්තර
-  const [bill, setBill] = useState({
-    bookingId: "SKN-8492",
-    guestName: "Lakshan Gamage",
-    roomType: "Standard (Room 101)",
-    roomCharges: 12000,
-    serviceCharges: 2500,
-    totalAmount: 14500,
-    paymentsReceived: 10000,
-    paymentHistory: [
-      { id: "PAY-01", date: "2026-10-06", method: "Card", amount: 10000 }
-    ]
-  });
-
   const outstandingBalance = bill.totalAmount - bill.paymentsReceived;
 
   return (
     <section>
-      <p className="eyebrow">STAFF BILLING PORTAL</p>
-      <h1>Booking Bill & Payment Details</h1>
+      <p className="eyebrow">STAFF BILLING PREVIEW</p>
+      <h1>Sample bill details</h1>
+      <p className="booking-notice">
+        Development preview using fictional data. This page is not connected to
+        the database. Payment simulations do not change this sample bill.
+      </p>
 
-      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "1.5rem" }}>
-        <h2>Reservation ID: {bill.bookingId}</h2>
-        <p><strong>Guest Name:</strong> {bill.guestName}</p>
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>Sample reservation: {bill.bookingId}</h2>
+        <p><strong>Guest:</strong> {bill.guestName}</p>
         <p><strong>Room:</strong> {bill.roomType}</p>
 
-        <hr style={{ margin: "1.5rem 0", borderColor: "#e2d9cc" }} />
+        <h3>Cost breakdown</h3>
+        <p>Room charges: {formatLkr(bill.roomCharges)}</p>
+        <p>Service charges: {formatLkr(bill.serviceCharges)}</p>
+        <p><strong>Total: {formatLkr(bill.totalAmount)}</strong></p>
 
-        <h3>Cost Breakdown</h3>
-        <p>Room Charges: LKR {bill.roomCharges.toLocaleString()}.00</p>
-        <p>Service Charges (Extra): LKR {bill.serviceCharges.toLocaleString()}.00</p>
-        <p><strong>Total Bill Amount: LKR {bill.totalAmount.toLocaleString()}.00</strong></p>
+        <h3>Sample payment status</h3>
+        <p>Paid: {formatLkr(bill.paymentsReceived)}</p>
+        <p><strong>Outstanding: {formatLkr(outstandingBalance)}</strong></p>
 
-        <hr style={{ margin: "1.5rem 0", borderColor: "#e2d9cc" }} />
+        <h3>Sample payment history</h3>
+        <ul>
+          {bill.paymentHistory.map((payment) => (
+            <li key={payment.id}>
+              {payment.date} — {formatLkr(payment.amount)} via {payment.method}
+              {" "}({payment.id})
+            </li>
+          ))}
+        </ul>
 
-        <h3>Payment Status</h3>
-        <p>Total Paid: <span style={{ color: "green", fontWeight: "bold" }}>LKR {bill.paymentsReceived.toLocaleString()}.00</span></p>
-        <p>Outstanding Balance: <span style={{ color: outstandingBalance > 0 ? "red" : "green", fontWeight: "bold" }}>LKR {outstandingBalance.toLocaleString()}.00</span></p>
-
-        <h4 style={{ marginTop: "1.5rem" }}>Payment History</h4>
-        {bill.paymentHistory.length > 0 ? (
-          <ul style={{ paddingLeft: "20px", marginBottom: "1.5rem" }}>
-            {bill.paymentHistory.map((pay) => (
-              <li key={pay.id}>
-                {pay.date} - LKR {pay.amount.toLocaleString()}.00 via {pay.method} ({pay.id})
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No payments recorded yet.</p>
-        )}
-
-        <div style={{ display: "flex", gap: "1rem", marginTop: "2rem" }}>
-          <Link className="button" to="/staff/record-payment">
-            Record a Payment
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "2rem" }}>
+          <Link className="button" to="/preview/staff/record-payment">
+            Simulate a payment
           </Link>
-          <Link className="button" style={{ background: "#6c757d" }} to="/staff/manager-reports">
-            Back to Reports
+          <Link className="button" to="/preview/staff/manager-reports">
+            View sample reports
           </Link>
         </div>
       </div>

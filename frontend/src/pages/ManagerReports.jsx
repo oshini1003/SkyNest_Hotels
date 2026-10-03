@@ -1,106 +1,90 @@
 import { useState } from "react";
 import { Link } from "react-router";
+import { demoBillingSummary, demoOccupancy, formatLkr } from "../data/demoBilling";
 
 export default function ManagerReports() {
-  const occupancyData = [
-    { branch: "Colombo", totalRooms: 50, occupied: 42, occupancyRate: "84%" },
-    { branch: "Kandy", totalRooms: 30, occupied: 21, occupancyRate: "70%" },
-    { branch: "Galle", totalRooms: 40, occupied: 35, occupancyRate: "87.5%" }
-  ];
-
-  const [bills] = useState([
-    { id: "SKN-8492", guest: "Lakshan Gamage", branch: "Colombo", total: 14500, paid: 10000, status: "Outstanding" },
-    { id: "SKN-8493", guest: "Kasun Perera", branch: "Kandy", total: 22000, paid: 22000, status: "Paid" },
-    { id: "SKN-8494", guest: "Nimesha Silva", branch: "Galle", total: 18500, paid: 5000, status: "Outstanding" },
-    { id: "SKN-8495", guest: "Amal Fernando", branch: "Colombo", total: 30000, paid: 30000, status: "Paid" }
-  ]);
-
   const [filterOutstanding, setFilterOutstanding] = useState(false);
-
   const filteredBills = filterOutstanding
-    ? bills.filter(b => b.status === "Outstanding")
-    : bills;
+    ? demoBillingSummary.filter((bill) => bill.total > bill.paid)
+    : demoBillingSummary;
 
   return (
     <section>
-      <p className="eyebrow">MANAGER PORTAL</p>
-      <h1>Manager Reports & Analytics</h1>
+      <p className="eyebrow">MANAGER REPORTS PREVIEW</p>
+      <h1>Sample manager reports</h1>
+      <p className="booking-notice">
+        Development preview using fictional figures. These are not live hotel
+        reports. Payment simulations do not update the figures below.
+      </p>
 
-      {/* Branch Occupancy Section */}
-      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "1.5rem" }}>
-        <h2>Branch Occupancy Summary</h2>
-        <table style={{ width: "100%", marginTop: "1rem", borderCollapse: "collapse", textAlign: "left" }}>
+      <h2>Sample branch occupancy</h2>
+      <div className="staff-booking-table-wrap" tabIndex={0} role="region" aria-label="Sample occupancy table">
+        <table className="staff-booking-table" style={{ minWidth: "550px" }}>
+          <caption>Fictional room counts for the report layout</caption>
           <thead>
-            <tr style={{ borderBottom: "2px solid #e2d9cc" }}>
-              <th style={{ padding: "10px" }}>Branch</th>
-              <th style={{ padding: "10px" }}>Total Rooms</th>
-              <th style={{ padding: "10px" }}>Occupied Rooms</th>
-              <th style={{ padding: "10px" }}>Occupancy Rate</th>
+            <tr>
+              <th scope="col">Branch</th>
+              <th scope="col">Total rooms</th>
+              <th scope="col">Occupied rooms</th>
+              <th scope="col">Occupancy rate</th>
             </tr>
           </thead>
           <tbody>
-            {occupancyData.map((item, index) => (
-              <tr key={index} style={{ borderBottom: "1px solid #e2d9cc" }}>
-                <td style={{ padding: "10px" }}>{item.branch}</td>
-                <td style={{ padding: "10px" }}>{item.totalRooms}</td>
-                <td style={{ padding: "10px" }}>{item.occupied}</td>
-                <td style={{ padding: "10px", fontWeight: "bold" }}>{item.occupancyRate}</td>
+            {demoOccupancy.map((item) => (
+              <tr key={item.branch}>
+                <th scope="row">{item.branch}</th>
+                <td>{item.totalRooms}</td>
+                <td>{item.occupied}</td>
+                <td>{((item.occupied / item.totalRooms) * 100).toLocaleString("en-LK", { maximumFractionDigits: 1 })}%</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Billing Summary Section */}
-      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <h2>Billing Summary & Invoices</h2>
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: "bold" }}>
-            <input
-              type="checkbox"
-              checked={filterOutstanding}
-              onChange={(e) => setFilterOutstanding(e.target.checked)}
-              style={{ width: "18px", height: "18px" }}
-            />
-            Show Outstanding Bills Only
-          </label>
-        </div>
-
-        <table style={{ width: "100%", marginTop: "1rem", borderCollapse: "collapse", textAlign: "left" }}>
+      <h2 style={{ marginTop: "2rem" }}>Sample billing summary</h2>
+      <label htmlFor="preview-outstanding-only" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1rem" }}>
+        <input
+          id="preview-outstanding-only"
+          type="checkbox"
+          checked={filterOutstanding}
+          onChange={(event) => setFilterOutstanding(event.target.checked)}
+        />
+        Show outstanding sample bills only
+      </label>
+      <div className="staff-booking-table-wrap" tabIndex={0} role="region" aria-label="Sample billing table">
+        <table className="staff-booking-table">
+          <caption>{filteredBills.length} sample bills</caption>
           <thead>
-            <tr style={{ borderBottom: "2px solid #e2d9cc" }}>
-              <th style={{ padding: "10px" }}>Booking ID</th>
-              <th style={{ padding: "10px" }}>Guest Name</th>
-              <th style={{ padding: "10px" }}>Branch</th>
-              <th style={{ padding: "10px" }}>Total (LKR)</th>
-              <th style={{ padding: "10px" }}>Paid (LKR)</th>
-              <th style={{ padding: "10px" }}>Status</th>
+            <tr>
+              <th scope="col">Booking</th>
+              <th scope="col">Guest</th>
+              <th scope="col">Branch</th>
+              <th scope="col">Total</th>
+              <th scope="col">Paid</th>
+              <th scope="col">Outstanding</th>
+              <th scope="col">Status</th>
             </tr>
           </thead>
           <tbody>
             {filteredBills.map((bill) => (
-              <tr key={bill.id} style={{ borderBottom: "1px solid #e2d9cc" }}>
-                <td style={{ padding: "10px" }}>{bill.id}</td>
-                <td style={{ padding: "10px" }}>{bill.guest}</td>
-                <td style={{ padding: "10px" }}>{bill.branch}</td>
-                <td style={{ padding: "10px" }}>LKR {bill.total.toLocaleString()}.00</td>
-                <td style={{ padding: "10px" }}>LKR {bill.paid.toLocaleString()}.00</td>
-                <td style={{ padding: "10px" }}>
-                  <span style={{ color: bill.status === "Outstanding" ? "red" : "green", fontWeight: "bold" }}>
-                    {bill.status}
-                  </span>
-                </td>
+              <tr key={bill.id}>
+                <th scope="row">{bill.id}</th>
+                <td>{bill.guest}</td>
+                <td>{bill.branch}</td>
+                <td>{formatLkr(bill.total)}</td>
+                <td>{formatLkr(bill.paid)}</td>
+                <td>{formatLkr(bill.total - bill.paid)}</td>
+                <td>{bill.total > bill.paid ? "Outstanding" : "Paid"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-
-        <div style={{ marginTop: "2rem", display: "flex", gap: "1rem" }}>
-          <Link className="button" style={{ background: "#6c757d" }} to="/staff/bill-details">
-            Back to Bill Details
-          </Link>
-        </div>
       </div>
+
+      <Link className="button" to="/preview/staff/bill-details" style={{ marginTop: "2rem" }}>
+        View sample bill
+      </Link>
     </section>
   );
 }

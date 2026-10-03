@@ -1,15 +1,15 @@
-const jwt = require('jsonwebtoken');
+const { verifyAccessToken } = require('../config/auth');
 
 function authenticate(req, res, next) {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : null;
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication token missing.' });
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = verifyAccessToken(token);
     req.user = payload; // { type: 'guest'|'staff', id, role?, username }
     next();
   } catch (err) {

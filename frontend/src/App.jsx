@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BrowserRouter,
   Link,
@@ -27,14 +27,17 @@ import ServiceUsagePreview from "./pages/ServiceUsagePreview";
 import {
   readStaffSession,
   saveStaffSession,
-  clearStaffSession,
 } from "./services/staffAuth";
 
 import {
   readGuestSession,
   saveGuestSession,
-  clearGuestSession,
 } from "./services/auth";
+import {
+  SESSION_CHANGED_EVENT,
+  observeSessionExpiry,
+  logoutSession,
+} from "./services/session";
 import "./App.css";
 
 const showPreviews = import.meta.env.DEV;
@@ -89,13 +92,27 @@ const [session, setSession] = useState(readGuestSession);
 const [staffSession, setStaffSession] =
   useState(readStaffSession);
 
+useEffect(() => {
+  const syncSessions = () => {
+    setSession(readGuestSession());
+    setStaffSession(readStaffSession());
+  };
+  window.addEventListener(SESSION_CHANGED_EVENT, syncSessions);
+  const stopObserving = observeSessionExpiry();
+  syncSessions();
+  return () => {
+    window.removeEventListener(SESSION_CHANGED_EVENT, syncSessions);
+    stopObserving();
+  };
+}, []);
+
 function handleLogin(newSession) {
   saveGuestSession(newSession);
   setSession(newSession);
 }
 
 function handleLogout() {
-  clearGuestSession();
+  void logoutSession("guest");
   setSession(null);
 }
 
@@ -105,7 +122,7 @@ function handleStaffLogin(newSession) {
 }
 
 function handleStaffLogout() {
-  clearStaffSession();
+  void logoutSession("staff");
   setStaffSession(null);
 }
 
@@ -179,6 +196,9 @@ function handleStaffLogout() {
                   path="/preview/staff/bookings/:bookingReference/services"
                   element={<ServiceUsagePreview />}
                 />
+                <Route path="/preview/staff/bill-details" element={<StaffBillDetails />} />
+                <Route path="/preview/staff/record-payment" element={<StaffPayment />} />
+                <Route path="/preview/staff/manager-reports" element={<ManagerReports />} />
               </>
             )}
 
@@ -229,9 +249,6 @@ function handleStaffLogout() {
 
             <Route path="/rooms" element={<RoomSearch />} />
             <Route path="/make-booking" element={<MakeBooking />} /> 
-            <Route path="/staff/bill-details" element={<StaffBillDetails />} />
-            <Route path="/staff/record-payment" element={<StaffPayment />} />
-            <Route path="/staff/manager-reports" element={<ManagerReports />} />
             <Route
               path="/staff/login"
               element={
@@ -272,12 +289,20 @@ function handleStaffLogout() {
             </Link>
 
             {showPreviews && (
+              <>
               <Link
                 className="staff-entry-link"
                 to="/preview/staff/bookings"
               >
                 Staff booking preview
               </Link>
+              <Link className="staff-entry-link" to="/preview/staff/bill-details">
+                Billing preview
+              </Link>
+              <Link className="staff-entry-link" to="/preview/staff/manager-reports">
+                Reports preview
+              </Link>
+              </>
             )}
           </div>
         </footer>

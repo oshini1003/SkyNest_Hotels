@@ -1,5 +1,4 @@
-const API_BASE = "http://localhost:5000/api";
-const SESSION_KEY = "skynest_staff_session";
+import { API_BASE, readSession, saveSession, clearSession } from "./session";
 
 const STAFF_ROLES = [
   "Admin",
@@ -65,15 +64,8 @@ export async function loginStaff(username, password) {
 }
 
 export function readStaffSession() {
-  try {
-    const session = JSON.parse(
-      sessionStorage.getItem(SESSION_KEY)
-    );
-
-    return isStaffSession(session) ? session : null;
-  } catch {
-    return null;
-  }
+  const session = readSession("staff");
+  return isStaffSession(session) ? session : null;
 }
 
 export function saveStaffSession(session) {
@@ -82,13 +74,11 @@ export function saveStaffSession(session) {
   }
 
   try {
-    sessionStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        token: session.token,
-        staff: session.staff,
-      })
-    );
+    saveSession("staff", {
+      token: session.token,
+      refreshToken: session.refreshToken,
+      staff: session.staff,
+    });
   } catch {
     throw new Error(
       "Your browser could not save the staff session. Please check its storage settings."
@@ -97,5 +87,5 @@ export function saveStaffSession(session) {
 }
 
 export function clearStaffSession() {
-  sessionStorage.removeItem(SESSION_KEY);
+  clearSession("staff");
 }

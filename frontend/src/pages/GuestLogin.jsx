@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { readSessionNotice } from "../services/session";
 import { loginGuest } from "../services/auth";
 import { Link } from "react-router";
 
 export default function GuestLogin({ onLogin }) {
+  const [notice] = useState(() => readSessionNotice("guest"));
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -38,6 +40,8 @@ export default function GuestLogin({ onLogin }) {
       <p className="eyebrow">GUEST ACCESS</p>
       <h1 id="login-heading">Guest login</h1>
       <p>Sign in to manage your hotel stays.</p>
+
+      {notice && <p role="status">{notice}</p>}
 
       <form
         className="auth-form"

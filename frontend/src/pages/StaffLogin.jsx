@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { readSessionNotice } from "../services/session";
 import { Link } from "react-router";
 import { loginStaff } from "../services/staffAuth";
 
 export default function StaffLogin({ onLogin }) {
+  const [notice] = useState(() => readSessionNotice("staff"));
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -55,6 +57,8 @@ export default function StaffLogin({ onLogin }) {
       <h1 id="staff-login-heading">Staff login</h1>
 
       <p>Sign in with your hotel staff account.</p>
+
+      {notice && <p role="status">{notice}</p>}
 
       <form
         className="auth-form"
