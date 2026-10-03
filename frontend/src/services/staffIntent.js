@@ -2,7 +2,7 @@
 export function staffReturnDestination(state) {
   const path = state?.returnTo;
   if (path === "/staff/bookings") return path;
-  const match = typeof path === "string" && /^\/staff\/bookings\/([1-9]\d*)$/.exec(path);
+  const match = typeof path === "string" && /^\/staff\/bookings\/([1-9]\d*)(?:\/services)?$/.exec(path);
   if (match && Number(match[1]) <= 2147483647) return path;
   return "/staff";
 }

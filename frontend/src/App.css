@@ -899,6 +899,21 @@
   overflow-wrap: anywhere;
 }
 
+.staff-services-page .staff-service-section {
+  margin-top: 32px;
+}
+
+.staff-services-page .button:disabled,
+.staff-services-page input:disabled,
+.staff-services-page select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.staff-services-page .service-entry-review h3 {
+  margin-top: 0;
+}
+
 @media (max-width: 600px) {
   .service-entry-form,
   .service-entry-review dl {

@@ -93,6 +93,7 @@ function BookingDetails({ bookingId, session }) {
                 <div><dt>Preferred payment</dt><dd>{booking.PreferredPaymentMethod || "Not recorded"}</dd></div>
               </dl>
               <p>A payment preference does not confirm a payment.</p>
+              <p><Link className="staff-service-link" to={`/staff/bookings/${bookingId}/services`}>View services</Link></p>
             </div>
 
             <h2>Reserved rooms</h2>
@@ -109,7 +110,7 @@ function BookingDetails({ bookingId, session }) {
             <section className="stay-review" aria-labelledby="check-in-heading">
               <h2 id="check-in-heading">Guest check-in</h2>
               <p>Hotel date: {formatStayDate(booking.checkInEligibility.today)}</p>
-              {!permitted ? <p>Your ServiceStaff account has read-only access to bookings. Ask reception, a manager or an administrator to check in this guest.</p>
+              {!permitted ? <p>Ask reception, a manager or an administrator to check in this guest. Your ServiceStaff account can record services after check-in.</p>
                 : booking.BookingStatus === "Checked-In" ? <p>The guest is checked in. Check-in opens a bill; it does not record a payment.</p>
                   : !eligible ? <p>{booking.checkInEligibility.reason || "This booking is not eligible for check-in."}</p>
                     : !needsStatusCheck && (confirming ? <div>

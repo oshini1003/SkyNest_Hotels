@@ -56,7 +56,8 @@ and logout. The test exits unsuccessfully if any assertion fails and prints no t
 Lakshan's billing/payment/report layouts are labelled development previews under
 `/preview/staff/...`. Payment simulation does not save or collect money. Guest
 reservations and staff booking search/details/check-in are connected to the live
-API. Services, billing, payment and checkout frontend integration remain later
+API. The public service catalogue and staff service recording/history/bill totals
+also use the live API. Payment and checkout frontend integration remain later
 project stages.
 
 | Endpoint | Method | Access | Description |
@@ -217,7 +218,7 @@ other checks, remove the temporary test credentials from your shell afterwards.
 
 ## Services
 
-| Endpoint | Method | Access |
+| Endpoint | Access | Description |
 |---|---|---|
 | `GET /api/services` | Public | List active services |
 | `POST /api/services` | Admin/Manager | Add a service |
@@ -225,9 +226,71 @@ other checks, remove the temporary test credentials from your shell afterwards.
 | `POST /api/service-usage` | Authenticated | Log usage — `{ bookingId, serviceId, quantity }` |
 | `GET /api/service-usage/:bookingId` | Authenticated | List usage for a booking |
 
+### Live catalogue and staff service entry
+
+The public `/services` page lists active database services with a name/description
+search. It displays no sample fallback when the API is unavailable. The database
+has no service category or separate unit field; the description supplies any
+relevant unit information (for example, Laundry is per load).
+
+Open a staff booking and follow its services link to
+`/staff/bookings/:id/services`. Admin, Manager, Receptionist and ServiceStaff
+accounts can record services against a `Checked-In` reservation. Other booking
+statuses have history access only. Entries belong to the whole booking; a room
+selection would not be persisted by the existing schema, so the form shows room
+context without assigning the charge to a particular room.
+
+Choose an active service and a positive whole-number quantity, review the entry,
+then explicitly confirm saving it. The API validates booking/service IDs and
+quantity as positive signed SQL INT values before querying. Existing guest API
+access remains limited to that guest's own booking; missing and foreign booking
+lookups return the same 404 response. The procedure checks the current booking
+status and active service, captures `PriceAtUsage`, inserts the entry and
+recalculates the bill in one transaction. Its booking lock serializes this with
+payment and checkout operations. The controller does not wrap the procedure in
+another transaction. Quantities whose charges exceed the database's monetary
+capacity are rejected and the transaction is rolled back.
+
+The review uses the currently displayed catalogue price; the saved history uses
+the price captured when the database records the entry. History includes
+`LineTotal` and a `UsageDateDisplay` string in the database server's local time.
+The bill endpoint reads booking access, bill, payments and service rows on one
+read-only consistent snapshot, so the page's history and totals describe the
+same committed state.
+
+The form blocks repeated clicks while saving and never automatically retries a
+POST. If the response is lost or uncertain, refresh the history and bill and
+reconcile the attempted service before deliberately recording another entry.
+An immediate empty history does not prove a still-running request failed. There
+is no server idempotency key in this schema, so submitting the same service again
+is a separate charge. Do not blindly repeat it after a timeout.
+
+Run these database-free checks from the repository root:
+
+```bash
+node backend/tests/service-usage-regression.cjs
+node backend/tests/service-ownership-regression.cjs
+node backend/tests/bill-read-regression.cjs
+```
+
+For the live integration scenario, keep the one-night Colombo Double reservation
+checked in with its LKR 12,000 room charge and no payments. Using a staff account
+(for example the seeded ServiceStaff account `sunil` / `staff123`), record exactly
+one Laundry entry with quantity 2 at LKR 800, then one Room Service entry with
+quantity 1 at LKR 1,500. Expect LKR 3,100 service charges and LKR 15,100 unpaid.
+
+Set `TEST_API_URL`, `TEST_STAFF_USERNAME`, `TEST_STAFF_PASSWORD`, and
+`TEST_STAFF_BOOKING_ID`, then run `node backend/test-service-usage.js` from the
+repository root. This test only reads the booking, usage history and bill apart
+from its own login/logout. It checks both saved entries, their captured prices,
+stored bill totals, unpaid balance and occupied room status. Re-running this
+verification does not add charges. Keep the stay checked in for the payment and
+checkout stage and remove temporary credential environment variables afterwards.
+No database migration, reset or seed rerun is needed for this update.
+
 ## Billing & payments
 
-| Endpoint | Method | Access |
+| Endpoint | Access | Description |
 |---|---|---|
 | `GET /api/bookings/:bookingId/bill` | Authenticated | Itemised live bill, payments, service usage |
 | `POST /api/payments` | Front desk | Record a payment — `{ bookingId, amount, paymentMethod }` |

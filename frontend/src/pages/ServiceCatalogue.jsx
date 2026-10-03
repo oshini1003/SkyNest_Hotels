@@ -1,8 +1,5 @@
-import { useState } from "react";
-import {
-  demoServiceCategories,
-  demoServices,
-} from "../data/demoServices";
+import { useEffect, useState } from "react";
+import { loadServiceCatalogue } from "../services/serviceCatalogueApi";
 
 const money = new Intl.NumberFormat("en-LK", {
   style: "currency",
@@ -11,39 +8,49 @@ const money = new Intl.NumberFormat("en-LK", {
 });
 
 export default function ServiceCatalogue() {
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadServiceCatalogue(controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) setServices(data);
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) setError(failure.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [attempt]);
 
   const query = search.trim().toLowerCase();
+  const matchingServices = services.filter((service) =>
+    `${service.ServiceName} ${service.Description ?? ""}`
+      .toLowerCase()
+      .includes(query),
+  );
 
-  const matchingServices = demoServices.filter((service) => {
-    const matchesCategory =
-      category === "" || service.category === category;
-
-    const searchableText =
-      `${service.name} ${service.description} ${service.category}`
-        .toLowerCase();
-
-    const matchesSearch = searchableText.includes(query);
-
-    return matchesCategory && matchesSearch;
-  });
-
-  function clearFilters() {
-    setSearch("");
-    setCategory("");
+  function retry() {
+    setLoading(true);
+    setError("");
+    setAttempt((current) => current + 1);
   }
 
   return (
-    <section aria-labelledby="services-heading">
+    <section aria-labelledby="services-heading" aria-busy={loading}>
       <p className="eyebrow">DURING YOUR STAY</p>
       <h1 id="services-heading">Guest services</h1>
 
-      <p>Explore dining, spa, laundry and minibar options.</p>
+      <p>Explore our available services and current prices.</p>
 
       <p className="service-notice">
-        Preview catalogue: these are sample services and prices.
-        Service requests are not available in this preview.
+        Ask a member of staff to arrange a service during your stay.
       </p>
 
       <div className="service-filters">
@@ -52,68 +59,57 @@ export default function ServiceCatalogue() {
           <input
             id="service-search"
             type="search"
-            placeholder="For example, breakfast or laundry"
+            placeholder="Search by name or description"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
 
-        <div className="form-field">
-          <label htmlFor="service-category">Category</label>
-          <select
-            id="service-category"
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-          >
-            <option value="">All categories</option>
-
-            {demoServiceCategories.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <button
           className="button"
           type="button"
-          onClick={clearFilters}
-          disabled={search === "" && category === ""}
+          onClick={() => setSearch("")}
+          disabled={search === ""}
         >
-          Clear filters
+          Clear search
         </button>
       </div>
 
-      <p className="service-count" role="status">
-        {matchingServices.length} sample{" "}
-        {matchingServices.length === 1 ? "service" : "services"} found.
-      </p>
-
-      {matchingServices.length === 0 ? (
-        <p>
-          No sample services match your search. Try another
-          search term or category.
-        </p>
-      ) : (
-        <div className="card-grid">
-          {matchingServices.map((service) => (
-            <article className="card service-card" key={service.id}>
-              <p className="eyebrow">{service.category}</p>
-
-              <h2>{service.name}</h2>
-
-              <p className="service-description">
-                {service.description}
-              </p>
-
-              <p className="service-price">
-                <strong>{money.format(service.unitPrice)}</strong>
-                <span>per {service.unit}</span>
-              </p>
-            </article>
-          ))}
+      {loading ? (
+        <p className="service-count" role="status">Loading services…</p>
+      ) : error ? (
+        <div className="service-notice">
+          <p role="alert">{error}</p>
+          <button className="button" type="button" onClick={retry}>
+            Retry
+          </button>
         </div>
+      ) : (
+        <>
+          <p className="service-count" role="status">
+            {matchingServices.length}{" "}
+            {matchingServices.length === 1 ? "service" : "services"} found.
+          </p>
+          {services.length === 0 ? (
+            <p>No services are available in the catalogue right now. Please ask staff for assistance.</p>
+          ) : matchingServices.length === 0 ? (
+            <p>No services match your search. Try another search term or clear your search.</p>
+          ) : (
+            <div className="card-grid">
+              {matchingServices.map((service) => (
+                <article className="card service-card" key={service.ServiceID}>
+                  <h2>{service.ServiceName}</h2>
+                  {service.Description && (
+                    <p className="service-description">{service.Description}</p>
+                  )}
+                  <p className="service-price">
+                    <strong>{money.format(service.UnitPrice)}</strong>
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
