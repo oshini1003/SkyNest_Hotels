@@ -1,5 +1,32 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { canProcessPayment, validatePayment } = require('../utils/paymentValidation');
+
+const paymentConflictMessages = new Set([
+  'Payments require a Checked-In booking.',
+  'No bill exists yet for this booking (guest must be Checked-In first).',
+  'Payment amount must be > 0 and cannot exceed the outstanding balance.',
+  'Choose Cash, Card or Bank Transfer.',
+]);
+
+function paymentConflict(err, res) {
+  if (err.sqlState === '45000') {
+    const error = paymentConflictMessages.has(err.sqlMessage)
+      ? err.sqlMessage : 'The payment cannot be recorded in the current booking state.';
+    res.status(409).json({ error });
+    return true;
+  }
+  if (['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT'].includes(err.code) || [1205, 1213].includes(err.errno)) {
+    res.status(409).json({ error: 'Another booking action is in progress. Refresh the bill before trying again.' });
+    return true;
+  }
+  if (err.sqlState === '22003' || ['ER_WARN_DATA_OUT_OF_RANGE', 'ER_DATA_OUT_OF_RANGE'].includes(err.code)
+      || [1264, 1690].includes(err.errno)) {
+    res.status(400).json({ error: 'This payment exceeds the supported payment or bill amount.' });
+    return true;
+  }
+  return false;
+}
 
 // GET /api/bookings/:bookingId/bill  - itemised live bill (room + service charges, paid, balance)
 const getBill = asyncHandler(async (req, res) => {
@@ -35,8 +62,8 @@ const getBill = asyncHandler(async (req, res) => {
 
     const [[booking]] = await connection.execute(
       req.user.type === 'guest'
-        ? 'SELECT BookingID FROM BOOKING WHERE BookingID = ? AND GuestID = ?'
-        : 'SELECT BookingID FROM BOOKING WHERE BookingID = ?',
+        ? 'SELECT BookingID, BookingStatus FROM BOOKING WHERE BookingID = ? AND GuestID = ?'
+        : 'SELECT BookingID, BookingStatus FROM BOOKING WHERE BookingID = ?',
       req.user.type === 'guest' ? [bookingId, req.user.id] : [bookingId]
     );
     if (!booking) {
@@ -54,7 +81,8 @@ const getBill = asyncHandler(async (req, res) => {
       );
     }
     const [payments] = await connection.execute(
-      'SELECT * FROM PAYMENT WHERE BookingID = ? ORDER BY PaymentDate, PaymentID', [bookingId]
+      `SELECT p.*, DATE_FORMAT(p.PaymentDate, '%Y-%m-%d %H:%i:%s') AS PaymentDateDisplay
+       FROM PAYMENT p WHERE p.BookingID = ? ORDER BY p.PaymentDate, p.PaymentID`, [bookingId]
     );
     const [serviceUsage] = await connection.execute(
       `SELECT su.*, sc.ServiceName, su.Quantity * su.PriceAtUsage AS LineTotal,
@@ -72,9 +100,11 @@ const getBill = asyncHandler(async (req, res) => {
     const paidCents = payments.reduce((sum, payment) => sum + toCents(payment.Amount), 0n);
     result = {
       bookingId,
+      bookingStatus: booking.BookingStatus,
       roomCharges: asAmount(roomCents),
       serviceCharges: asAmount(serviceCents),
       totalAmount: asAmount(totalCents),
+      paidAmount: asAmount(paidCents),
       outstandingBalance: asAmount(totalCents - paidCents),
       bill: bill || null,
       payments,
@@ -90,20 +120,46 @@ const getBill = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
-// POST /api/payments   { bookingId, amount, paymentMethod }  (Front Desk / Staff)
+// POST /api/payments   { bookingId, amount, paymentMethod }  (Front Desk / Manager / Admin)
 const processPayment = asyncHandler(async (req, res) => {
-  const { bookingId, amount, paymentMethod } = req.body;
-  if (!bookingId || !amount || !paymentMethod) {
-    return res.status(400).json({ error: 'bookingId, amount and paymentMethod are required.' });
+  if (!canProcessPayment(req.user)) {
+    return res.status(403).json({ error: 'You do not have permission to perform this action.' });
   }
+  const parsed = validatePayment(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const { bookingId, amount, paymentMethod } = parsed.value;
   try {
+    const [[booking]] = await pool.execute('SELECT BookingStatus FROM BOOKING WHERE BookingID = ?', [bookingId]);
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.BookingStatus !== 'Checked-In') {
+      return res.status(409).json({ error: 'Payments require a Checked-In booking.' });
+    }
+    // The procedure owns its transaction, locks the booking first, rechecks
+    // status and balance, and atomically inserts payment/update bill status.
+    // Never wrap this call in another transaction or automatically retry it.
     await pool.execute(`CALL sp_process_payment(?, ?, ?)`, [bookingId, amount, paymentMethod]);
-    const [[balance]] = await pool.query(`SELECT fn_calculate_outstanding_balance(?) AS OutstandingBalance`, [bookingId]);
-    res.status(201).json({ bookingId, amount, outstandingBalance: balance.OutstandingBalance });
   } catch (err) {
-    if (err.sqlState === '45000') return res.status(409).json({ error: err.sqlMessage });
+    if (paymentConflict(err, res)) return;
     throw err;
   }
+
+  // CALL completed successfully, so the payment is committed even if this
+  // separate live-balance read fails. Preserve that acknowledgement and ask
+  // the client to reconcile the bill; a false failure could invite duplicates.
+  const result = { bookingId, amount: Number(amount), outstandingBalance: null };
+  try {
+    const [[balance]] = await pool.query(`SELECT fn_calculate_outstanding_balance(?) AS OutstandingBalance`, [bookingId]);
+    const rawBalance = balance?.OutstandingBalance;
+    if (!['string', 'number'].includes(typeof rawBalance)
+        || !/^-?\d+(?:\.\d{1,2})?$/.test(String(rawBalance))
+        || !Number.isFinite(Number(rawBalance))) {
+      throw new Error('Invalid outstanding balance returned by database.');
+    }
+    result.outstandingBalance = Number(rawBalance);
+  } catch (_) {
+    result.refreshRequired = true;
+  }
+  res.status(201).json(result);
 });
 
 module.exports = { getBill, processPayment };

@@ -37,7 +37,7 @@ function connection(options = {}) {
   let snapshot;
   let started = false;
   const current = {
-    booking: options.booking === undefined ? { BookingID: 12, GuestID: 7 } : options.booking,
+    booking: options.booking === undefined ? { BookingID: 12, GuestID: 7, BookingStatus: 'Checked-In' } : options.booking,
     bill: options.bill === undefined ? null : options.bill,
     estimate: options.estimate || { RoomCharges: 0.1, ServiceCharges: 0.2 },
     payments: options.payments || [],
@@ -74,13 +74,13 @@ function connection(options = {}) {
       return [[]];
     }
     assert.ok(started, 'Every data read must run within the snapshot.');
-    if (sql.startsWith('SELECT BookingID FROM BOOKING')) {
+    if (sql.startsWith('SELECT BookingID, BookingStatus FROM BOOKING')) {
       assert.equal(events.length, 3, 'Booking permission check must be the first data read.');
       const booking = snapshot.booking;
       const visible = booking && booking.BookingID === values[0]
         && (values.length === 1 || booking.GuestID === values[1]);
       if (options.afterBookingRead) options.afterBookingRead(current);
-      return [visible ? [{ BookingID: booking.BookingID }] : []];
+      return [visible ? [{ BookingID: booking.BookingID, BookingStatus: booking.BookingStatus }] : []];
     }
     if (sql.startsWith('SELECT * FROM BILL')) return [snapshot.bill ? [snapshot.bill] : []];
     if (sql.includes('fn_calculate_room_charges')) {
@@ -88,8 +88,10 @@ function connection(options = {}) {
       assert.deepEqual(values, [snapshot.booking.BookingID, snapshot.booking.BookingID]);
       return [[snapshot.estimate]];
     }
-    if (sql.startsWith('SELECT * FROM PAYMENT')) {
-      assert.match(sql, /ORDER BY PaymentDate, PaymentID$/);
+    if (sql.includes('FROM PAYMENT p')) {
+      assert.match(sql, /SELECT p\.\*/);
+      assert.match(sql, /DATE_FORMAT\(p\.PaymentDate, '%Y-%m-%d %H:%i:%s'\) AS PaymentDateDisplay/);
+      assert.match(sql, /ORDER BY p\.PaymentDate, p\.PaymentID$/);
       return [snapshot.payments];
     }
     if (sql.includes('FROM SERVICE_USAGE su')) {
@@ -146,7 +148,7 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
   let response = await invoke();
   assert.deepEqual(response, {
     status: 200,
-    data: { bookingId: 12, roomCharges: 0.1, serviceCharges: 0.2, totalAmount: 0.3,
+    data: { bookingId: 12, bookingStatus: 'Checked-In', roomCharges: 0.1, serviceCharges: 0.2, totalAmount: 0.3, paidAmount: 0,
       outstandingBalance: 0.3, bill: null, payments: [], serviceUsage: [] },
   });
   assert.equal(dataReads(conn).filter(event => event.sql.includes('fn_calculate_')).length, 1);
@@ -154,17 +156,19 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
 
   const bill = { BillID: 23, BookingID: 12, RoomCharges: '12.01', ServiceCharges: '59.97',
     TotalAmount: '71.98', BillStatus: 'Partially Paid' };
-  const payments = [{ PaymentID: 1, Amount: '12.01' }, { PaymentID: 2, Amount: 0.1 }, { PaymentID: 3, Amount: 0.19 }];
+  const payments = [{ PaymentID: 1, Amount: '12.01', PaymentDateDisplay: '2026-10-03 23:59:59' },
+    { PaymentID: 2, Amount: 0.1 }, { PaymentID: 3, Amount: 0.19 }];
   const serviceUsage = [{ UsageID: 4, ServiceName: 'Historical service', Quantity: 3,
     PriceAtUsage: '19.99', LineTotal: '59.97', UsageDateDisplay: '2026-10-02 23:59:59' }];
   conn = connection({ bill, payments, serviceUsage, estimate: { RoomCharges: 100, ServiceCharges: 500 } });
   response = await invoke('12', { type: 'staff', id: 3, role: 'Service Staff' });
   assert.equal(response.status, 200);
-  assert.deepEqual(Object.keys(response.data), ['bookingId', 'roomCharges', 'serviceCharges', 'totalAmount',
+  assert.deepEqual(Object.keys(response.data), ['bookingId', 'bookingStatus', 'roomCharges', 'serviceCharges', 'totalAmount', 'paidAmount',
     'outstandingBalance', 'bill', 'payments', 'serviceUsage']);
   assert.equal(response.data.roomCharges, 12.01);
   assert.equal(response.data.serviceCharges, 59.97);
   assert.equal(response.data.totalAmount, 71.98);
+  assert.equal(response.data.paidAmount, 12.3);
   assert.equal(response.data.outstandingBalance, 59.68);
   assert.deepEqual(response.data.bill, bill);
   assert.deepEqual(response.data.payments, payments);
@@ -177,6 +181,7 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
       bill: { ...bill, RoomCharges: 0.1, ServiceCharges: 0.2, TotalAmount: 0.3, BillStatus: 'Paid' },
       payments: [{ Amount: 0.1 }, { Amount: 0.2 }], serviceUsage });
     response = await invoke();
+    assert.equal(response.data.bookingStatus, bookingStatus);
     assert.equal(response.data.outstandingBalance, 0);
     assert.deepEqual(response.data.serviceUsage, serviceUsage);
   }
@@ -189,11 +194,14 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
   // payments, or history into this response. The mock models a snapshot at START.
   conn = connection({ bill, payments, serviceUsage, afterBookingRead(current) {
     current.bill.TotalAmount = '999.99';
+    current.booking.BookingStatus = 'Checked-Out';
     current.payments.push({ PaymentID: 9, Amount: '99.99' });
     current.serviceUsage.push({ UsageID: 9, LineTotal: '99.99' });
   } });
   response = await invoke();
   assert.equal(response.data.totalAmount, 71.98);
+  assert.equal(response.data.bookingStatus, 'Checked-In');
+  assert.equal(response.data.paidAmount, 12.3);
   assert.equal(response.data.outstandingBalance, 59.68);
   assert.equal(response.data.payments.length, 3);
   assert.equal(response.data.serviceUsage.length, 1);
@@ -204,7 +212,7 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
     sql => sql.startsWith('SELECT BookingID'),
     sql => sql.startsWith('SELECT * FROM BILL'),
     sql => sql.includes('fn_calculate_room_charges'),
-    sql => sql.startsWith('SELECT * FROM PAYMENT'),
+    sql => sql.includes('FROM PAYMENT p'),
     sql => sql.includes('FROM SERVICE_USAGE'),
     'commit',
   ]) {

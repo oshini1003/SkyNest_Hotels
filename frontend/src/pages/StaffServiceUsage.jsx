@@ -138,7 +138,7 @@ function BookingServices({ bookingId, session }) {
     <section className="staff-services-page" aria-labelledby="staff-services-heading">
       <p className="eyebrow">STAFF WORKSPACE</p>
       <h1 id="staff-services-heading">Services for booking #{bookingId}</h1>
-      <p><Link to={`/staff/bookings/${bookingId}`}>Back to booking</Link> · <Link to="/staff/bookings">All bookings</Link></p>
+      <p><Link to={`/staff/bookings/${bookingId}`}>Back to booking</Link> · <Link to={`/staff/bookings/${bookingId}/bill`}>Bill and payments</Link> · <Link to="/staff/bookings">All bookings</Link></p>
       {notice && <p className="form-success" role="status">{notice}</p>}
       {uncertainEntry && <div className="booking-notice" role="alert">
         <p><strong>Check before entering this service again.</strong> The save result for {uncertainEntry.serviceName} × {uncertainEntry.quantity} is unknown. It may already have been saved.</p>

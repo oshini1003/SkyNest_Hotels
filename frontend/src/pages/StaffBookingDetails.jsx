@@ -93,7 +93,7 @@ function BookingDetails({ bookingId, session }) {
                 <div><dt>Preferred payment</dt><dd>{booking.PreferredPaymentMethod || "Not recorded"}</dd></div>
               </dl>
               <p>A payment preference does not confirm a payment.</p>
-              <p><Link className="staff-service-link" to={`/staff/bookings/${bookingId}/services`}>View services</Link></p>
+              <p><Link className="staff-service-link" to={`/staff/bookings/${bookingId}/services`}>View services</Link> · <Link className="staff-service-link" to={`/staff/bookings/${bookingId}/bill`}>View bill</Link></p>
             </div>
 
             <h2>Reserved rooms</h2>

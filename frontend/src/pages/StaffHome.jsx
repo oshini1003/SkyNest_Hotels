@@ -29,8 +29,8 @@ export default function StaffHome({ staff, onLogout }) {
 
       <p>
         {canCheckIn(staff.role)
-          ? "Find reservations, check in arriving guests and record services for checked-in bookings."
-          : "View reservations and record services for checked-in bookings. Check-in is handled by reception, managers or administrators."}
+          ? "Find reservations, check in guests, record services and received payments, and check out fully paid bookings."
+          : "View reservations, bills and payment history, and record services for checked-in bookings. Reception, managers or administrators handle check-in, payments and check-out."}
       </p>
       <p><Link className="button" to="/staff/bookings">{canCheckIn(staff.role) ? "Manage bookings" : "View bookings"}</Link></p>
 

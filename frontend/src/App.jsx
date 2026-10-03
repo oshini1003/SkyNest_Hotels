@@ -23,6 +23,7 @@ import StaffHome from "./pages/StaffHome";
 import StaffBookingList from "./pages/StaffBookingList";
 import StaffBookingDetails from "./pages/StaffBookingDetails";
 import StaffServiceUsage from "./pages/StaffServiceUsage";
+import StaffBilling from "./pages/StaffBilling";
 import { staffReturnDestination, staffSignInState } from "./services/staffIntent";
 import StaffBookings from "./pages/StaffBookings";
 import StaffBillDetails from "./pages/StaffBillDetails";
@@ -323,6 +324,10 @@ function handleStaffLogout() {
             <Route
               path="/staff/bookings/:id/services"
               element={<StaffOnly session={staffSession}><StaffServiceUsage key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/bookings/:id/bill"
+              element={<StaffOnly session={staffSession}><StaffBilling key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
 
             <Route path="*" element={<NotFound />} />

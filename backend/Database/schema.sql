@@ -483,14 +483,20 @@ proc_body: BEGIN
     DECLARE v_total DECIMAL(10,2);
     DECLARE v_balance DECIMAL(10,2);
 
-    SET v_room_charges    = fn_calculate_room_charges(p_booking_id);
+    -- The room charge is fixed when check-in opens the bill. Catalogue rate
+    -- changes must not reprice this stay during service entry or checkout.
+    -- The calling procedure already holds the booking lock; lock its bill next.
+    SELECT RoomCharges INTO v_room_charges
+    FROM BILL WHERE BookingID = p_booking_id FOR UPDATE;
+    IF v_room_charges IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No bill exists yet for this booking.';
+    END IF;
     SET v_service_charges = fn_calculate_service_charges(p_booking_id);
     SET v_total = v_room_charges + v_service_charges;
     SET v_balance = v_total - (SELECT IFNULL(SUM(Amount),0) FROM PAYMENT WHERE BookingID = p_booking_id);
 
     UPDATE BILL
-    SET RoomCharges = v_room_charges,
-        ServiceCharges = v_service_charges,
+    SET ServiceCharges = v_service_charges,
         TotalAmount = v_total,
         BillStatus = CASE WHEN v_balance <= 0 THEN 'Paid'
                           WHEN v_balance < v_total THEN 'Partially Paid'

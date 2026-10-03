@@ -57,8 +57,8 @@ Lakshan's billing/payment/report layouts are labelled development previews under
 `/preview/staff/...`. Payment simulation does not save or collect money. Guest
 reservations and staff booking search/details/check-in are connected to the live
 API. The public service catalogue and staff service recording/history/bill totals
-also use the live API. Payment and checkout frontend integration remain later
-project stages.
+also use the live API. Staff bill history, payment recording and checkout are
+connected at `/staff/bookings/:id/bill`. The preview pages remain separate.
 
 | Endpoint | Method | Access | Description |
 |---|---|---|---|
@@ -294,6 +294,110 @@ No database migration, reset or seed rerun is needed for this update.
 |---|---|---|
 | `GET /api/bookings/:bookingId/bill` | Authenticated | Itemised live bill, payments, service usage |
 | `POST /api/payments` | Front desk | Record a payment — `{ bookingId, amount, paymentMethod }` |
+
+### Live staff bill, payments and checkout
+
+Open a live staff booking and choose its bill link. All staff roles can read the
+itemised bill, saved service prices and payment history. Only Receptionist,
+Manager and Admin accounts can record payments or check out a guest. Both the
+page and backend enforce this role restriction. A guest's existing bill API
+access remains restricted to that guest's own bookings.
+
+Payment recording is a hotel ledger operation for money already received; it
+does not charge a card or connect to a payment gateway. Enter a positive decimal
+amount with at most two decimal places, choose Cash, Card or Bank Transfer,
+review it and confirm. The API passes an exact two-decimal string to MySQL and
+rejects invalid IDs, amounts, methods and identities before executing a payment.
+The procedure locks the booking and bill, requires `Checked-In`, prevents an
+overpayment and inserts the payment together with its bill-status update.
+The database assigns `Partial` or `Full` according to the balance at that time;
+the final instalment is `Full` even if earlier partial payments exist.
+
+The bill response includes `bookingStatus`, `paidAmount` and payment timestamps
+as `PaymentDateDisplay` strings in the database server's local time. Booking
+status, charges, payments and service history come from one consistent read-only
+snapshot. The page refreshes this snapshot and room details after each action.
+
+Checkout requires a checked-in stay with an open, fully settled bill. The page
+asks for confirmation; `sp_check_out` and the booking trigger enforce the rule
+again under a transaction. A successful checkout records the staff identity,
+sets the stay to `Checked-Out` and releases its occupied rooms. Existing payment
+and service rows remain available. The reserved stay dates and number of nights
+charged are unchanged by checkout.
+
+Payment and checkout do not automatically retry. If the procedure reports
+success but a subsequent response read fails, the API still acknowledges the
+committed action with `refreshRequired: true` and a nullable balance/bill. The
+page blocks further actions until fresh data is loaded. A timeout, lost response
+or unknown server failure instead requires refreshing and reconciling the
+attempt with hotel records before deliberately continuing. An immediate empty
+history does not prove that an in-flight payment failed. This schema has no
+payment idempotency key; repeating a POST could record a second payment. A
+pending-action marker survives navigation and reload in the same browser tab,
+scoped to the staff account and booking. It contains no password or access token.
+It is cleared only after a known result or deliberate reconciliation.
+
+### Update an existing integration database
+
+An opened bill preserves the room charge calculated at check-in. Later service
+entries and checkout recalculate saved service charges and payment status without
+repricing the room from the current room-type catalogue. This prevents a later
+rate change from altering a bill that has already been paid.
+
+For the existing `SkyNest_Integration_20261002` database, stop the backend dev
+server, then run this command from the repository root:
+
+```bash
+node backend/Database/updateBillingRoutine.js --backend-stopped
+```
+
+This replaces only `sp_recalculate_bill`; it does not reset the database, rerun
+seeds, or change existing table rows. It validates the database/routine before
+changing anything, backs up the previous routine to a temporary file, and
+attempts to restore it if replacement fails. Keep the printed backup location
+until the update is verified. Run it while no other application uses this local
+database because routine replacement uses DDL, not a rollbackable transaction.
+The command is safe to rerun after a successful update. Fresh databases receive
+the same definition from `schema.sql` automatically. Restart the backend after
+the command succeeds.
+
+### Payment and checkout checks
+
+Run the focused checks from the repository root:
+
+```bash
+node backend/tests/payment-regression.cjs
+node backend/tests/checkout-regression.cjs
+node backend/tests/bill-read-regression.cjs
+node backend/tests/billing-routine-regression.cjs
+npm --prefix frontend run build
+```
+
+These regressions mock MySQL; the following local scenario verifies real saved
+data. Continue the existing checked-in Colombo Double stay with LKR 12,000 room
+charges, Laundry quantity 2 at LKR 800, Room Service quantity 1 at LKR 1,500, and
+no payments. Use the front-desk test account `amali` / `staff123`. Set
+`TEST_API_URL`, `TEST_STAFF_USERNAME`, `TEST_STAFF_PASSWORD` and
+`TEST_STAFF_BOOKING_ID`, then run each phase at its corresponding stage:
+
+```bash
+node backend/test-payment-checkout.js unpaid --check-unpaid-guard
+# Through the live page, record LKR 5000.00 Cash once.
+node backend/test-payment-checkout.js partial --check-unpaid-guard
+# Through the live page, record the remaining LKR 10100.00 Cash once.
+node backend/test-payment-checkout.js paid
+# Through the live page, confirm checkout once.
+node backend/test-payment-checkout.js complete
+```
+
+The phase checks only read reservation/bill/history data apart from their own
+login/logout. The explicit `--check-unpaid-guard` option also attempts checkout,
+expects rejection with HTTP 409, and verifies the reservation and bill remain
+unchanged. It never records a payment. Stop if any assertion fails; inspect the
+current history before repeating any action. The completed scenario has two
+payment entries totalling LKR 15,100, a `Paid` bill with zero outstanding, two
+unchanged service entries, a `Checked-Out` stay and an `Available` room. Remove
+temporary test credentials from the shell afterwards.
 
 ## Reports (Manager/Admin only)
 

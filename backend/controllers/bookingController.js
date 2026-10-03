@@ -105,13 +105,30 @@ const checkOut = asyncHandler(async (req, res) => {
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   try {
+    const [[booking]] = await pool.execute('SELECT BookingStatus FROM BOOKING WHERE BookingID = ?', [id]);
+    if (!booking) return notFound(res);
+    if (booking.BookingStatus !== 'Checked-In') {
+      return res.status(409).json({ error: 'Only a Checked-In reservation can be checked out.' });
+    }
+    // The procedure owns the transaction and booking lock. It recalculates the
+    // bill and checks payment under that lock before changing status or rooms.
     await pool.execute('CALL sp_check_out(?, ?)', [id, positiveInteger(req.user.id)]);
-    const [[bill]] = await pool.execute('SELECT * FROM BILL WHERE BookingID = ?', [id]);
-    res.json({ bookingId: id, status: 'Checked-Out', bill });
   } catch (err) {
     if (conflictResponse(err, res)) return;
     throw err;
   }
+  // Checkout has committed. If its bill cannot be read, report that known
+  // success and ask the client to refresh; never rerun the procedure.
+  let bill;
+  try {
+    [[bill]] = await pool.execute('SELECT * FROM BILL WHERE BookingID = ?', [id]);
+  } catch {
+    // The completed checkout remains successful even without its bill response.
+  }
+  if (!bill) {
+    return res.json({ bookingId: id, status: 'Checked-Out', bill: null, refreshRequired: true });
+  }
+  res.json({ bookingId: id, status: 'Checked-Out', bill });
 });
 
 // Guest ownership is part of the lookup: foreign and nonexistent bookings
