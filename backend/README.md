@@ -22,10 +22,14 @@ Authorization: Bearer <token>
 
 | Endpoint | Method | Access | Description |
 |---|---|---|---|
-| `/api/auth/guest/register` | POST | Public | Create a guest account, returns a token |
-| `/api/auth/guest/login` | POST | Public | Guest login |
-| `/api/auth/staff/login` | POST | Public | Staff login |
+| `/api/auth/guest/register` | POST | Public | Create a guest account, returns access + refresh token |
+| `/api/auth/guest/login` | POST | Public | Guest login, returns access + refresh token |
+| `/api/auth/staff/login` | POST | Public | Staff login, returns access + refresh token |
 | `/api/auth/staff/register` | POST | Admin only | Create a new staff account |
+| `/api/auth/guest/password` | PUT | Guest | Change guest password |
+| `/api/auth/staff/password` | PUT | Staff | Change staff password |
+| `/api/auth/refresh` | POST | Public | Exchange refresh token for new access + rotated refresh token |
+| `/api/auth/logout` | POST | Public | Revoke refresh token |
 
 ## Branches / room types / amenities / rooms
 

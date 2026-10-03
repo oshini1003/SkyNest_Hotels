@@ -169,6 +169,20 @@ CREATE TABLE PAYMENT (
     FOREIGN KEY (BillID)    REFERENCES BILL(BillID)
 ) ENGINE=InnoDB;
 
+-- REFRESH_TOKEN (stores long-lived refresh tokens for guests and staff)
+
+CREATE TABLE REFRESH_TOKEN (
+    TokenID         INT AUTO_INCREMENT PRIMARY KEY,
+    UserType        ENUM('guest', 'staff') NOT NULL,
+    UserID          INT NOT NULL,
+    Token           VARCHAR(500) NOT NULL UNIQUE,
+    ExpiresAt       DATETIME NOT NULL,
+    RevokedAt       DATETIME NULL,
+    CreatedAt       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_refresh_token (Token),
+    INDEX idx_user_tokens (UserType, UserID)
+) ENGINE=InnoDB;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- INDEXES (support the SRS's most frequent queries)

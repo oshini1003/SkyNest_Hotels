@@ -1,3 +1,6 @@
+import { changeStaffPassword } from "../services/passwordApi";
+import ChangePasswordForm from "./ChangePasswordForm";
+
 export default function StaffHome({ staff, onLogout }) {
   return (
     <section
@@ -25,6 +28,8 @@ export default function StaffHome({ staff, onLogout }) {
       <p>
         Booking, service and payment tools will be added here.
       </p>
+
+      <ChangePasswordForm onChangePassword={changeStaffPassword} />
 
       <button
         className="button"

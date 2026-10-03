@@ -13,6 +13,7 @@ import RoomSearch from "./pages/RoomSearch";
 import MakeBooking from "./pages/MakeBooking"; 
 import ServiceCatalogue from "./pages/ServiceCatalogue";
 import GuestBookings from "./pages/GuestBookings";
+import GuestProfile from "./pages/GuestProfile";
 import { demoBookings } from "./data/demoBookings";
 import StaffLogin from "./pages/StaffLogin";
 import StaffHome from "./pages/StaffHome";
@@ -194,18 +195,18 @@ function handleStaffLogout() {
               path="/guest"
               element={
                 session ? (
-                  <section className="auth-card">
-                    <p className="eyebrow">MY ACCOUNT</p>
-                    <h1>Welcome, {session.guest.name}</h1>
-                    <p>Username: {session.guest.username}</p>
-                    <button
-                      className="button"
-                      type="button" 
-                      onClick={handleLogout}>
-
-                      Sign out
-                    </button>
-                  </section>
+                  <GuestProfile
+                    session={session}
+                    onLogout={handleLogout}
+                    onProfileUpdate={(newName) => {
+                      const updated = {
+                        ...session,
+                        guest: { ...session.guest, name: newName },
+                      };
+                      saveGuestSession(updated);
+                      setSession(updated);
+                    }}
+                  />
                 ) : (
                   <Navigate to="/guest/login" replace />
                 )

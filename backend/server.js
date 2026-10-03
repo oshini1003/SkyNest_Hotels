@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 
 const authRoutes = require('./routes/authRoutes');
+const guestRoutes = require('./routes/guestRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
@@ -17,6 +18,7 @@ app.use(express.json());
 app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'HRGSMS backend' }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/guests', guestRoutes);
 app.use('/api', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api', serviceRoutes);
