@@ -124,10 +124,11 @@ their own reservations. Foreign or missing booking details/cancellations return
 |---|---|
 | `GET /api/bookings` | List/search bookings (`?bookingId=&guestName=&idNumber=&status=&branchId=`). Guests only ever see their own. |
 | `GET /api/bookings/:id` | Full booking detail incl. rooms |
-| `POST /api/bookings` | Make a booking — `{ roomId, checkin, checkout, guestCount, paymentMethod }` |
+| `POST /api/bookings` | Make a booking — `{ roomId, checkin, checkout, guestCount, paymentMethod }` or several rooms at once with `{ rooms: [{ roomId, guestCount }], checkin, checkout, paymentMethod }` |
 | `PATCH /api/bookings/:id/cancel` | Cancel a Booked reservation |
 | `POST /api/bookings/:id/check-in` | Front desk only |
 | `POST /api/bookings/:id/check-out` | Front desk only |
+| `PATCH /api/bookings/:id` | Change room, dates or guest count of one room entry on a Booked reservation - `{ bookedRoomId?, roomId?, checkin?, checkout?, guestCount? }` | 
 
 Creation requires one room, positive integer guest count, valid date-only
 `checkin`/`checkout`, and a payment preference of `Cash`, `Card` or `Bank Transfer`.
@@ -361,6 +362,19 @@ database because routine replacement uses DDL, not a rollbackable transaction.
 The command is safe to rerun after a successful update. Fresh databases receive
 the same definition from `schema.sql` automatically. Restart the backend after
 the command succeeds.
+
+### Add booking-update objects to an existing integration database
+
+Databases created before this change lack `sp_update_booked_room` and
+`trg_prevent_overlap_booking_update` (fresh databases get them from `schema.sql`).
+Stop the backend, then run from `backend`:
+
+```bash
+node Database/addBookingUpdate.js --backend-stopped
+```
+
+This adds only the two missing objects and reports any that already exist; it does
+not reset the database, rerun seeds or change rows. Restart the backend afterwards.
 
 ### Payment and checkout checks
 
