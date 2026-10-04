@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { cancelGuestBooking, isCurrentGuest, loadMyBookings } from "../services/bookingApi";
+import "./MyBookings.css";
 
 const bookingStatuses = ["Booked", "Checked-In", "Checked-Out", "Cancelled"];
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
@@ -40,35 +41,69 @@ export default function MyBookings({ session }) {
     (`#${booking.BookingID} ${booking.rooms.map((room) => `${room.BranchName} ${room.RoomNumber}`).join(" ")}`.toLowerCase().includes(search))
   );
   return (
-    <section aria-labelledby="my-bookings-heading">
-      <p className="eyebrow">YOUR STAYS</p>
-      <h1 id="my-bookings-heading">My bookings</h1>
-      <p>Reservations saved for your signed-in guest account.</p>
-      <p><Link to="/rooms">Find a room</Link> · <Link to="/guest">My account</Link></p>
-      {notice && <p className="room-search-summary" role="status">{notice}</p>}
-      <div className="booking-filters">
-        <div className="form-field">
-          <label htmlFor="my-booking-search">Search bookings</label>
-          <input id="my-booking-search" type="search" placeholder="Booking reference, branch or room" value={query} onChange={(event) => setQuery(event.target.value)} />
+    <section className="my-bookings-page" aria-labelledby="my-bookings-heading">
+      <header className="mb-page-heading">
+        <div>
+          <p className="mb-eyebrow">YOUR SKYNEST STAYS</p>
+          <h1 id="my-bookings-heading">My bookings</h1>
+          <p className="mb-introduction">Your reservations, all in one place. Review your stay details and manage your upcoming bookings.</p>
         </div>
-        <div className="form-field">
+        <nav className="mb-heading-actions" aria-label="Guest booking actions">
+          <Link className="mb-button mb-button-primary" to="/rooms">Find a room <span aria-hidden="true">↗</span></Link>
+          <Link className="mb-account-link" to="/guest">My account <span aria-hidden="true">→</span></Link>
+        </nav>
+      </header>
+      {notice && <p className="mb-notice" role="status">{notice}</p>}
+      <div className="mb-filter-panel" role="search" aria-label="Filter your bookings">
+        <div className="mb-field mb-search-field">
+          <label htmlFor="my-booking-search">Search bookings</label>
+          <input id="my-booking-search" type="search" placeholder="Reference, branch or room" value={query} onChange={(event) => setQuery(event.target.value)} />
+        </div>
+        <div className="mb-field">
           <label htmlFor="my-booking-status">Booking status</label>
           <select id="my-booking-status" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">All statuses</option>
             {bookingStatuses.map((value) => <option key={value}>{value}</option>)}
           </select>
         </div>
-        <button className="button" type="button" disabled={!query && !status} onClick={() => { setQuery(""); setStatus(""); }}>Clear filters</button>
-        <button className="button" type="button" disabled={result.loading} onClick={() => reload()}>Refresh bookings</button>
+        <div className="mb-filter-actions">
+          <button className="mb-button mb-button-secondary" type="button" disabled={!query && !status} onClick={() => { setQuery(""); setStatus(""); }}>Clear filters</button>
+          <button className="mb-refresh-button" type="button" disabled={result.loading} onClick={() => reload()}>Refresh bookings</button>
+        </div>
       </div>
-      {result.loading ? <p role="status">Loading your bookings…</p>
-        : result.error ? <><p className="form-error" role="alert">{result.error}</p><button className="button" type="button" onClick={() => reload()}>Try again</button></>
-          : <>
-            {result.bookings.length === 200 && <p>Showing your latest 200 reservations.</p>}
-            <p className="booking-count" role="status">{bookings.length} {bookings.length === 1 ? "booking" : "bookings"} found.</p>
-            {!bookings.length ? <p>{result.bookings.length ? "No bookings match your filters. Clear the filters to see all your bookings." : "You have no bookings yet. Choose a room to make your first reservation."}</p>
-              : <div className="card-grid">{bookings.map((booking) => <BookingCard key={booking.BookingID} booking={booking} token={token} onRefresh={reload} />)}</div>}
-          </>}
+      {result.loading ? (
+        <div className="mb-state-panel" role="status">
+          <StayIcon />
+          <h2>Loading your bookings…</h2>
+          <p>Your reservation details will appear here.</p>
+        </div>
+      ) : result.error ? (
+        <div className="mb-state-panel">
+          <h2>We could not load your bookings</h2>
+          <p className="mb-error" role="alert">{result.error}</p>
+          <button className="mb-button mb-button-primary" type="button" onClick={() => reload()}>Try again</button>
+        </div>
+      ) : (
+        <>
+          <div className="mb-results-heading">
+            <h2>Your reservations</h2>
+            <p className="mb-booking-count" role="status">{bookings.length} {bookings.length === 1 ? "booking" : "bookings"} found.</p>
+          </div>
+          {result.bookings.length === 200 && <p className="mb-limit-note">Showing your latest 200 reservations.</p>}
+          {!bookings.length ? (
+            <div className="mb-state-panel">
+              <StayIcon />
+              <h2>{result.bookings.length ? "No matching bookings" : "Your next stay starts here"}</h2>
+              <p>{result.bookings.length ? "No bookings match your filters. Clear the filters to see all your bookings." : "You have no bookings yet. Choose a room to make your first reservation."}</p>
+              {result.bookings.length ? (
+                <button className="mb-button mb-button-secondary" type="button" onClick={() => { setQuery(""); setStatus(""); }}>Show all bookings</button>
+              ) : <Link className="mb-button mb-button-primary" to="/rooms">Explore rooms <span aria-hidden="true">↗</span></Link>}
+            </div>
+          ) : (
+            <div className="mb-booking-list">{bookings.map((booking) => <BookingCard key={booking.BookingID} booking={booking} token={token} onRefresh={reload} />)}</div>
+          )}
+        </>
+      )}
     </section>
   );
 }
@@ -103,28 +138,55 @@ function BookingCard({ booking, token, onRefresh }) {
     }
   }
   return (
-    <article className="card booking-card">
-      <div className="booking-card-header">
-        <h2>Booking #{booking.BookingID}</h2>
-        <span className="booking-status" data-status={booking.BookingStatus}>{booking.BookingStatus}</span>
-      </div>
-      {booking.rooms.map((room) => (
-        <div key={room.RoomID}>
-          <p className="booking-branch">{room.BranchName} · Room {room.RoomNumber} · {room.RoomTypeName}</p>
-          <p className="booking-dates">{formatDate(room.CheckInDate)} – {formatDate(room.CheckOutDate)}</p>
-          <p>{room.GuestCount} {room.GuestCount === 1 ? "guest" : "guests"}</p>
+    <article className="mb-booking-card" aria-labelledby={`my-booking-${booking.BookingID}`} aria-busy={pending}>
+      <header className="mb-card-heading">
+        <div>
+          <p className="mb-eyebrow">RESERVATION REFERENCE</p>
+          <h2 id={`my-booking-${booking.BookingID}`}>Booking #{booking.BookingID}</h2>
         </div>
-      ))}
-      <p>Preferred payment: {booking.PreferredPaymentMethod}</p>
-      {booking.BookingStatus === "Booked" && !uncertain && (
-        confirming ? <div>
-          <p id={`cancel-confirm-${booking.BookingID}`}>Cancel booking #{booking.BookingID}? This releases the reserved room.</p>
-          <p><button className="button" type="button" disabled={pending} aria-describedby={`cancel-confirm-${booking.BookingID}`} onClick={cancel}>{pending ? "Cancelling…" : "Yes, cancel booking"}</button></p>
-          <button className="button" type="button" disabled={pending} onClick={() => setConfirming(false)}>Keep booking</button>
-        </div> : <button className="button" type="button" onClick={() => { setConfirming(true); setError(""); }}>Cancel booking</button>
+        <span className="mb-booking-status" data-status={booking.BookingStatus}>{booking.BookingStatus}</span>
+      </header>
+      <div className="mb-rooms">
+        {booking.rooms.map((room) => (
+          <section className="mb-room" key={room.RoomID} aria-label={`${room.BranchName}, room ${room.RoomNumber}`}>
+            <div className="mb-room-heading">
+              <h3>{room.BranchName}</h3>
+              <p>Room {room.RoomNumber} <span aria-hidden="true">·</span> {room.RoomTypeName}</p>
+            </div>
+            <dl className="mb-stay-facts">
+              <div><dt>Check-in</dt><dd>{formatDate(room.CheckInDate)}</dd></div>
+              <div><dt>Check-out</dt><dd>{formatDate(room.CheckOutDate)}</dd></div>
+              <div><dt>Guests</dt><dd>{room.GuestCount} {room.GuestCount === 1 ? "guest" : "guests"}</dd></div>
+            </dl>
+          </section>
+        ))}
+      </div>
+      <footer className="mb-card-footer">
+        <p className="mb-payment-preference"><span>Preferred payment method</span><strong>{booking.PreferredPaymentMethod}</strong></p>
+        {booking.BookingStatus === "Booked" && !uncertain && !confirming && (
+          <button className="mb-cancel-link" type="button" onClick={() => { setConfirming(true); setError(""); }}>Cancel booking</button>
+        )}
+      </footer>
+      {booking.BookingStatus === "Booked" && !uncertain && confirming && (
+        <div className="mb-cancel-review">
+          <h3>Cancel this reservation?</h3>
+          <p id={`cancel-confirm-${booking.BookingID}`}>Cancel booking #{booking.BookingID}? This releases the reserved rooms.</p>
+          <div className="mb-cancel-actions">
+            <button className="mb-button mb-button-secondary" type="button" disabled={pending} onClick={() => setConfirming(false)}>Keep booking</button>
+            <button className="mb-button mb-button-danger" type="button" disabled={pending} aria-describedby={`cancel-confirm-${booking.BookingID}`} onClick={cancel}>{pending ? "Cancelling…" : "Yes, cancel booking"}</button>
+          </div>
+        </div>
       )}
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {uncertain && <button className="button" type="button" onClick={() => onRefresh()}>Check current status</button>}
+      {error && <p className="mb-error mb-card-error" role="alert">{error}</p>}
+      {uncertain && <div className="mb-status-check"><button className="mb-button mb-button-secondary" type="button" onClick={() => onRefresh()}>Check current status</button></div>}
     </article>
+  );
+}
+
+function StayIcon() {
+  return (
+    <svg className="mb-stay-icon" width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+      <path d="M7 37V12h30v25M4 37h36M15 12V7h14v5M18 37V26h8v11M13 18h3m12 0h3m-18 5h3m12 0h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

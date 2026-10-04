@@ -99,3 +99,33 @@ photographs. Image source paths and design references are documented in
 Check Home → Rooms form prefilling, branch → Rooms prefilling, date validation,
 search results, changing a filter, clearing a selection, and continuing to booking
 review. Also check branch/catalogue loading, empty and error/retry states.
+
+## Guest reservation pages
+
+`src/pages/MakeBooking.jsx` and `MakeBooking.css` present the selected stay,
+signed-in guest details, estimated room charge and preferred payment method.
+The form creates a reservation only when Confirm booking is selected; it does
+not charge a card or record a payment. Missing selections, availability errors,
+unavailable rooms, saved reservations and uncertain results have their own views.
+
+`src/pages/MyBookings.jsx` and `MyBookings.css` display saved reservations with
+status, room details and dates. Search, status filters, clear and refresh controls
+remain available. Each booking can display multiple rooms. Cancellation still
+requires confirmation and is offered only for Booked reservations. If an outcome
+cannot be confirmed, use Check current status before attempting another action.
+
+Both stylesheets are scoped to their page root classes. They use the shared
+green, cream and gold palette and responsive layouts. Guest account pages,
+API services, session handling and database code are unchanged by this update.
+
+Visual check with the backend running:
+
+1. Sign in as a guest, search for a room, select it and continue to Booking Review.
+   Check the selected branch, room, dates, guest count and estimated room charge.
+2. Visit My bookings and inspect existing records; try search, status and clear.
+3. On an existing Booked reservation, open Cancel booking, then choose Keep booking.
+   Opening or dismissing the confirmation does not cancel the reservation.
+4. Check both pages at desktop and phone widths. Review can be inspected without
+   confirming a new booking, and existing records can be viewed without cancelling.
+
+No database migration, dependency installation or additional payment is needed.

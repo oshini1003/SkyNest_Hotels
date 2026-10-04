@@ -1,0 +1,299 @@
+.booking-review-page {
+  color: #173d35;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.booking-review-page .review-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding: 0 0 24px;
+  margin: 0 0 34px;
+  border-bottom: 1px solid #dfe3d9;
+  list-style: none;
+}
+
+.booking-review-page .review-progress li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #637369;
+  font-size: 11px;
+}
+
+.booking-review-page .review-progress li[aria-current="step"] {
+  color: #173d35;
+  font-weight: 700;
+}
+
+.booking-review-page .review-progress span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d9dfd5;
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.booking-review-page .review-progress li[aria-current="step"] span {
+  background: #173d35;
+  border-color: #173d35;
+  color: #fffefa;
+}
+
+.booking-review-page .review-eyebrow {
+  margin: 0 0 12px;
+  color: #86632e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+}
+
+.booking-review-page h1,
+.booking-review-page h2,
+.booking-review-page h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.booking-review-page h1 {
+  margin: 0;
+  font-size: clamp(34px, 4.5vw, 49px);
+  line-height: 1.16;
+  letter-spacing: -1.4px;
+}
+
+.booking-review-page h2 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.25;
+  letter-spacing: -.4px;
+}
+
+.booking-review-page .review-page-heading {
+  margin-bottom: 32px;
+}
+
+.booking-review-page .review-page-heading > p:last-child {
+  max-width: 620px;
+  margin: 18px 0 0;
+  color: #5d6d62;
+  line-height: 1.85;
+}
+
+.booking-review-page .review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  align-items: start;
+  gap: 28px;
+}
+
+.booking-review-page .review-information {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.booking-review-page .review-panel,
+.booking-review-page .review-total-panel {
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid #dce0d5;
+  border-radius: 3px;
+  background: #fffefa;
+}
+
+.booking-review-page .review-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 21px;
+  border-bottom: 1px solid #e6e8df;
+}
+
+.booking-review-page .review-section-number {
+  color: #86632e;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.booking-review-page .review-room-heading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 25px 0;
+}
+
+.booking-review-page .review-room-heading > div { min-width: 0; }
+.booking-review-page .review-room-heading p { margin: 0 0 4px; color: #61736a; font-size: 12px; overflow-wrap: anywhere; }
+.booking-review-page .review-room-heading h3 { margin: 0; font-size: 24px; line-height: 1.3; }
+.booking-review-page .review-room-heading .review-symbol { flex-shrink: 0; width: 40px; height: 40px; }
+
+.booking-review-page .review-stay-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+  margin: 0;
+  padding-top: 23px;
+  border-top: 1px solid #e6e8df;
+}
+
+.booking-review-page .review-stay-details dt,
+.booking-review-page .review-guest-details dt {
+  color: #637369;
+  font-size: 11px;
+}
+
+.booking-review-page .review-stay-details dd,
+.booking-review-page .review-guest-details dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.booking-review-page .review-guest-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+  margin: 24px 0 0;
+}
+
+.booking-review-page .review-guest-details > div:last-child { grid-column: 1 / -1; }
+.booking-review-page .review-account-note { margin: 22px 0 0; padding-top: 20px; border-top: 1px solid #e6e8df; color: #637369; font-size: 12px; }
+
+.booking-review-page .review-total-panel {
+  border-top: 3px solid #b68a45;
+  background: #f0f2e9;
+}
+
+.booking-review-page .review-price-details {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0 0;
+}
+
+.booking-review-page .review-price-details > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 18px;
+}
+
+.booking-review-page .review-price-details dt { color: #5d6d62; font-size: 12px; }
+.booking-review-page .review-price-details dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.booking-review-page .review-total { margin: 23px 0 0; padding-top: 22px; border-top: 1px solid #d6dccf; }
+.booking-review-page .review-total p { margin: 0 0 6px; font-size: 12px; }
+.booking-review-page .review-total strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: clamp(25px, 2.5vw, 34px); font-weight: 400; line-height: 1.3; overflow-wrap: anywhere; }
+.booking-review-page .review-charge-note { margin: 10px 0 24px; color: #61736a; font-size: 11px; }
+.booking-review-page .review-confirm-form { padding-top: 24px; border-top: 1px solid #d6dccf; }
+.booking-review-page .review-payment-field { display: grid; gap: 9px; }
+.booking-review-page .review-payment-field label { font-size: 12px; font-weight: 600; }
+
+.booking-review-page .review-payment-field select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 11px 12px;
+  border: 1px solid #ccd5c8;
+  border-radius: 2px;
+  color: #173d35;
+  background: #fffefa;
+  font: inherit;
+  font-size: 13px;
+}
+
+.booking-review-page .review-payment-note { margin: 12px 0 20px; color: #61736a; font-size: 11px; }
+.booking-review-page .review-error { padding: 14px 16px; border: 1px solid #ecd1cd; border-radius: 3px; color: #982e24; background: #fff4f1; font-size: 13px; overflow-wrap: anywhere; }
+.booking-review-page .review-notice { padding: 18px 20px; border: 1px solid #e0d4b9; border-radius: 3px; color: #665128; background: #f7f0e0; font-size: 13px; overflow-wrap: anywhere; }
+.booking-review-page .review-conflict-note { color: #665128; font-size: 12px; }
+
+.booking-review-page .review-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  max-width: 100%;
+  margin: 0;
+  padding: 13px 22px;
+  border: 1px solid #173d35;
+  border-radius: 2px;
+  color: #fffefa;
+  background: #173d35;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  cursor: pointer;
+}
+
+.booking-review-page .review-button:hover { background: #285448; border-color: #285448; }
+.booking-review-page .review-button--secondary { color: #173d35; background: transparent; border-color: #b8c5b6; }
+.booking-review-page .review-button--secondary:hover { color: #173d35; background: #e8eee3; border-color: #849686; }
+.booking-review-page .review-button:disabled { color: #fffefa; background: #64776a; border-color: #64776a; cursor: not-allowed; }
+.booking-review-page .review-payment-field select:disabled { color: #5d6d62; background: #e6eadf; cursor: not-allowed; }
+.booking-review-page .review-confirm-form .review-button { width: 100%; }
+.booking-review-page .review-text-link { color: #173d35; text-decoration: underline; text-decoration-color: #b68a45; text-underline-offset: 4px; }
+.booking-review-page .review-text-link:hover { color: #795c30; }
+.booking-review-page a:focus-visible,
+.booking-review-page button:focus-visible,
+.booking-review-page select:focus-visible { outline: 3px solid #b68a45; outline-offset: 4px; }
+.booking-review-page .review-bottom-links { display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 27px; font-size: 12px; }
+.booking-review-page .review-symbol { display: block; width: 48px; height: 48px; color: #b68a45; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.booking-review-page .review-state-card {
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 44px 48px;
+  border: 1px solid #dce0d5;
+  border-top: 3px solid #b68a45;
+  border-radius: 3px;
+  background: #fffefa;
+}
+
+.booking-review-page .review-state-card > .review-symbol { margin-bottom: 25px; }
+.booking-review-page .review-state-card h1 { font-size: clamp(31px, 4vw, 43px); }
+.booking-review-page .review-state-card > p:not(.review-eyebrow):not(.review-error):not(.review-notice) { color: #5d6d62; }
+.booking-review-page .review-state-card .review-reference { margin: 23px 0; }
+.booking-review-page .review-reference strong { color: #173d35; font-weight: 700; }
+.booking-review-page .review-confirmed-stay { padding: 23px 25px; margin: 24px 0; border: 1px solid #dce3d4; background: #f0f2e9; }
+.booking-review-page .review-confirmed-stay h2 { font-size: 26px; }
+.booking-review-page .review-confirmed-stay p { margin: 9px 0 0; font-size: 13px; }
+.booking-review-page .review-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; margin-top: 26px; }
+
+@media (max-width: 900px) {
+  .booking-review-page .review-layout { grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr); gap: 20px; }
+  .booking-review-page .review-panel,
+  .booking-review-page .review-total-panel { padding: 24px; }
+}
+
+@media (max-width: 740px) {
+  .booking-review-page .review-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .booking-review-page .review-progress { gap: 12px 18px; margin-bottom: 28px; }
+  .booking-review-page .review-total strong { font-size: 32px; }
+  .booking-review-page .review-state-card { padding: 32px 27px; }
+}
+
+@media (max-width: 420px) {
+  .booking-review-page .review-progress { display: grid; gap: 11px; padding-bottom: 22px; }
+  .booking-review-page .review-page-heading { margin-bottom: 25px; }
+  .booking-review-page .review-page-heading > p:last-child { font-size: 13px; }
+  .booking-review-page .review-panel,
+  .booking-review-page .review-total-panel,
+  .booking-review-page .review-state-card { padding: 23px 20px; }
+  .booking-review-page h2 { font-size: 23px; }
+  .booking-review-page .review-room-heading { gap: 13px; }
+  .booking-review-page .review-room-heading h3 { font-size: 22px; }
+  .booking-review-page .review-stay-details { gap: 20px 14px; }
+  .booking-review-page .review-stay-details dd { font-size: 13px; }
+  .booking-review-page .review-guest-details { grid-template-columns: minmax(0, 1fr); }
+  .booking-review-page .review-total strong { font-size: 29px; }
+  .booking-review-page .review-confirmed-stay { padding: 20px; }
+  .booking-review-page .review-actions { align-items: stretch; flex-direction: column; }
+  .booking-review-page .review-actions > .review-text-link { align-self: flex-start; }
+}
