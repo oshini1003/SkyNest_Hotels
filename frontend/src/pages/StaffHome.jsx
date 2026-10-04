@@ -1,50 +1,81 @@
-import { changeStaffPassword } from "../services/passwordApi";
-import ChangePasswordForm from "./ChangePasswordForm";
 import { Link } from "react-router";
+import { changeStaffPassword } from "../services/passwordApi";
 import { canCheckIn } from "../services/staffBookingApi";
 import { canViewReports } from "../services/reportApi";
+import ChangePasswordForm from "./ChangePasswordForm";
+import "./StaffHome.css";
+
+function WorkspaceIcon({ reports = false }) {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {reports ? <><path d="M4 3v17h17" /><path d="M8 15v-4m5 4V6m5 9V9" /></> : <><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M8 3v4m8-4v4M4 11h16m-11 4h2m3 0h1m-6 3h2" /></>}
+    </svg>
+  );
+}
 
 export default function StaffHome({ staff, onLogout }) {
+  const handlesReception = canCheckIn(staff.role);
+  const roleLabel = staff.role === "ServiceStaff" ? "Service staff" : staff.role;
+
   return (
-    <section
-      className="auth-card"
-      aria-labelledby="staff-account-heading"
-    >
-      <p className="eyebrow">STAFF ACCOUNT</p>
+    <section className="staff-dashboard" aria-labelledby="staff-account-heading">
+      <header className="staff-dashboard-heading">
+        <p className="eyebrow">YOUR WORKSPACE</p>
+        <h1 id="staff-account-heading">Welcome, {staff.name}</h1>
+        <p>Everything you need for the next guest, the current stay, and the day ahead.</p>
+      </header>
 
-      <h1 id="staff-account-heading">
-        Welcome, {staff.name}
-      </h1>
+      <div className="staff-dashboard-grid">
+        <section className="staff-dashboard-operations" aria-labelledby="staff-operations-heading">
+          <p className="staff-dashboard-kicker">HOTEL OPERATIONS</p>
+          <h2 id="staff-operations-heading">Where would you like to start?</h2>
+          <p className="staff-dashboard-description">
+            {handlesReception
+              ? "Manage arrivals, record guest services and received payments, and complete departures from the booking workspace."
+              : "Find a guest's stay, record services and view their bill. Reception, managers and administrators handle arrivals, payments and departures."}
+          </p>
 
-      <dl className="staff-account-details">
-        <div>
-          <dt>Username</dt>
-          <dd>{staff.username}</dd>
+          <div className="staff-dashboard-actions">
+            <Link className="staff-workspace-card" to="/staff/bookings">
+              <span className="staff-workspace-icon"><WorkspaceIcon /></span>
+              <span className="staff-workspace-copy">
+                <span className="staff-workspace-title">{handlesReception ? "Manage bookings" : "View bookings"}</span>
+                <span className="staff-workspace-description">Reservations, guest stays, services and billing.</span>
+              </span>
+              <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+            </Link>
+            {canViewReports(staff.role) && (
+              <Link className="staff-workspace-card" to="/staff/reports">
+                <span className="staff-workspace-icon"><WorkspaceIcon reports /></span>
+                <span className="staff-workspace-copy">
+                  <span className="staff-workspace-title">Manager reports</span>
+                  <span className="staff-workspace-description">Room occupancy, billing and service activity across branches.</span>
+                </span>
+                <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+              </Link>
+            )}
+          </div>
+        </section>
+
+        <aside className="staff-identity-card" aria-labelledby="staff-identity-heading">
+          <span className="staff-identity-role">{roleLabel}</span>
+          <h2 id="staff-identity-heading">Your staff account</h2>
+          <dl>
+            <div><dt>Name</dt><dd>{staff.name}</dd></div>
+            <div><dt>Username</dt><dd>{staff.username}</dd></div>
+          </dl>
+          <button className="staff-sign-out" type="button" onClick={onLogout}>Sign out</button>
+        </aside>
+      </div>
+
+      <section className="staff-security-card" aria-labelledby="staff-security-heading">
+        <div className="staff-security-intro">
+          <p className="staff-dashboard-kicker">ACCOUNT SETTINGS</p>
+          <h2 id="staff-security-heading">Password &amp; security</h2>
+          <p>Update the password you use to sign in to your staff account.</p>
         </div>
-
-        <div>
-          <dt>Role</dt>
-          <dd>{staff.role}</dd>
-        </div>
-      </dl>
-
-      <p>
-        {canCheckIn(staff.role)
-          ? "Find reservations, check in guests, record services and received payments, and check out fully paid bookings."
-          : "View reservations, bills and payment history, and record services for checked-in bookings. Reception, managers or administrators handle check-in, payments and check-out."}
-      </p>
-      <p><Link className="button" to="/staff/bookings">{canCheckIn(staff.role) ? "Manage bookings" : "View bookings"}</Link></p>
-      {canViewReports(staff.role) && <p><Link className="button" to="/staff/reports">Manager reports</Link></p>}
-
-      <ChangePasswordForm onChangePassword={changeStaffPassword} />
-
-      <button
-        className="button"
-        type="button"
-        onClick={onLogout}
-      >
-        Sign out
-      </button>
+        <ChangePasswordForm onChangePassword={changeStaffPassword} />
+      </section>
     </section>
   );
 }

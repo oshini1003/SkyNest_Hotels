@@ -1,0 +1,155 @@
+.staff-dashboard {
+  color: var(--sk-ink, #173d35);
+}
+
+.staff-dashboard-heading {
+  padding-bottom: 32px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--sk-line, #dfe5dd);
+}
+
+.staff-dashboard-heading h1 {
+  margin-bottom: 16px;
+  font: normal clamp(2.1rem, 4vw, 3.5rem) / 1.12 var(--sk-font-display, Georgia, serif);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.staff-dashboard-heading > p:last-child {
+  margin: 0;
+  color: var(--sk-muted, #61736a);
+  max-width: 65ch;
+}
+
+.staff-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: 32px;
+}
+
+.staff-dashboard-kicker {
+  margin-bottom: 10px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #80602e;
+}
+
+.staff-dashboard h2 {
+  margin: 0 0 12px;
+  font: normal 1.65rem / 1.25 var(--sk-font-display, Georgia, serif);
+  letter-spacing: -0.025em;
+}
+
+.staff-dashboard-description {
+  color: var(--sk-muted, #61736a);
+  max-width: 66ch;
+  margin-bottom: 24px;
+  font-size: 0.94rem;
+}
+
+.staff-dashboard-actions {
+  display: grid;
+  gap: 14px;
+}
+
+.staff-workspace-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 23px;
+  border: 1px solid var(--sk-line, #dfe5dd);
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.staff-workspace-card:hover {
+  border-color: #a68a54;
+  box-shadow: 0 6px 20px #173d3508;
+}
+
+.staff-workspace-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: #eef2eb;
+}
+
+.staff-workspace-copy { min-width: 0; }
+.staff-workspace-title { display: block; font-size: 1.06rem; font-weight: 700; }
+.staff-workspace-description { display: block; margin-top: 4px; font-size: 0.86rem; color: var(--sk-muted, #61736a); }
+.staff-workspace-arrow { margin-left: auto; color: #80602e; font-size: 1.5rem; }
+
+.staff-identity-card {
+  padding: 28px;
+  border-radius: 14px;
+  background: #173d35;
+  color: #fff;
+}
+
+.staff-identity-role {
+  display: inline-block;
+  padding: 4px 10px;
+  margin-bottom: 24px;
+  border: 1px solid #b7ba9670;
+  border-radius: 4px;
+  color: #ead7b0;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.staff-identity-card h2 { color: #fff; }
+.staff-identity-card dl { display: grid; gap: 18px; margin: 24px 0; }
+.staff-identity-card dt { color: #bbcfc5; font-size: 0.78rem; }
+.staff-identity-card dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+.staff-sign-out {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid #acc3b56b;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.staff-sign-out:hover { background: #ffffff0d; border-color: #ead7b0; }
+.staff-sign-out:focus-visible, .staff-workspace-card:focus-visible { outline: 3px solid #b68a45; outline-offset: 4px; }
+
+.staff-security-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: 32px;
+  margin-top: 36px;
+  padding: 28px;
+  border: 1px solid var(--sk-line, #dfe5dd);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.staff-security-intro p:last-child { max-width: 38ch; margin: 0; color: var(--sk-muted, #61736a); font-size: 0.88rem; }
+.staff-security-card .change-password-section { margin: 0; padding: 0; border: 0; min-width: 0; }
+.staff-security-card .change-password-toggle { margin: 0; min-height: 44px; }
+.staff-security-card .change-password-form { margin-top: 20px; padding: 20px; border-color: #dfe5dd; background: #f7f8f4; }
+.staff-security-card .change-password-form .form-field input { min-width: 0; }
+
+@media (max-width: 760px) {
+  .staff-dashboard-grid, .staff-security-card { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .staff-dashboard-heading { margin-bottom: 24px; padding-bottom: 24px; }
+  .staff-workspace-card { padding: 18px; gap: 14px; }
+  .staff-identity-card, .staff-security-card { padding: 22px; }
+  .staff-security-card { margin-top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-workspace-card { transition: none; }
+}

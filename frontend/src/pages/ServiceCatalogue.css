@@ -1,0 +1,424 @@
+.service-catalogue-page {
+  color: #173d35;
+}
+
+.service-catalogue-page .service-catalogue-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 52px;
+  align-items: center;
+  padding: 8px 0 38px;
+}
+
+.service-catalogue-page .eyebrow {
+  margin: 0 0 16px;
+  color: #88632e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+}
+
+.service-catalogue-page h1 {
+  margin: 0 0 15px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(43px, 5.2vw, 62px);
+  font-weight: 400;
+  letter-spacing: -2px;
+  line-height: 1.05;
+}
+
+.service-catalogue-page h1 > span {
+  color: #b68a45;
+}
+
+.service-catalogue-page .service-catalogue-lead {
+  margin: 0 0 7px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  line-height: 1.4;
+}
+
+.service-catalogue-page .service-catalogue-summary {
+  margin: 0;
+  color: #61736a;
+  font-size: 13px;
+}
+
+.service-catalogue-page .service-catalogue-assistance {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 29px 26px;
+  border: 1px solid #dfe5dd;
+  border-radius: 2px 2px 28px 2px;
+  background: #eef0e8;
+}
+
+.service-catalogue-page .service-catalogue-bell {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  stroke: #a17c40;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.service-catalogue-page .service-catalogue-assistance p {
+  margin: 0;
+  color: #51675c;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.service-catalogue-page .service-catalogue-assistance .service-catalogue-small-label {
+  margin-bottom: 9px;
+  color: #173d35;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+}
+
+.service-catalogue-page .service-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  margin: 0;
+  padding: 24px 28px;
+  border: 1px solid #dfe5dd;
+  border-radius: 3px;
+  background: #fffefa;
+}
+
+.service-catalogue-page .service-filters .form-field {
+  min-width: 0;
+}
+
+.service-catalogue-page .service-filters label {
+  display: block;
+  margin-bottom: 8px;
+  color: #173d35;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.service-catalogue-page .service-search-input {
+  position: relative;
+}
+
+.service-catalogue-page .service-search-input svg {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  width: 18px;
+  height: 18px;
+  stroke: #75867b;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.service-catalogue-page .service-search-input input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 15px 12px 43px;
+  border: 1px solid #d6dfd5;
+  border-radius: 3px;
+  background: #fff;
+  color: #173d35;
+  font: inherit;
+  font-size: 13px;
+}
+
+.service-catalogue-page .service-search-input input::placeholder {
+  color: #7a887e;
+  opacity: 1;
+}
+
+.service-catalogue-page .button {
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 23px;
+  border: 1px solid #173d35;
+  border-radius: 3px;
+  background: #173d35;
+  color: #fffefa;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.service-catalogue-page .button:hover:not(:disabled) {
+  background: #285448;
+}
+
+.service-catalogue-page .button:disabled {
+  border-color: #d6dfd5;
+  background: #f1f3ed;
+  color: #66786d;
+  opacity: 1;
+  cursor: default;
+}
+
+.service-catalogue-page input:focus-visible,
+.service-catalogue-page .button:focus-visible {
+  outline: 3px solid #b68a45;
+  outline-offset: 3px;
+}
+
+.service-catalogue-page .service-catalogue-results-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 39px 0 21px;
+}
+
+.service-catalogue-page .service-catalogue-results-heading h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 27px;
+  font-weight: 400;
+  letter-spacing: -0.4px;
+  line-height: 1.3;
+}
+
+.service-catalogue-page .service-count {
+  flex-shrink: 0;
+  margin: 0;
+  color: #61736a;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.service-catalogue-page .card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+}
+
+.service-catalogue-page .service-card {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dfe5dd;
+  border-radius: 3px;
+  background: #fffefa;
+}
+
+.service-catalogue-page .service-catalogue-media {
+  position: relative;
+  aspect-ratio: 1.65;
+  overflow: hidden;
+  background: #e9ece2;
+}
+
+.service-catalogue-page .service-catalogue-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.service-catalogue-page .service-catalogue-media--graphic {
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 45%, #f2f3ec 0%, #e7ebdf 75%);
+}
+
+.service-catalogue-page .service-catalogue-service-mark {
+  display: grid;
+  place-items: center;
+  width: 105px;
+  height: 105px;
+  border: 1px solid #cbd5c4;
+  border-radius: 50%;
+  box-shadow: 0 0 0 13px #e8ecdf, 0 0 0 14px #d7dfce;
+}
+
+.service-catalogue-page .service-catalogue-service-mark .service-catalogue-bell,
+.service-catalogue-page .service-catalogue-service-icon {
+  width: 62px;
+  height: 62px;
+  stroke: #a17c40;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.service-catalogue-page .service-catalogue-media-label {
+  position: absolute;
+  bottom: 16px;
+  left: 18px;
+  padding: 6px 9px;
+  border-radius: 2px;
+  background: #fffef5ed;
+  color: #173d35;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.service-catalogue-page .service-catalogue-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 23px 24px 21px;
+}
+
+.service-catalogue-page .service-catalogue-card-body h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 25px;
+  font-weight: 400;
+  letter-spacing: -0.4px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.service-catalogue-page .service-description {
+  margin: 13px 0 23px;
+  color: #61736a;
+  font-size: 12px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.service-catalogue-page .service-price {
+  margin: auto 0 0;
+  padding-top: 20px;
+}
+
+.service-catalogue-page .service-price span {
+  display: block;
+  padding-top: 16px;
+  border-top: 1px solid #e6e9e0;
+  color: #61736a;
+  font-size: 10px;
+}
+
+.service-catalogue-page .service-price strong {
+  margin-top: 3px;
+  color: #173d35;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.service-catalogue-page .service-catalogue-photo-note {
+  margin: 19px 0 0;
+  color: #61736a;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.service-catalogue-page .service-catalogue-state {
+  margin: 28px 0 0;
+  padding: 28px;
+  border: 1px solid #dfe5dd;
+  border-radius: 3px;
+  background: #fffefa;
+  color: #61736a;
+  font-size: 14px;
+}
+
+.service-catalogue-page .service-notice {
+  border-left: 3px solid #b68a45;
+}
+
+.service-catalogue-page .service-notice p {
+  margin-bottom: 18px;
+}
+
+@media (min-width: 1150px) {
+  .service-catalogue-page .card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .service-catalogue-page .service-catalogue-card-body {
+    padding-inline: 20px;
+  }
+
+  .service-catalogue-page .service-catalogue-card-body h3 {
+    font-size: 23px;
+  }
+}
+
+@media (max-width: 900px) {
+  .service-catalogue-page .service-catalogue-intro {
+    grid-template-columns: minmax(0, 1fr) 270px;
+    gap: 24px;
+  }
+
+  .service-catalogue-page .service-catalogue-assistance {
+    gap: 12px;
+    padding: 24px 20px;
+  }
+
+  .service-catalogue-page .card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 650px) {
+  .service-catalogue-page .service-catalogue-intro {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 0 0 26px;
+  }
+
+  .service-catalogue-page h1 {
+    font-size: 46px;
+  }
+
+  .service-catalogue-page .service-catalogue-lead {
+    font-size: 21px;
+  }
+
+  .service-catalogue-page .service-catalogue-assistance {
+    gap: 19px;
+    padding: 18px 20px;
+  }
+
+  .service-catalogue-page .service-catalogue-assistance .service-catalogue-small-label {
+    margin-bottom: 4px;
+  }
+
+  .service-catalogue-page .service-filters {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 19px;
+  }
+
+  .service-catalogue-page .service-filters .button {
+    width: 100%;
+  }
+
+  .service-catalogue-page .service-catalogue-results-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 30px;
+  }
+
+  .service-catalogue-page .service-catalogue-results-heading h2 {
+    font-size: 25px;
+  }
+
+  .service-catalogue-page .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .service-catalogue-page .service-catalogue-media {
+    aspect-ratio: 1.8;
+  }
+
+  .service-catalogue-page .service-catalogue-card-body {
+    padding: 22px;
+  }
+}

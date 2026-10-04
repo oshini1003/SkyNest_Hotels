@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { getLocalToday, loadRoomOptions, searchRooms, validateStay } from "../services/roomApi";
+import "./RoomSearch.css";
 
 const initialFilters = {
   branch: "",
@@ -10,15 +11,48 @@ const initialFilters = {
   guests: "1",
 };
 
+function initialRoomFilters(navigationState) {
+  const stay = navigationState?.roomSearch;
+  if (!stay || typeof stay !== "object" || Object.getPrototypeOf(stay) !== Object.prototype) return initialFilters;
+  const positiveInteger = (value) => typeof value === "string" && /^[1-9]\d*$/.test(value)
+    && Number.isSafeInteger(Number(value));
+  const date = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+  return {
+    ...initialFilters,
+    branch: positiveInteger(stay.branchId) ? stay.branchId : "",
+    checkin: date(stay.checkin),
+    checkout: date(stay.checkout),
+    guests: positiveInteger(stay.guests) ? stay.guests : "1",
+  };
+}
+
 const money = new Intl.NumberFormat("en-LK", {
   style: "currency",
   currency: "LKR",
   currencyDisplay: "code",
 });
 
+function roomPhoto(roomType) {
+  const name = roomType.toLowerCase();
+  if (name.includes("family") || name.includes("double")) return "/images/hotel/room-family.jpg";
+  if (name.includes("deluxe") || name.includes("suite")) return "/images/hotel/room-deluxe.jpg";
+  if (name.includes("standard") || name.includes("single")) return "/images/hotel/room-standard.jpg";
+  return null;
+}
+
+function RoomIcon() {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M7 34V19m34 15V19M7 28h34M7 34h34M10 28V16a3 3 0 0 1 3-3h22a3 3 0 0 1 3 3v12M12 34v5m24-5v5" />
+      <path d="M14 27v-5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5m2 0v-5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5" />
+    </svg>
+  );
+}
+
 export default function RoomSearch() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(initialFilters);
+  const [filters, setFilters] = useState(() => initialRoomFilters(location.state));
   const [options, setOptions] = useState({ branches: [], roomTypes: [] });
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState("");
@@ -38,7 +72,14 @@ export default function RoomSearch() {
     const controller = new AbortController();
     let active = true;
     loadRoomOptions(controller.signal)
-      .then((data) => { if (active) setOptions(data); })
+      .then((data) => {
+        if (active) {
+          setOptions(data);
+          setFilters((current) => current.branch && !data.branches.some((branch) => String(branch.id) === current.branch)
+            ? { ...current, branch: "" }
+            : current);
+        }
+      })
       .catch((failure) => {
         if (active && failure.name !== "AbortError") setOptionsError(failure.message);
       })
@@ -131,15 +172,19 @@ export default function RoomSearch() {
   }
 
   return (
-    <section aria-labelledby="room-search-heading">
-      <p className="eyebrow">PLAN YOUR STAY</p>
-      <h1 id="room-search-heading">Find a room</h1>
-      <p>Choose your destination, dates and number of guests.</p>
-
-      <p className="room-demo-note">
-        Room availability and prices are checked for your selected dates.
-        Selecting a room does not reserve it.
-      </p>
+    <section className="room-search-page" aria-labelledby="room-search-heading">
+      <header className="room-page-intro">
+        <div className="room-intro-copy">
+          <p className="eyebrow">PLAN YOUR STAY</p>
+          <h1 id="room-search-heading">Find a room.<br /><em>Make it your own.</em></h1>
+          <p>Choose your destination, dates and number of guests. Your next Sri Lankan stay begins here.</p>
+        </div>
+        <div className="room-intro-image">
+          <img src="/images/hotel/room-deluxe.jpg" alt="" />
+          <span>SPACE TO SLOW DOWN</span>
+        </div>
+      </header>
+      <p className="room-photograph-note">Room photographs are illustrative.</p>
 
       {optionsLoading && <p role="status">Loading branches and room types…</p>}
       {optionsError && (
@@ -152,6 +197,13 @@ export default function RoomSearch() {
       )}
 
       <form className="room-search-form" onSubmit={handleSearch}>
+        <div className="room-form-heading">
+          <div>
+            <p className="eyebrow">THE DETAILS</p>
+            <h2>Tell us about your stay</h2>
+          </div>
+          <span className="room-form-heading-note">A place. A date. A little time away.</span>
+        </div>
         <div className="form-field">
           <label htmlFor="room-branch">Branch</label>
           <select
@@ -234,11 +286,18 @@ export default function RoomSearch() {
           </p>
         )}
 
-        <button className="button" type="submit" disabled={loading || optionsLoading || Boolean(optionsError)}>
-          {loading ? "Searching…" : error ? "Try search again" : "Search rooms"}
+        <button className="button room-search-submit" type="submit" disabled={loading || optionsLoading || Boolean(optionsError)}>
+          <span>{loading ? "Searching…" : error ? "Try search again" : "Search rooms"}</span>
+          <span aria-hidden="true">↗</span>
         </button>
+        <p className="room-demo-note room-form-notice">
+          Room availability and prices are checked for your selected dates.
+          Selecting a room does not reserve it.
+        </p>
       </form>
 
+      <div className="room-results-heading">
+      <h2>{result ? "Rooms for your stay" : "A room to look forward to"}</h2>
       <p className="room-search-summary" role="status">
         {loading
           ? "Checking room availability…"
@@ -248,9 +307,20 @@ export default function RoomSearch() {
               result.nights
             } night${result.nights === 1 ? "" : "s"}.`}
       </p>
+      </div>
+
+      {!loading && result === null && (
+        <div className="room-search-placeholder">
+          <span className="room-placeholder-icon"><RoomIcon /></span>
+          <div>
+            <h3>Let’s find your place</h3>
+            <p>Enter your stay details above to explore available rooms and prices.</p>
+          </div>
+        </div>
+      )}
 
       {result && result.rooms.length === 0 && (
-        <p>
+        <p className="room-empty-state">
           No rooms are available for these filters and dates. Try another branch,
           room type, date range or guest count.
         </p>
@@ -259,14 +329,17 @@ export default function RoomSearch() {
       {result && (
         <div className="card-grid">
           {result.rooms.map((room) => (
-            <article className="card room-card" key={room.id}>
+            <article className={`card room-card${selectedRoomId === room.id ? " room-card-selected" : ""}`} key={room.id}>
+              <div className={`room-card-image${roomPhoto(room.roomType) ? "" : " room-card-image-placeholder"}`}>
+                {roomPhoto(room.roomType) ? (
+                  <img src={roomPhoto(room.roomType)} alt="" loading="lazy" />
+                ) : <RoomIcon />}
+                <span className="room-number">ROOM {room.number}</span>
+              </div>
+              <div className="room-card-content">
+              <p className="room-card-branch">{room.branch}</p>
               <h2>{room.roomType}</h2>
-
-              <p>
-                {room.branch} · Room {room.number}
-              </p>
-
-              <p>Maximum guests: {room.capacity}</p>
+              <p className="room-capacity"><span aria-hidden="true">◦</span> Maximum guests: {room.capacity}</p>
 
               <p className="room-price">
                 {money.format(room.pricePerNight)}
@@ -290,12 +363,13 @@ export default function RoomSearch() {
                 aria-label={`Review this room: ${room.branch}, room ${room.number}`}
                 onClick={(event) => handleSelectRoom(room.id, event)}
                 >
-                Review this room
+                <span>Review this room</span><span aria-hidden="true">↗</span>
                 </button>
 
                 {selectedRoomId === room.id && (
                 <p className="room-selected-label">Selected for review</p>
                 )}
+              </div>
             </article>
           ))}
         </div>
@@ -362,9 +436,9 @@ export default function RoomSearch() {
     </p>
     
 
-    <div style={{ display: "flex", gap: "10px", marginTop: "1rem" }}>
+    <div className="room-review-actions">
       <button
-        className="button"
+        className="button room-clear-selection"
         type="button"
         onClick={handleClearSelection}
       >

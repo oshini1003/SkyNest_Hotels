@@ -3,7 +3,6 @@ import {
   BrowserRouter,
   Link,
   Navigate,
-  NavLink,
   Route,
   Routes,
   useLocation,
@@ -48,41 +47,11 @@ import {
   logoutSession,
 } from "./services/session";
 import "./App.css";
+import SiteLayout from "./components/SiteLayout";
+import Home from "./pages/Home";
+import Branches from "./pages/Branches";
 
 const showPreviews = import.meta.env.DEV;
-function Home() {
-  return (
-    <section className="hero">
-      <p className="eyebrow">COLOMBO · KANDY · GALLE</p>
-      <h1>Welcome to SkyNest Hotels</h1>
-      <p className="hero-description">
-        Explore our hotels across Sri Lanka and discover the services
-        available during your stay.
-      </p>
-      <Link className="button" to="/branches">
-        Explore our branches
-      </Link>
-    </section>
-  );
-}
-
-function ListingPage({ title, items }) {
-  return (
-    <section>
-      <p className="eyebrow">SKYNEST HOTELS</p>
-      <h1>{title}</h1>
-
-      <div className="card-grid">
-        {items.map((item) => (
-          <article className="card" key={item}>
-            <h2>{item}</h2>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function NotFound() {
   return (
     <section>
@@ -158,47 +127,11 @@ function handleStaffLogout() {
 
   return (
     <BrowserRouter>
-      <div className="site-shell">
-        <header className="site-header">
-          <div className="container navbar">
-            <Link className="brand" to="/">
-              SkyNest <span>HOTELS</span>
-            </Link>
-
-            <nav aria-label="Main navigation">
-              <NavLink to="/" end>
-                Home
-              </NavLink>
-              <NavLink to="/branches">Branches</NavLink>
-              <NavLink to="/rooms">Rooms</NavLink>
-              <NavLink to="/services">Services</NavLink>
-              {showPreviews && (
-                <NavLink to="/preview/bookings">
-                  Sample bookings
-                </NavLink>
-              )}
-
-              {session && <NavLink to="/guest/bookings">My bookings</NavLink>}
-              <NavLink to={session ? "/guest" : "/guest/login"}>
-                {session ? "My Account" : "Guest Login"}
-              </NavLink>
-            </nav>
-          </div>
-        </header>
-
-        <main className="container main-content">
+      <SiteLayout session={session} staffSession={staffSession} showPreviews={showPreviews}>
           <Routes>
             <Route path="/" element={<Home />} />
 
-            <Route
-              path="/branches"
-              element={
-                <ListingPage
-                  title="Our branches"
-                  items={["Colombo", "Kandy", "Galle"]}
-                />
-              }
-            />
+            <Route path="/branches" element={<Branches />} />
 
             <Route path="/services" element={<ServiceCatalogue />} />
             {showPreviews && (
@@ -337,37 +270,7 @@ function handleStaffLogout() {
 
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </main>
-
-        <footer className="site-footer">
-          <p>
-            SkyNest Hotels · Colombo, Kandy and Galle
-          </p>
-
-          <div className="footer-links">
-            <Link className="staff-entry-link" to="/staff">
-              Staff access
-            </Link>
-
-            {showPreviews && (
-              <>
-              <Link
-                className="staff-entry-link"
-                to="/preview/staff/bookings"
-              >
-                Staff booking preview
-              </Link>
-              <Link className="staff-entry-link" to="/preview/staff/bill-details">
-                Billing preview
-              </Link>
-              <Link className="staff-entry-link" to="/preview/staff/manager-reports">
-                Reports preview
-              </Link>
-              </>
-            )}
-          </div>
-        </footer>
-      </div>
+      </SiteLayout>
     </BrowserRouter>
   );
 }
