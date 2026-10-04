@@ -8,6 +8,7 @@ router.use(authenticate); // every booking action requires a logged-in guest or 
 router.get('/', ctrl.listBookings);
 router.get('/:id', ctrl.getBooking);
 router.post('/', ctrl.makeBooking); // guest self-service OR front desk on the guest's behalf
+router.patch('/:id', ctrl.updateBooking);   // guest (own booking) or front desk
 router.patch('/:id/cancel', ctrl.cancelBooking);
 router.post('/:id/check-in', requireRole('Receptionist', 'Manager', 'Admin'), ctrl.checkIn);
 router.post('/:id/check-out', requireRole('Receptionist', 'Manager', 'Admin'), ctrl.checkOut);
