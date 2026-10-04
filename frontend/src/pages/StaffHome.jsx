@@ -2,6 +2,7 @@ import { changeStaffPassword } from "../services/passwordApi";
 import ChangePasswordForm from "./ChangePasswordForm";
 import { Link } from "react-router";
 import { canCheckIn } from "../services/staffBookingApi";
+import { canViewReports } from "../services/reportApi";
 
 export default function StaffHome({ staff, onLogout }) {
   return (
@@ -33,6 +34,7 @@ export default function StaffHome({ staff, onLogout }) {
           : "View reservations, bills and payment history, and record services for checked-in bookings. Reception, managers or administrators handle check-in, payments and check-out."}
       </p>
       <p><Link className="button" to="/staff/bookings">{canCheckIn(staff.role) ? "Manage bookings" : "View bookings"}</Link></p>
+      {canViewReports(staff.role) && <p><Link className="button" to="/staff/reports">Manager reports</Link></p>}
 
       <ChangePasswordForm onChangePassword={changeStaffPassword} />
 

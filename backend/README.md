@@ -58,7 +58,8 @@ Lakshan's billing/payment/report layouts are labelled development previews under
 reservations and staff booking search/details/check-in are connected to the live
 API. The public service catalogue and staff service recording/history/bill totals
 also use the live API. Staff bill history, payment recording and checkout are
-connected at `/staff/bookings/:id/bill`. The preview pages remain separate.
+connected at `/staff/bookings/:id/bill`. Manager/Admin reports are live at
+`/staff/reports`. The development preview pages remain separate.
 
 | Endpoint | Method | Access | Description |
 |---|---|---|---|
@@ -401,13 +402,97 @@ temporary test credentials from the shell afterwards.
 
 ## Reports (Manager/Admin only)
 
-| Endpoint | Description |
-|---|---|
-| `GET /api/reports/occupancy` | Occupied vs available rooms per branch |
-| `GET /api/reports/billing-summary` | Itemised bills, `?outstandingOnly=true` to filter |
-| `GET /api/reports/service-usage` | Quantity + revenue per service |
-| `GET /api/reports/revenue` | Monthly revenue per branch (Checked-Out bookings) |
-| `GET /api/reports/top-services` | Most-used services |
+Open **Staff account → Manager reports** after signing in as Manager or Admin.
+The five existing report endpoints now supply the live frontend at `/staff/reports`.
+Receptionist, ServiceStaff and guest accounts cannot access these reports. The
+fictional report layout remains at `/preview/staff/manager-reports` in development.
+
+| Endpoint | Meaning | Optional filters |
+|---|---|---|
+| `GET /api/reports/occupancy` | Current room status counts, including branches with no rooms | `branchId` |
+| `GET /api/reports/billing-summary` | One row per saved bill with total, paid and outstanding amounts | `branchId`, `outstandingOnly=true` or `false` |
+| `GET /api/reports/service-usage` | Saved service entry counts, quantity and charges at recorded prices | `branchId` |
+| `GET /api/reports/revenue` | Finalized bills grouped by branch and **bill-opened month** | `branchId`, `year`, `month` |
+| `GET /api/reports/top-services` | Services ranked by number of usage entries | `branchId`, `limit` (default 5, maximum 50) |
+
+All endpoints return arrays, including an empty array when no records match.
+Unknown or malformed filters return 400 before SQL. Numeric query filters are
+canonical positive decimal integers (no spaces, fractions, leading zeros or
+arrays). `branchId` is at most 2147483647; `year` is 1000–9999; `month` is 1–12
+and requires `year`. `limit` is 1–50. Query values are bound parameters.
+
+Report definitions matter when demonstrating the database:
+
+- Occupancy is the current `ROOM.RoomStatus`, not future reservation availability
+  or historical occupancy. The displayed rate is occupied / total rooms, including
+  maintenance rooms in the denominator. A zero-room branch has no occupancy rate.
+- Billing includes saved bills only; a reservation without a bill is not an
+  unpaid bill. Outstanding means saved total minus saved payments, greater than
+  zero. The report does not calculate charges again from today's room prices.
+- Service charges use `SERVICE_USAGE.Quantity * PriceAtUsage`, including services
+  that are no longer active in the current catalogue. These are recorded charges,
+  not cash collected. Top services ranks by usage entries, then quantity, then
+  ServiceID to resolve ties consistently.
+- `/revenue` retains its existing URL but is labelled **Finalized bill totals**.
+  It includes only `Checked-Out` bookings and uses stored bill amounts.
+  `BILL.GeneratedDate` is when the bill was opened at check-in. It is not an actual
+  checkout timestamp or a payment date; those meanings must not be inferred.
+- Each booking is mapped to its branch once before aggregation. Several booked
+  rooms in one branch do not multiply bill or service amounts. The schema allows
+  bookings across branches but does not store an allocation of their bill charges.
+  Such bills are counted once under **Multiple branches** in all-branch reports;
+  bookings without rooms use **Unassigned branch**. Selecting a specific branch
+  excludes both groups. No arbitrary allocation or current-price weighting is used.
+- Money is aggregated as database decimals and returned as decimal strings to
+  avoid losing precision through automatic conversion of large SQL sums.
+  Occupancy/count fields remain numbers. The frontend rejects invalid/inconsistent
+  report responses and shows an error rather than invented zero totals.
+
+Billing rows include `BillID`, `BookingID`, `GuestName`, `BookingStatus`,
+`BillStatus`, `GeneratedDateDisplay`, `RoomCharges`, `ServiceCharges`,
+`TotalAmount`, `PaidAmount`, `OutstandingBalance`, and branch attribution fields.
+Billing/revenue attribution fields are `BranchID` (null when unallocated),
+`BranchName`, and `BranchScope` (`single`, `multiple`, or `unassigned`). Revenue
+rows add `Month` (`YYYY-MM`), `BillCount`, `RoomRevenue`, `ServiceRevenue` and
+`TotalRevenue`. Service/top-service rows include `ServiceID`, `ServiceName`,
+`TimesUsed`, `TotalQuantity` and `TotalRevenue`.
+
+Reports are read-only. Each GET reads the current database; separate reports are
+not one shared transaction snapshot. Keep data unchanged during cross-report
+verification. Changing a frontend filter clears the previous result and cancels
+pending loads. Loading failures never fall back to sample data. The only month/year
+filters appear on the finalized-bill report. These coursework endpoints return
+all matching groups/bills; pagination would be needed for a larger production dataset.
+
+### Verification
+
+No schema migration, routine update, reset or reseeding is needed for this stage.
+From the repository root, run:
+
+```powershell
+node .\backend\tests\report-regression.cjs
+npm --prefix frontend run build
+```
+
+The regression script uses a mock database and checks report access, strict
+filters, bound SQL parameters and aggregation contracts. It does not verify a
+running MySQL installation. With the backend running against the existing local
+integration database, set `TEST_API_URL`, `TEST_STAFF_USERNAME` and
+`TEST_STAFF_PASSWORD` to a Manager/Admin test account (for example seeded `nimal`)
+and `TEST_STAFF_BOOKING_ID` to the completed guided booking (`4`), then run:
+
+```powershell
+node .\backend\test-manager-reports.js
+```
+
+This checks all five real report queries, authentication, branch/month/outstanding
+filters, ranking, and report totals against the saved billing rows. The guided
+booking should still show LKR 12000 room charges + 3100 services = 15100 total,
+15100 paid, zero outstanding, two services and two payments. Other bookings are
+allowed; hotel-wide totals need not equal this one bill. The script only reads
+hotel records and creates/revokes its own login session. It never adds another
+payment, checks out a stay, or changes hotel rows. Remove the temporary test
+credentials from your shell afterwards.
 
 ## Project layout
 

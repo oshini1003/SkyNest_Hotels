@@ -29,6 +29,7 @@ import StaffBookings from "./pages/StaffBookings";
 import StaffBillDetails from "./pages/StaffBillDetails";
 import StaffPayment from "./pages/StaffPayment";
 import ManagerReports from "./pages/ManagerReports";
+import ManagerReportsPreview from "./pages/ManagerReportsPreview";
 import { demoStaffBookings } from "./data/demoStaffBookings";
 import ServiceUsagePreview from "./pages/ServiceUsagePreview";
 
@@ -228,7 +229,7 @@ function handleStaffLogout() {
                 />
                 <Route path="/preview/staff/bill-details" element={<StaffBillDetails />} />
                 <Route path="/preview/staff/record-payment" element={<StaffPayment />} />
-                <Route path="/preview/staff/manager-reports" element={<ManagerReports />} />
+                <Route path="/preview/staff/manager-reports" element={<ManagerReportsPreview />} />
               </>
             )}
 
@@ -313,6 +314,10 @@ function handleStaffLogout() {
               }
             />
 
+            <Route
+              path="/staff/reports"
+              element={<StaffOnly session={staffSession}><ManagerReports key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
             <Route
               path="/staff/bookings"
               element={<StaffOnly session={staffSession}><StaffBookingList key={staffSession?.token} session={staffSession} /></StaffOnly>}
