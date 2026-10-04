@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const { positiveInteger, validateBooking, validateBookingFilters, checkInEligibility } = require('../utils/bookingValidation');
+const { validateRoomSearch } = require('../utils/roomSearchValidation');
 
 const bookingRoles = new Set(['Admin', 'Manager', 'Receptionist']);
 const forbidden = res => res.status(403).json({ error: 'You do not have permission to perform this action.' });
@@ -33,10 +34,76 @@ const roomSelect = `SELECT br.*, r.RoomNumber, r.RoomStatus, r.BranchID, bh.Name
                    JOIN BRANCH bh ON bh.BranchID = r.BranchID
                    JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID`;
 
+
+const MAX_ROOMS = 10;
+const httpError = (status, message) => Object.assign(new Error(message), { status });
+
+// POST /api/bookings with rooms: [{ roomId, guestCount }, ...]. All rooms share the
+// booking's checkin/checkout. Single-room requests still use sp_make_booking.
+async function makeMultiRoomBooking(req, res) {
+  const { rooms, ...base } = req.body;
+  if (!rooms.length || rooms.length > MAX_ROOMS) {
+    return res.status(400).json({ error: `Provide between 1 and ${MAX_ROOMS} rooms.` });
+  }
+  const stays = [];
+  for (const room of rooms) {
+    if (!room || typeof room !== 'object' || Array.isArray(room)) {
+      return res.status(400).json({ error: 'Each room must include roomId and guestCount.' });
+    }
+    const parsed = validateBooking({ ...base, roomId: room.roomId, guestCount: room.guestCount }, req.user);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    stays.push(parsed.value);
+  }
+  if (new Set(stays.map(stay => stay.roomId)).size !== stays.length) {
+    return res.status(400).json({ error: 'A room can appear only once per booking.' });
+  }
+  stays.sort((a, b) => a.roomId - b.roomId);       // same lock order for everyone avoids deadlocks
+  const { guestId, paymentMethod } = stays[0];
+  const staffId = req.user.type === 'staff' ? positiveInteger(req.user.id) : null;
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [header] = await conn.execute(
+      'INSERT INTO BOOKING (GuestID, StaffID, PreferredPaymentMethod) VALUES (?, ?, ?)',
+      [guestId, staffId, paymentMethod]);
+    for (const stay of stays) {
+      const [[room]] = await conn.execute(
+        `SELECT r.RoomStatus, rt.Capacity FROM ROOM r JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID
+         WHERE r.RoomID = ? FOR UPDATE OF r`, [stay.roomId]);
+      if (!room) throw httpError(404, `Room ${stay.roomId} was not found.`);
+      if (room.RoomStatus === 'Maintenance') throw httpError(409, `Room ${stay.roomId} is under maintenance.`);
+      if (stay.guestCount > room.Capacity) throw httpError(400, `Room ${stay.roomId} sleeps at most ${room.Capacity}.`);
+      // Locking read, as in sp_make_booking: sees stays committed while this request waited for the room lock.
+      const [[clash]] = await conn.execute(
+        `SELECT br.BookedRoomID FROM BOOKED_ROOMS br
+         JOIN BOOKING b ON b.BookingID = br.BookingID
+         WHERE br.RoomID = ? AND b.BookingStatus IN ('Booked','Checked-In')
+           AND ? < br.CheckOutDateTime AND ? > br.CheckInDateTime
+         LIMIT 1 FOR UPDATE`, [stay.roomId, stay.checkin, stay.checkout]);
+      if (clash) throw httpError(409, 'Room is already booked for an overlapping period.');
+      await conn.execute(
+        `INSERT INTO BOOKED_ROOMS (BookingID, RoomID, CheckInDateTime, CheckOutDateTime, GuestCount)
+         VALUES (?, ?, ?, ?, ?)`,
+        [header.insertId, stay.roomId, stay.checkin, stay.checkout, stay.guestCount]);
+    }
+    await conn.commit();
+    res.status(201).json({ bookingId: header.insertId, status: 'Booked', rooms: stays.length });
+  } catch (err) {
+    await conn.rollback();
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    if (conflictResponse(err, res)) return;
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 // POST /api/bookings. The stored procedure owns the booking transaction and
 // room locks. A preferred payment method does not create a payment or bill.
 const makeBooking = asyncHandler(async (req, res) => {
   if (!canManage(req.user)) return forbidden(res);
+  if (Array.isArray(req.body?.rooms)) return makeMultiRoomBooking(req, res);
   const parsed = validateBooking(req.body, req.user);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
   const { guestId, roomId, checkin, checkout, guestCount, paymentMethod } = parsed.value;
@@ -188,4 +255,69 @@ const listBookings = asyncHandler(async (req, res) => {
   res.json(rows.map(row => ({ ...row, rooms: roomsByBooking.get(row.BookingID) })));
 });
 
-module.exports = { makeBooking, cancelBooking, checkIn, checkOut, getBooking, listBookings };
+const updateFields = ['bookedRoomId', 'roomId', 'checkin', 'checkout', 'guestCount'];
+
+// PATCH /api/bookings/:id - change room, dates or guest count of one room entry
+// on a Booked reservation. sp_update_booked_room and the update trigger enforce
+// status, capacity, maintenance and overlap under locks.
+const updateBooking = asyncHandler(async (req, res) => {
+  if (!canManage(req.user)) return forbidden(res);
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).some(key => !updateFields.includes(key))) {
+    return res.status(400).json({ error: `Send only ${updateFields.join(', ')}.` });
+  }
+  const change = {};
+  for (const key of ['bookedRoomId', 'roomId', 'guestCount']) {
+    change[key] = body[key] === undefined ? null : positiveInteger(body[key]);
+    if (body[key] !== undefined && change[key] === null) {
+      return res.status(400).json({ error: `${key} must be a positive whole number no greater than 2147483647.` });
+    }
+  }
+  for (const key of ['checkin', 'checkout']) {
+    if (body[key] !== undefined && typeof body[key] !== 'string') {
+      return res.status(400).json({ error: `${key} must be a YYYY-MM-DD date.` });
+    }
+  }
+  const datesChanged = body.checkin !== undefined || body.checkout !== undefined;
+  if (!datesChanged && change.roomId === null && change.guestCount === null) {
+    return res.status(400).json({ error: 'Provide at least one of roomId, checkin, checkout or guestCount.' });
+  }
+
+  const own = req.user.type === 'guest';
+  try {
+    const [[booking]] = await pool.execute(
+      `SELECT BookingID FROM BOOKING WHERE BookingID = ?${own ? ' AND GuestID = ?' : ''}`,
+      own ? [id, positiveInteger(req.user.id)] : [id]);
+    if (!booking) return notFound(res);
+
+    const [lines] = await pool.execute(
+      `SELECT BookedRoomID, DATE_FORMAT(CheckInDateTime, '%Y-%m-%d') AS CheckInDate,
+              DATE_FORMAT(CheckOutDateTime, '%Y-%m-%d') AS CheckOutDate
+       FROM BOOKED_ROOMS WHERE BookingID = ? ORDER BY BookedRoomID`, [id]);
+    if (change.bookedRoomId === null && lines.length !== 1) {
+      return res.status(400).json({ error: 'bookedRoomId is required for a booking with several rooms.' });
+    }
+    const line = change.bookedRoomId === null ? lines[0] : lines.find(l => l.BookedRoomID === change.bookedRoomId);
+    if (!line) return res.status(400).json({ error: 'That room entry does not belong to this booking.' });
+
+    let checkin = null;
+    let checkout = null;
+    if (datesChanged) {          // a single new date is combined with the stored one, then checked as a pair
+      const stay = validateRoomSearch(
+        { checkin: body.checkin ?? line.CheckInDate, checkout: body.checkout ?? line.CheckOutDate }, new Date());
+      if (stay.error) return res.status(400).json({ error: stay.error });
+      ({ checkin, checkout } = stay.value);
+    }
+    await pool.execute('CALL sp_update_booked_room(?, ?, ?, ?, ?, ?)',
+      [id, line.BookedRoomID, change.roomId, checkin, checkout, change.guestCount]);
+    res.json({ bookingId: id, bookedRoomId: line.BookedRoomID, status: 'Booked', updated: true });
+  } catch (err) {
+    if (conflictResponse(err, res)) return;
+    throw err;
+  }
+});
+
+module.exports = { makeBooking, updateBooking, cancelBooking, checkIn, checkOut, getBooking, listBookings };
