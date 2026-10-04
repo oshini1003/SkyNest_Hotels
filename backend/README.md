@@ -19,8 +19,8 @@ npm run dev
 
 The setup command refuses to touch an existing database. It loads `schema.sql`
 and `seed.sql` into the configured integration database, ignoring their default
-`SkyNest_Hotels` selection. It verifies 16 tables, 4 functions, 6 procedures and
-4 triggers. An import failure leaves the new database intact for inspection;
+`SkyNest_Hotels` selection. It verifies 16 tables, 4 functions, 7 procedures and
+5 triggers. An import failure leaves the new database intact for inspection;
 do not rerun the seed on an existing database.
 
 The sample booking starts tomorrow, avoiding expired fixed dates. Seed accounts

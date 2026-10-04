@@ -630,3 +630,137 @@ proc_body: BEGIN
 END //
 
 DELIMITER ;
+
+-- BOOKING UPDATE SUPPORT
+
+DELIMITER //
+
+-- Same overlap rule as trg_prevent_overlap_booking, for edits to an existing stay.
+-- sp_update_booked_room performs the locking check first; this guards direct updates.
+CREATE TRIGGER trg_prevent_overlap_booking_update
+BEFORE UPDATE ON BOOKED_ROOMS
+FOR EACH ROW
+BEGIN
+    DECLARE v_conflict INT DEFAULT 0;
+
+    IF NEW.RoomID <> OLD.RoomID
+       OR NEW.CheckInDateTime <> OLD.CheckInDateTime
+       OR NEW.CheckOutDateTime <> OLD.CheckOutDateTime THEN
+
+        SELECT COUNT(*) INTO v_conflict
+        FROM BOOKED_ROOMS br
+        JOIN BOOKING b ON b.BookingID = br.BookingID
+        WHERE br.RoomID = NEW.RoomID
+          AND br.BookedRoomID <> OLD.BookedRoomID
+          AND b.BookingStatus IN ('Booked','Checked-In')
+          AND NEW.CheckInDateTime < br.CheckOutDateTime
+          AND NEW.CheckOutDateTime > br.CheckInDateTime;
+
+        IF v_conflict > 0 THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Room is already booked for an overlapping period.';
+        END IF;
+    END IF;
+END //
+
+-- Change the room, stay dates or guest count of one room entry on a Booked
+-- reservation. NULL parameters keep the current value.
+CREATE PROCEDURE sp_update_booked_room(
+    IN p_booking_id INT,
+    IN p_booked_room_id INT,
+    IN p_new_room_id INT,
+    IN p_new_checkin DATETIME,
+    IN p_new_checkout DATETIME,
+    IN p_new_guest_count INT
+)
+proc_body: BEGIN
+    DECLARE v_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_cur_room INT DEFAULT NULL;
+    DECLARE v_cur_in DATETIME;
+    DECLARE v_cur_out DATETIME;
+    DECLARE v_cur_guests INT;
+    DECLARE v_room INT;
+    DECLARE v_in DATETIME;
+    DECLARE v_out DATETIME;
+    DECLARE v_guests INT;
+    DECLARE v_room_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_capacity INT DEFAULT NULL;
+    DECLARE v_conflict INT DEFAULT NULL;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    -- Booking lock first, as in check-in, check-out and payments. It also
+    -- serialises this edit with cancellation and check-in.
+    SELECT BookingStatus INTO v_status FROM BOOKING WHERE BookingID = p_booking_id FOR UPDATE;
+    IF v_status IS NULL OR v_status <> 'Booked' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only a Booked reservation can be modified.';
+    END IF;
+
+    -- Only this procedure edits BOOKED_ROOMS and it holds the booking lock,
+    -- so this row cannot change underneath it.
+    SELECT RoomID, CheckInDateTime, CheckOutDateTime, GuestCount
+      INTO v_cur_room, v_cur_in, v_cur_out, v_cur_guests
+    FROM BOOKED_ROOMS
+    WHERE BookedRoomID = p_booked_room_id AND BookingID = p_booking_id;
+    IF v_cur_room IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'That room entry does not belong to this booking.';
+    END IF;
+
+    SET v_room   = IFNULL(p_new_room_id, v_cur_room);
+    SET v_in     = IFNULL(p_new_checkin, v_cur_in);
+    SET v_out    = IFNULL(p_new_checkout, v_cur_out);
+    SET v_guests = IFNULL(p_new_guest_count, v_cur_guests);
+
+    IF v_out <= v_in OR DATE(v_in) < CURDATE() THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Choose a check-in date today or later and a later check-out date.';
+    END IF;
+
+    -- Requests for the same room queue on this row until commit or rollback.
+    SELECT r.RoomStatus, rt.Capacity INTO v_room_status, v_capacity
+    FROM ROOM r
+    JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID
+    WHERE r.RoomID = v_room
+    FOR UPDATE OF r;
+
+    IF v_room_status IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Room does not exist.';
+    END IF;
+    IF v_room_status = 'Maintenance' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'This room is unavailable for maintenance.';
+    END IF;
+    IF v_guests > v_capacity THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Guest count exceeds room capacity.';
+    END IF;
+
+    -- Locking read, as in sp_make_booking: sees stays committed while this
+    -- request waited for the room, even under REPEATABLE READ.
+    SELECT br.BookedRoomID INTO v_conflict
+    FROM BOOKED_ROOMS br
+    JOIN BOOKING b ON b.BookingID = br.BookingID
+    WHERE br.RoomID = v_room
+      AND br.BookedRoomID <> p_booked_room_id
+      AND b.BookingStatus IN ('Booked','Checked-In')
+      AND v_in < br.CheckOutDateTime
+      AND v_out > br.CheckInDateTime
+    LIMIT 1 FOR UPDATE;
+
+    IF v_conflict IS NOT NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Room is already booked for an overlapping period.';
+    END IF;
+
+    UPDATE BOOKED_ROOMS
+    SET RoomID = v_room, CheckInDateTime = v_in, CheckOutDateTime = v_out, GuestCount = v_guests
+    WHERE BookedRoomID = p_booked_room_id;
+
+    COMMIT;
+END //
+
+DELIMITER ;
