@@ -477,12 +477,6 @@ fictional report layout remains at `/preview/staff/manager-reports` in developme
 | `GET /api/reports/revenue` | Finalized bills grouped by branch and **bill-opened month** | `branchId`, `year`, `month` |
 | `GET /api/reports/top-services` | Services ranked by number of usage entries | `branchId`, `limit` (default 5, maximum 50) |
 
-## Dashboard (Admin/Manager only)
-
-| Endpoint | Method | Access | Description | Optional filters |
-|---|---|---|---|---|
-| `/api/dashboard/admin` (or `/dashboard/admin`) | GET | Admin/Manager | Consolidated at-a-glance summary (today's check-ins, check-outs, today's revenue, current occupancy percentage, room status counts, and per-branch breakdown) | `?branchId=` |
-
 All endpoints return arrays, including an empty array when no records match.
 Unknown or malformed filters return 400 before SQL. Numeric query filters are
 canonical positive decimal integers (no spaces, fractions, leading zeros or
@@ -561,6 +555,71 @@ allowed; hotel-wide totals need not equal this one bill. The script only reads
 hotel records and creates/revokes its own login session. It never adds another
 payment, checks out a stay, or changes hotel rows. Remove the temporary test
 credentials from your shell afterwards.
+
+## Dashboard (Admin/Manager only)
+
+| Endpoint | Method | Access | Description | Optional filters |
+|---|---|---|---|---|
+| `/api/dashboard/admin` (or `/dashboard/admin`) | GET | Admin/Manager | Current room status, scheduled arrival/departure cohorts, cash received today and active bookings | `?branchId=` |
+
+Both aliases require an authenticated Manager or Admin. The only accepted query
+key is `branchId`: a canonical positive decimal integer no greater than
+2147483647. Arrays, leading zeros, spaces, fractions, extra characters and unknown
+query keys return 400 before database access. A valid but nonexistent branch ID
+returns an empty summary (zero counts and payments, null occupancy rate).
+
+The response is an **object**, not a report array: `date`, `branchId`, `summary`,
+and, for an all-branch request, `branchBreakdown`. `branchId` is `"all"` or the
+selected numeric ID. Counts are nonnegative safe integers. Invalid database
+counts or amounts cause an error; they are not silently converted to zero.
+
+Dashboard definitions:
+
+- `date` is the database's current date, captured once and bound to every dated
+  query. It is not the JavaScript server's UTC date. The whole response reads one
+  read-only repeatable-read snapshot, so its parts describe the same saved state.
+- `todayCheckIns` and `todayCheckOuts` count distinct non-cancelled reservations
+  with a room scheduled to arrive or depart on that database date. The completed
+  fields describe the current status of those same scheduled cohorts: arrivals
+  are completed for `Checked-In` **or** `Checked-Out` reservations; departures
+  are completed for `Checked-Out` reservations. They are not counts of actual
+  events performed today: the schema has no actual check-in/checkout timestamp.
+  A multi-branch reservation can belong to more than one branch's stay cohort;
+  all-branch counts still count that reservation only once.
+- `todayRevenue` retains its API field name but means **cash received today**,
+  from saved `PAYMENT.Amount` values and `PaymentDate`. It is an exact decimal
+  string, such as `"15100.00"`; `todayPaymentsCount` counts saved payment entries.
+  This differs from the existing finalized-bill revenue report. Each payment is
+  counted once regardless of room count. Specific-branch cash totals include only
+  bookings wholly assigned to that branch. Mixed-branch and unassigned bookings
+  remain included once in chain-wide cash totals, without inventing an allocation.
+- Occupancy is current occupied rooms divided by all rooms, including maintenance
+  rooms. `currentOccupancyPercentage` (and each breakdown `occupancyPercentage`)
+  is null when there are no rooms. Room counts come from current `ROOM` statuses;
+  they do not describe availability for a future stay. The chain-wide breakdown
+  includes zero-room branches and is ordered by BranchID.
+- `activeBookings` counts distinct reservations currently `Booked` or
+  `Checked-In`. A selected branch includes reservations with any room assigned
+  there; the chain-wide count includes each reservation once.
+
+No dashboard request creates or changes reservations, bills, service entries,
+payments or room statuses. No database schema installation is needed for this
+endpoint. It is currently a backend endpoint; this change adds no dashboard page.
+
+From the repository root:
+
+```bash
+node backend/tests/dashboard-regression.cjs
+```
+
+The regression uses mock connections and independent fixtures/static query checks;
+it does not verify live MySQL execution. With the backend running, the optional
+`node backend/test-dashboard.js` check uses `TEST_API_URL`,
+`TEST_STAFF_USERNAME` and `TEST_STAFF_PASSWORD` for a Manager or Admin. It checks
+the live API contract and room/occupancy consistency, including branch filters.
+Authentication creates/revokes only its own test session; it does not change hotel
+booking, billing or payment rows. This smoke check is not an independent audit of
+cash totals or proof of database concurrency behavior.
 
 ## Project layout
 

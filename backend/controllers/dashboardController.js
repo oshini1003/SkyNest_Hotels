@@ -1,153 +1,183 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { canReadReports, validateReportQuery } = require('../utils/reportValidation');
 
-// GET /api/dashboard/admin
-// Query param: ?branchId= (optional)
+function count(value) {
+  const parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error('An invalid dashboard count was returned by the database.');
+  }
+  return parsed;
+}
+
+function roomSummary(row) {
+  const totalRooms = count(row.totalRooms);
+  const occupiedRooms = count(row.occupiedRooms);
+  const availableRooms = count(row.availableRooms);
+  const maintenanceRooms = count(row.maintenanceRooms);
+  if (occupiedRooms + availableRooms + maintenanceRooms !== totalRooms) {
+    throw new Error('Inconsistent dashboard room counts were returned by the database.');
+  }
+  return {
+    totalRooms,
+    occupiedRooms,
+    availableRooms,
+    maintenanceRooms,
+    occupancyPercentage: totalRooms > 0
+      ? Number(((occupiedRooms / totalRooms) * 100).toFixed(2)) : null,
+  };
+}
+
+// GET /api/dashboard/admin?branchId=
 const getAdminDashboardSummary = asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-
-  let branchId = null;
-  if (req.query.branchId !== undefined) {
-    const parsed = parseInt(req.query.branchId, 10);
-    if (isNaN(parsed) || parsed <= 0) {
-      return res.status(400).json({ error: 'branchId must be a positive integer.' });
-    }
-    branchId = parsed;
+  if (!canReadReports(req.user)) {
+    return res.status(403).json({ error: 'Manager or administrator access is required.' });
   }
+  const parsed = validateReportQuery('occupancy', req.query);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const { branchId } = parsed.value;
+  const branchClause = branchId === undefined ? '' : 'AND r.BranchID = ?';
+  const branchParams = branchId === undefined ? [] : [branchId];
 
-  const branchClause = branchId ? 'AND r.BranchID = ?' : '';
-  const branchParams = branchId ? [branchId] : [];
+  const connection = await pool.getConnection();
+  let result;
+  try {
+    // A dashboard response represents one committed state even while staff
+    // process check-ins, services and payments in other transactions.
+    await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    await connection.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
+    const [[day]] = await connection.query("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday");
+    if (!day || typeof day.ServerToday !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day.ServerToday)) {
+      throw new Error('An invalid dashboard date was returned by the database.');
+    }
+    const date = day.ServerToday;
+    const datedParams = [date, ...branchParams];
 
-  // 1. Room Status & Current Occupancy
-  const [roomRows] = await pool.query(
-    `SELECT 
-       COUNT(r.RoomID) AS totalRooms,
-       COALESCE(SUM(r.RoomStatus = 'Occupied'), 0) AS occupiedRooms,
-       COALESCE(SUM(r.RoomStatus = 'Available'), 0) AS availableRooms,
-       COALESCE(SUM(r.RoomStatus = 'Maintenance'), 0) AS maintenanceRooms
-     FROM ROOM r
-     ${branchId ? 'WHERE r.BranchID = ?' : ''}`,
-    branchParams
-  );
+    const [[roomRow]] = await connection.query(
+      `SELECT COUNT(r.RoomID) AS totalRooms,
+              COALESCE(SUM(r.RoomStatus = 'Occupied'), 0) AS occupiedRooms,
+              COALESCE(SUM(r.RoomStatus = 'Available'), 0) AS availableRooms,
+              COALESCE(SUM(r.RoomStatus = 'Maintenance'), 0) AS maintenanceRooms
+       FROM ROOM r
+       ${branchId === undefined ? '' : 'WHERE r.BranchID = ?'}`,
+      branchParams
+    );
+    const rooms = roomSummary(roomRow);
 
-  const totalRooms = Number(roomRows[0].totalRooms) || 0;
-  const occupiedRooms = Number(roomRows[0].occupiedRooms) || 0;
-  const availableRooms = Number(roomRows[0].availableRooms) || 0;
-  const maintenanceRooms = Number(roomRows[0].maintenanceRooms) || 0;
-  const occupancyPercentage = totalRooms > 0
-    ? Number(((occupiedRooms / totalRooms) * 100).toFixed(2))
-    : 0;
-
-  // 2. Today's Check-ins
-  const [checkInRows] = await pool.query(
-    `SELECT 
-       COUNT(DISTINCT br.BookingID) AS scheduledToday,
-       COUNT(DISTINCT CASE WHEN b.BookingStatus = 'Checked-In' THEN br.BookingID END) AS completedToday
-     FROM BOOKED_ROOMS br
-     JOIN BOOKING b ON b.BookingID = br.BookingID
-     JOIN ROOM r ON r.RoomID = br.RoomID
-     WHERE DATE(br.CheckInDateTime) = CURDATE()
-       AND b.BookingStatus != 'Cancelled'
-       ${branchClause}`,
-    branchParams
-  );
-
-  // 3. Today's Check-outs
-  const [checkOutRows] = await pool.query(
-    `SELECT 
-       COUNT(DISTINCT br.BookingID) AS scheduledToday,
-       COUNT(DISTINCT CASE WHEN b.BookingStatus = 'Checked-Out' THEN br.BookingID END) AS completedToday
-     FROM BOOKED_ROOMS br
-     JOIN BOOKING b ON b.BookingID = br.BookingID
-     JOIN ROOM r ON r.RoomID = br.RoomID
-     WHERE DATE(br.CheckOutDateTime) = CURDATE()
-       AND b.BookingStatus != 'Cancelled'
-       ${branchClause}`,
-    branchParams
-  );
-
-  // 4. Today's Revenue (Payments recorded today)
-  const paymentQuery = branchId
-    ? `SELECT 
-         COALESCE(SUM(p.Amount), 0.00) AS todayRevenue,
-         COUNT(p.PaymentID) AS todayPaymentsCount
-       FROM PAYMENT p
-       JOIN BOOKED_ROOMS br ON br.BookingID = p.BookingID
+    // These are scheduled-date cohorts and their current statuses. There are
+    // no actual check-in/check-out event timestamps in the current schema.
+    const [[checkInRow]] = await connection.query(
+      `SELECT COUNT(DISTINCT br.BookingID) AS scheduledToday,
+              COUNT(DISTINCT CASE WHEN b.BookingStatus IN ('Checked-In', 'Checked-Out')
+                THEN br.BookingID END) AS completedToday
+       FROM BOOKED_ROOMS br
+       JOIN BOOKING b ON b.BookingID = br.BookingID
        JOIN ROOM r ON r.RoomID = br.RoomID
-       WHERE DATE(p.PaymentDate) = CURDATE() AND r.BranchID = ?`
-    : `SELECT 
-         COALESCE(SUM(p.Amount), 0.00) AS todayRevenue,
-         COUNT(p.PaymentID) AS todayPaymentsCount
+       WHERE DATE(br.CheckInDateTime) = ?
+         AND b.BookingStatus != 'Cancelled'
+         ${branchClause}`,
+      datedParams
+    );
+    const [[checkOutRow]] = await connection.query(
+      `SELECT COUNT(DISTINCT br.BookingID) AS scheduledToday,
+              COUNT(DISTINCT CASE WHEN b.BookingStatus = 'Checked-Out'
+                THEN br.BookingID END) AS completedToday
+       FROM BOOKED_ROOMS br
+       JOIN BOOKING b ON b.BookingID = br.BookingID
+       JOIN ROOM r ON r.RoomID = br.RoomID
+       WHERE DATE(br.CheckOutDateTime) = ?
+         AND b.BookingStatus != 'Cancelled'
+         ${branchClause}`,
+      datedParams
+    );
+    const todayCheckIns = count(checkInRow.scheduledToday);
+    const todayCompletedCheckIns = count(checkInRow.completedToday);
+    const todayCheckOuts = count(checkOutRow.scheduledToday);
+    const todayCompletedCheckOuts = count(checkOutRow.completedToday);
+    if (todayCompletedCheckIns > todayCheckIns || todayCompletedCheckOuts > todayCheckOuts) {
+      throw new Error('Inconsistent dashboard stay counts were returned by the database.');
+    }
+
+    // Each payment contributes once. As in the existing reports, a booking
+    // spanning several branches has no defensible per-branch cash allocation.
+    const [[paymentRow]] = await connection.query(
+      `SELECT CAST(COALESCE(SUM(p.Amount), 0.00) AS CHAR) AS todayRevenue,
+              COUNT(p.PaymentID) AS todayPaymentsCount
        FROM PAYMENT p
-       WHERE DATE(p.PaymentDate) = CURDATE()`;
+       ${branchId === undefined ? '' : `JOIN (
+         SELECT br.BookingID, MIN(r.BranchID) AS BranchID
+         FROM BOOKED_ROOMS br
+         JOIN ROOM r ON r.RoomID = br.RoomID
+         GROUP BY br.BookingID
+         HAVING COUNT(DISTINCT r.BranchID) = 1
+       ) scope ON scope.BookingID = p.BookingID`}
+       WHERE DATE(p.PaymentDate) = ?
+       ${branchId === undefined ? '' : 'AND scope.BranchID = ?'}`,
+      datedParams
+    );
+    if (typeof paymentRow.todayRevenue !== 'string' || !/^\d+\.\d{2}$/.test(paymentRow.todayRevenue)) {
+      throw new Error('An invalid dashboard payment amount was returned by the database.');
+    }
+    const todayPaymentsCount = count(paymentRow.todayPaymentsCount);
 
-  const [paymentRows] = await pool.query(paymentQuery, branchParams);
-
-  // 5. Total Active Bookings (Booked or Checked-In)
-  const [activeRows] = await pool.query(
-    `SELECT COUNT(DISTINCT b.BookingID) AS activeBookings
-     FROM BOOKING b
-     LEFT JOIN BOOKED_ROOMS br ON br.BookingID = b.BookingID
-     LEFT JOIN ROOM r ON r.RoomID = br.RoomID
-     WHERE b.BookingStatus IN ('Booked', 'Checked-In')
-     ${branchClause}`,
-    branchParams
-  );
-
-  // 6. Optional Per-Branch Summary (when viewing chain-wide)
-  let branchBreakdown = undefined;
-  if (!branchId) {
-    const [branchRows] = await pool.query(
-      `SELECT 
-         b.BranchID,
-         b.Name AS BranchName,
-         COUNT(r.RoomID) AS totalRooms,
-         COALESCE(SUM(r.RoomStatus = 'Occupied'), 0) AS occupiedRooms,
-         COALESCE(SUM(r.RoomStatus = 'Available'), 0) AS availableRooms,
-         COALESCE(SUM(r.RoomStatus = 'Maintenance'), 0) AS maintenanceRooms
-       FROM BRANCH b
-       LEFT JOIN ROOM r ON r.BranchID = b.BranchID
-       GROUP BY b.BranchID, b.Name
-       ORDER BY b.BranchID`
+    const [[activeRow]] = await connection.query(
+      `SELECT COUNT(DISTINCT b.BookingID) AS activeBookings
+       FROM BOOKING b
+       LEFT JOIN BOOKED_ROOMS br ON br.BookingID = b.BookingID
+       LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+       WHERE b.BookingStatus IN ('Booked', 'Checked-In')
+       ${branchClause}`,
+      branchParams
     );
 
-    branchBreakdown = branchRows.map(row => {
-      const bTotal = Number(row.totalRooms) || 0;
-      const bOccupied = Number(row.occupiedRooms) || 0;
-      return {
-        branchId: row.BranchID,
-        branchName: row.BranchName,
-        totalRooms: bTotal,
-        occupiedRooms: bOccupied,
-        availableRooms: Number(row.availableRooms) || 0,
-        maintenanceRooms: Number(row.maintenanceRooms) || 0,
-        occupancyPercentage: bTotal > 0 ? Number(((bOccupied / bTotal) * 100).toFixed(2)) : 0,
-      };
-    });
-  }
+    let branchBreakdown;
+    if (branchId === undefined) {
+      const [branchRows] = await connection.query(
+        `SELECT b.BranchID, b.Name AS BranchName,
+                COUNT(r.RoomID) AS totalRooms,
+                COALESCE(SUM(r.RoomStatus = 'Occupied'), 0) AS occupiedRooms,
+                COALESCE(SUM(r.RoomStatus = 'Available'), 0) AS availableRooms,
+                COALESCE(SUM(r.RoomStatus = 'Maintenance'), 0) AS maintenanceRooms
+         FROM BRANCH b LEFT JOIN ROOM r ON r.BranchID = b.BranchID
+         GROUP BY b.BranchID, b.Name ORDER BY b.BranchID`
+      );
+      branchBreakdown = branchRows.map(row => {
+        const id = count(row.BranchID);
+        if (id < 1 || id > 2147483647 || typeof row.BranchName !== 'string') {
+          throw new Error('An invalid dashboard branch was returned by the database.');
+        }
+        return { branchId: id, branchName: row.BranchName, ...roomSummary(row) };
+      });
+    }
 
-  res.json({
-    date: new Date().toISOString().split('T')[0],
-    branchId: branchId || 'all',
-    summary: {
-      todayCheckIns: Number(checkInRows[0].scheduledToday) || 0,
-      todayCompletedCheckIns: Number(checkInRows[0].completedToday) || 0,
-      todayCheckOuts: Number(checkOutRows[0].scheduledToday) || 0,
-      todayCompletedCheckOuts: Number(checkOutRows[0].completedToday) || 0,
-      todayRevenue: Number(paymentRows[0].todayRevenue) || 0,
-      todayPaymentsCount: Number(paymentRows[0].todayPaymentsCount) || 0,
-      currentOccupancyPercentage: occupancyPercentage,
-      totalRooms,
-      occupiedRooms,
-      availableRooms,
-      maintenanceRooms,
-      activeBookings: Number(activeRows[0].activeBookings) || 0,
-    },
-    branchBreakdown,
-  });
+    result = {
+      date,
+      branchId: branchId === undefined ? 'all' : branchId,
+      summary: {
+        todayCheckIns,
+        todayCompletedCheckIns,
+        todayCheckOuts,
+        todayCompletedCheckOuts,
+        todayRevenue: paymentRow.todayRevenue,
+        todayPaymentsCount,
+        currentOccupancyPercentage: rooms.occupancyPercentage,
+        totalRooms: rooms.totalRooms,
+        occupiedRooms: rooms.occupiedRooms,
+        availableRooms: rooms.availableRooms,
+        maintenanceRooms: rooms.maintenanceRooms,
+        activeBookings: count(activeRow.activeBookings),
+      },
+      branchBreakdown,
+    };
+    await connection.commit();
+  } catch (error) {
+    try { await connection.rollback(); } catch (_) { /* Preserve the original read error. */ }
+    throw error;
+  } finally {
+    connection.release();
+  }
+  res.json(result);
 });
 
-module.exports = {
-  getAdminDashboardSummary,
-};
-
+module.exports = { getAdminDashboardSummary };
