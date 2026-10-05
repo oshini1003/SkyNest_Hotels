@@ -429,6 +429,12 @@ fictional report layout remains at `/preview/staff/manager-reports` in developme
 | `GET /api/reports/revenue` | Finalized bills grouped by branch and **bill-opened month** | `branchId`, `year`, `month` |
 | `GET /api/reports/top-services` | Services ranked by number of usage entries | `branchId`, `limit` (default 5, maximum 50) |
 
+## Dashboard (Admin/Manager only)
+
+| Endpoint | Method | Access | Description | Optional filters |
+|---|---|---|---|---|
+| `/api/dashboard/admin` (or `/dashboard/admin`) | GET | Admin/Manager | Consolidated at-a-glance summary (today's check-ins, check-outs, today's revenue, current occupancy percentage, room status counts, and per-branch breakdown) | `?branchId=` |
+
 All endpoints return arrays, including an empty array when no records match.
 Unknown or malformed filters return 400 before SQL. Numeric query filters are
 canonical positive decimal integers (no spaces, fractions, leading zeros or
