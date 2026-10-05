@@ -20,8 +20,9 @@ npm run dev
 The setup command refuses to touch an existing database. It loads `schema.sql`
 and `seed.sql` into the configured integration database, ignoring their default
 `SkyNest_Hotels` selection. It verifies 16 tables, 4 functions, 7 procedures and
-5 triggers. An import failure leaves the new database intact for inspection;
-do not rerun the seed on an existing database.
+6 triggers. An import failure leaves the new database intact for inspection.
+`schema.sql` and `setupIntegrationDb.js` are for new databases only. Do not rerun
+setup or seeds on an existing database; use the specific update command below.
 
 The sample booking starts tomorrow, avoiding expired fixed dates. Seed accounts
 are for local coursework tests only; their credentials are documented in `seed.sql`.
@@ -116,9 +117,10 @@ These changes need no schema import or seed rerun on an existing database.
 ## Bookings
 
 All require authentication. A guest's identity comes from the verified access
-token, never from a submitted `guestId`. Guests can list, view and cancel only
-their own reservations. Foreign or missing booking details/cancellations return
-404. Staff creation/cancellation is limited to Receptionist, Manager and Admin.
+token, never from a submitted `guestId`. Guests can list, view, edit and cancel
+only their own reservations. Foreign or missing booking lookups return 404.
+Staff creation, editing and cancellation are limited to Receptionist, Manager
+and Admin.
 
 | Endpoint | Description |
 |---|---|
@@ -130,11 +132,24 @@ their own reservations. Foreign or missing booking details/cancellations return
 | `POST /api/bookings/:id/check-out` | Front desk only |
 | `PATCH /api/bookings/:id` | Change room, dates or guest count of one room entry on a Booked reservation - `{ bookedRoomId?, roomId?, checkin?, checkout?, guestCount? }` | 
 
-Creation requires one room, positive integer guest count, valid date-only
+Single-room creation requires one room, positive integer guest count, valid date-only
 `checkin`/`checkout`, and a payment preference of `Cash`, `Card` or `Bank Transfer`.
 The existing `sp_make_booking` procedure locks the room and checks capacity and
 overlap inside its own transaction. HTTP 201 returns `{ bookingId, status }`;
 validation failures return 400 and unavailable/conflicting stays return 409.
+
+The API also accepts 1–10 distinct rooms in one booking, with a positive guest
+count for each room and shared arrival/departure dates. Room locks are acquired
+in RoomID order; all room entries are committed together or rolled back together.
+A preferred payment method does not create a payment.
+
+Booking edits affect one room entry on a `Booked` reservation. Supply
+`bookedRoomId` when the booking has several rooms. Omitted fields remain unchanged:
+for a partial date edit, the procedure combines the supplied date with the current
+stored date after acquiring the booking lock, then rechecks the resulting stay.
+This prevents an omitted date from overwriting a concurrent edit. Checked-In,
+Checked-Out and Cancelled reservations cannot be edited through this endpoint.
+
 Cancellation locks and checks the booking before changing a `Booked` reservation
 to `Cancelled`. It preserves the record and releases those dates for room search.
 
@@ -143,7 +158,12 @@ List/detail responses include a `rooms` array. Each room includes date-only
 shift, together with room, branch, room type and guest-count fields. Lists are
 limited to the latest 200 matching reservations.
 
-The frontend `/guest/bookings` page loads the signed-in guest's reservations.
+The current frontend still creates one room per booking and remains compatible
+with this API. Multi-room selection and booking-edit forms are not implemented
+in the frontend yet; these are currently backend capabilities. The
+`/guest/bookings` page loads the signed-in guest's reservations and displays every
+room in a saved multi-room booking.
+
 Sign-in or registration preserves the selected stay for review; it never submits
 a booking automatically. The booking account supplies the guest identity. The
 confirmation page records a payment preference only: no card details are taken,
@@ -157,6 +177,7 @@ From `backend`, run these database-free regression checks:
 
 ```bash
 node tests/booking-regression.cjs
+node tests/booking-change-regression.cjs
 node tests/service-ownership-regression.cjs
 ```
 
@@ -193,11 +214,13 @@ role independently of the page controls. Booking detail responses include
 Eligibility uses MySQL's current date: the booking must be `Booked`, have at least
 one room, and every room's stay must include today (arrival inclusive, departure
 exclusive). Every room must currently be `Available`. The check-in endpoint
-rechecks these conditions before calling `sp_check_in`. The existing procedure
-and room-status trigger perform the final status/occupancy checks under database
-locks, set `Checked-In`/`Occupied`, open an `Unpaid` bill and commit together.
-No payment is recorded. Date-window validation is enforced by the API; direct
-calls to the unchanged stored procedure do not include that date preflight.
+rechecks these conditions before calling `sp_check_in`. The procedure locks the
+booking, and `trg_validate_check_in_dates` rechecks all room dates using current
+locking reads before its status changes. This also protects against an edit
+between the API precheck and check-in. The existing room-status trigger checks
+room availability. Status changes and the new `Unpaid` bill commit together;
+no payment is recorded. Existing databases must install the date guard using
+`addBookingUpdate.js` before enabling booking edits.
 
 If the browser loses a check-in response, reload the booking status before
 attempting another action. Do not automatically repeat the POST.
@@ -365,16 +388,41 @@ the command succeeds.
 
 ### Add booking-update objects to an existing integration database
 
-Databases created before this change lack `sp_update_booked_room` and
-`trg_prevent_overlap_booking_update` (fresh databases get them from `schema.sql`).
-Stop the backend, then run from `backend`:
+For an existing database, do **not** rerun `setupIntegrationDb.js`, `schema.sql`
+or the seed. The booking update installer targets only
+`SkyNest_Integration_20261002`, which must be the exact configured `DB_NAME`.
+Stop the backend and any other application using this database, then run from
+the repository root:
 
 ```bash
-node Database/addBookingUpdate.js --backend-stopped
+node backend/Database/addBookingUpdate.js --backend-stopped
 ```
 
-This adds only the two missing objects and reports any that already exist; it does
-not reset the database, rerun seeds or change rows. Restart the backend afterwards.
+The flag acknowledges that the backend is stopped; it does not stop it for you.
+The installer verifies existing definitions before creating missing objects in
+this order:
+
+1. `trg_validate_check_in_dates` — prevents check-in outside any room's stay dates.
+2. `trg_prevent_overlap_booking_update` — checks overlap on a room/date edit.
+3. `sp_update_booked_room` — edits one room entry on a Booked reservation.
+
+It verifies every created definition, accepts Windows database-name casing under
+the server's identifier rules, and uses an advisory lock to prevent concurrent
+installer runs. It never drops or replaces existing objects, resets the database,
+reruns seeds, or changes booking, bill, service or payment rows. Existing recorded
+room charges and payments are preserved. A different existing definition causes
+it to stop; keep the backend stopped and inspect the output after any failure.
+Restart the backend only after all three objects are verified. Fresh databases
+receive the same definitions through the normal new-database setup.
+
+From the repository root, check the installer and SQL structure without MySQL:
+
+```bash
+node backend/tests/booking-update-install-regression.cjs
+```
+
+This test uses mocked database responses and static SQL checks. It does not prove
+that the objects have been installed or exercised on a live MySQL server.
 
 ### Payment and checkout checks
 

@@ -90,13 +90,13 @@ async function main() {
       [database, database, database, database]
     );
     if (Number(counts.tables_count) !== 16 || Number(counts.functions_count) !== 4 ||
-        Number(counts.procedures_count) !== 7 || Number(counts.triggers_count) !== 5) {
+        Number(counts.procedures_count) !== 7 || Number(counts.triggers_count) !== 6) {
       throw new Error('Database object counts did not match the expected schema.');
     }
     const [[data]] = await connection.query(
       'SELECT (SELECT COUNT(*) FROM BRANCH) AS branches, (SELECT COUNT(*) FROM ROOM) AS rooms, (SELECT COUNT(*) FROM GUEST_ACCOUNT) AS guest_accounts'
     );
-    console.log(`Created ${database}: 16 tables, 4 functions, 7 procedures, 5 triggers.`);
+    console.log(`Created ${database}: 16 tables, 4 functions, 7 procedures, 6 triggers.`);
     console.log(`Seeded ${data.branches} branches, ${data.rooms} rooms, ${data.guest_accounts} guest accounts.`);
     console.log('Database setup complete. Start the backend with npm run dev.');
   } catch (error) {

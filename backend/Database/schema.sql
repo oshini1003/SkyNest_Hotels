@@ -764,3 +764,50 @@ proc_body: BEGIN
 END //
 
 DELIMITER ;
+
+-- Recheck stay dates when the locked booking actually enters Checked-In.
+-- This closes the gap between the HTTP eligibility check and a concurrent edit.
+DELIMITER //
+
+CREATE TRIGGER trg_validate_check_in_dates
+BEFORE UPDATE ON BOOKING
+FOR EACH ROW
+BEGIN
+    DECLARE v_room_id INT DEFAULT NULL;
+    DECLARE v_invalid_room_id INT DEFAULT NULL;
+
+    IF NEW.BookingStatus = 'Checked-In' AND OLD.BookingStatus <> 'Checked-In' THEN
+        IF OLD.BookingStatus <> 'Booked' THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Only a Booked reservation can be checked in.';
+        END IF;
+
+        -- Locking reads use current room dates, even if the caller established
+        -- an earlier consistent snapshot. Booking edits take the booking lock too.
+        SELECT BookedRoomID INTO v_room_id
+        FROM BOOKED_ROOMS
+        WHERE BookingID = NEW.BookingID
+        ORDER BY BookedRoomID
+        LIMIT 1 FOR SHARE;
+
+        IF v_room_id IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'This booking has no rooms.';
+        END IF;
+
+        SELECT BookedRoomID INTO v_invalid_room_id
+        FROM BOOKED_ROOMS
+        WHERE BookingID = NEW.BookingID
+          AND (DATE(CheckInDateTime) > CURDATE()
+               OR DATE(CheckOutDateTime) <= CURDATE())
+        ORDER BY BookedRoomID
+        LIMIT 1 FOR SHARE;
+
+        IF v_invalid_room_id IS NOT NULL THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Check-in must be on or after every reserved arrival date and before every checkout date.';
+        END IF;
+    END IF;
+END //
+
+DELIMITER ;

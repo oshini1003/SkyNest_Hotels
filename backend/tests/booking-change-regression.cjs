@@ -24,6 +24,8 @@ const guest = { type: 'guest', id: 4 };
 const receptionist = { type: 'staff', id: 3, role: 'Receptionist' };
 const multi = { paymentMethod: 'Card', checkin: '2096-03-01', checkout: '2096-03-03',
   rooms: [{ roomId: 7, guestCount: 1 }, { roomId: 4, guestCount: 2 }] };
+const single = { paymentMethod: 'Card', checkin: '2096-03-01', checkout: '2096-03-03',
+  roomId: 7, guestCount: 1 };
 const overlap = { sqlState: '45000', sqlMessage: 'Room is already booked for an overlapping period.' };
 const line = { BookedRoomID: 9, CheckInDate: '2096-03-01', CheckOutDate: '2096-03-03' };
 
@@ -58,6 +60,10 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
     [{ roomId: 4, guestCount: 1 }, { roomId: 4, guestCount: 1 }]]) {
     assert.equal((await invoke('makeBooking', { body: { ...multi, rooms } })).status, 400);
   }
+  for (const rooms of [null, undefined, {}, '7', 7, false]) {
+    assert.equal((await invoke('makeBooking', { body: { ...single, rooms } })).status, 400,
+      'A malformed rooms field must not fall back to the otherwise valid single-room request.');
+  }
   assert.equal((await invoke('makeBooking', { body: { ...multi, checkin: '2000-01-01' } })).status, 400);
   assert.equal((await invoke('makeBooking', { user: receptionist })).status, 400, 'Staff must name the guest.');
   assert.equal((await invoke('makeBooking', { user: { type: 'staff', id: 2, role: 'ServiceStaff' } })).status, 403);
@@ -66,6 +72,14 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
     assert.equal((await patch({ roomId: 2 }, user)).status, 403);
   }
   assert.equal(calls.length + events.length, 0);
+
+  // Omitting rooms still uses the original single-room stored procedure.
+  reset(async sql => sql === 'SELECT @p_booking_id' ? [[{ '@p_booking_id': 56 }]] : [{}]);
+  assert.deepEqual(await invoke('makeBooking', { body: single }),
+    { status: 201, data: { bookingId: 56, status: 'Booked' } });
+  assert.deepEqual(calls.find(call => call.sql.startsWith('CALL sp_make_booking')).params,
+    [4, null, 7, single.checkin, single.checkout, 1, 'Card']);
+  assert.deepEqual(events, ['CONNECT', 'RELEASE']);
 
   // Success: guest identity from the token, rooms locked in ascending order, one commit.
   reset(roomDb());
@@ -116,7 +130,37 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   assert.equal((await patch({ checkout: '2096-03-01' })).status, 400, 'Checkout equals the stored check-in.');
   assert.ok(calls.every(c => !c.sql.startsWith('CALL')));
   await patch({ checkout: '2096-03-05' });
-  assert.deepEqual(calls.at(-1).params, [25, 9, null, '2096-03-01', '2096-03-05', null]);
+  assert.deepEqual(calls.at(-1).params, [25, 9, null, null, '2096-03-05', null]);
+
+  // Both requests read the same old dates before either reaches the locked
+  // procedure. The fake procedure preserves each omitted field, just as its
+  // NULL-parameter contract does. Neither PATCH may undo the other's edit.
+  let dateReads = 0;
+  let releaseDateReads;
+  const bothDatesRead = new Promise(resolve => { releaseDateReads = resolve; });
+  const savedDates = { checkin: line.CheckInDate, checkout: line.CheckOutDate };
+  reset(async (sql, params) => {
+    if (sql.includes('FROM BOOKING WHERE')) return [[{ BookingID: 25 }]];
+    if (sql.includes('FROM BOOKED_ROOMS WHERE')) {
+      const snapshot = { ...line, CheckInDate: savedDates.checkin, CheckOutDate: savedDates.checkout };
+      dateReads++;
+      if (dateReads === 2) releaseDateReads();
+      await bothDatesRead;
+      return [[snapshot]];
+    }
+    assert.ok(sql.startsWith('CALL sp_update_booked_room'), 'Unexpected query in concurrent date test.');
+    if (params[3] !== null) savedDates.checkin = params[3];
+    if (params[4] !== null) savedDates.checkout = params[4];
+    return [[]];
+  });
+  const updates = await Promise.all([
+    patch({ checkin: '2096-03-02' }),
+    patch({ checkout: '2096-03-05' }),
+  ]);
+  assert.deepEqual(updates.map(result => result.status), [200, 200]);
+  assert.equal(dateReads, 2);
+  assert.deepEqual(savedDates, { checkin: '2096-03-02', checkout: '2096-03-05' },
+    'Omitted dates must preserve the other committed edit, not overwrite it with a preflight snapshot.');
 
   // Update: malformed input, several rooms, ownership and procedure rejection.
   reset(updateDb());
@@ -136,5 +180,5 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   reset(async (sql, params) => { if (sql.startsWith('CALL')) throw overlap; return updateDb()(sql, params); });
   assert.equal((await patch({ roomId: 2 })).status, 409);
 
-  console.log('PASS: multi-room booking validation, locking order, rollback and release; booking update validation, ownership and conflict handling (mock database).');
+  console.log('PASS: strict single/multi-room dispatch, locking order, rollback and release; booking update validation, ownership, concurrent partial-date preservation and conflicts (mock database).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

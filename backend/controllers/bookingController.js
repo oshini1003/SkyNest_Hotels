@@ -103,7 +103,12 @@ async function makeMultiRoomBooking(req, res) {
 // room locks. A preferred payment method does not create a payment or bill.
 const makeBooking = asyncHandler(async (req, res) => {
   if (!canManage(req.user)) return forbidden(res);
-  if (Array.isArray(req.body?.rooms)) return makeMultiRoomBooking(req, res);
+  if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'rooms')) {
+    if (!Array.isArray(req.body.rooms)) {
+      return res.status(400).json({ error: 'rooms must be an array of roomId and guestCount entries.' });
+    }
+    return makeMultiRoomBooking(req, res);
+  }
   const parsed = validateBooking(req.body, req.user);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
   const { guestId, roomId, checkin, checkout, guestCount, paymentMethod } = parsed.value;
@@ -309,7 +314,11 @@ const updateBooking = asyncHandler(async (req, res) => {
       const stay = validateRoomSearch(
         { checkin: body.checkin ?? line.CheckInDate, checkout: body.checkout ?? line.CheckOutDate }, new Date());
       if (stay.error) return res.status(400).json({ error: stay.error });
-      ({ checkin, checkout } = stay.value);
+      // Keep omitted fields null: the procedure resolves them from the current
+      // row under its booking lock, rather than overwriting a concurrent edit
+      // with a value from this earlier read.
+      checkin = body.checkin === undefined ? null : stay.value.checkin;
+      checkout = body.checkout === undefined ? null : stay.value.checkout;
     }
     await pool.execute('CALL sp_update_booked_room(?, ?, ?, ?, ?, ?)',
       [id, line.BookedRoomID, change.roomId, checkin, checkout, change.guestCount]);
