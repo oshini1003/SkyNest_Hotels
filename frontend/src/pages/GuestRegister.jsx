@@ -1,193 +1,137 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router";
-import { guestReturnDestination, guestSignInState } from "../services/bookingIntent";
-import { registerGuest } from "../services/auth";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 
-const initialForm = {
-  name: "",
-  contactNumber: "",
-  email: "",
-  idNumber: "",
-  address: "",
-  username: "",
-  password: "",
-  confirmPassword: "",
-};
-
-const fields = [
-  {
-    name: "name", label: "Full name", type: "text",
-    autoComplete: "name", maxLength: 100,
-  },
-  {
-    name: "contactNumber", label: "Contact number", type: "tel",
-    autoComplete: "tel", maxLength: 20,
-  },
-  {
-    name: "email", label: "Email (optional)", type: "email",
-    autoComplete: "email", maxLength: 150,
-  },
-  {
-    name: "idNumber", label: "NIC / passport number", type: "text",
-    autoComplete: "off", maxLength: 30,
-  },
-  {
-    name: "address", label: "Address (optional)", type: "text",
-    autoComplete: "street-address", maxLength: 255,
-  },
-  {
-    name: "username", label: "Username", type: "text",
-    autoComplete: "username", maxLength: 60,
-  },
-  {
-    name: "password", label: "Password", type: "password",
-    autoComplete: "new-password",
-  },
-  {
-    name: "confirmPassword", label: "Confirm password", type: "password",
-    autoComplete: "new-password",
-  },
-];
-
-export default function GuestRegister({ onLogin }) {
-  const { state } = useLocation();
-  const destination = guestReturnDestination(state);
-  const returnState = guestSignInState(destination.pathname, destination.state);
-  const active = useRef(true);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const [form, setForm] = useState(initialForm);
+export default function GuestRegister() {
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: ""
+  });
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
 
-  function handleChange(event) {
-    const { name, value } = event.target;
+  function handleRegister(e) {
+    e.preventDefault();
+    
+    if (!formData.fullName || !formData.email || !formData.phone || !formData.password || !formData.confirmPassword) {
+      setError("Please fill in all required fields.");
+      return;
+    }
 
-    if (
-      name === "contactNumber" &&
-      !/^\+?[0-9 -]*$/.test(value)
-    ) {
-      setError(
-        "Contact number can contain digits, spaces, hyphens, and an optional + at the start."
-      );
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match. Please check again.");
       return;
     }
 
     setError("");
-    setForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    if (isSubmitting) return;
-
-    setError("");
-
-    const details = {
-      name: form.name.trim(),
-      contactNumber: form.contactNumber.trim(),
-      email: form.email.trim(),
-      idNumber: form.idNumber.trim(),
-      address: form.address.trim(),
-      username: form.username.trim(),
-      password: form.password,
-    };
-
-    if (
-      !details.name ||
-      !details.contactNumber ||
-      !details.idNumber ||
-      !details.username ||
-      !details.password
-    ) {
-      setError("Please complete all required fields.");
-      return;
-    }
-
-    const contactNumber = details.contactNumber.replace(/[ -]/g, "");
-
-    if (!/^\+?[0-9]{7,15}$/.test(contactNumber)) {
-    setError(
-        "Enter a contact number with 7–15 digits, for example 0712345678 or +94712345678."
-    );
-    return;
-    }
-
-    details.contactNumber = contactNumber;    
-
-    if (form.password !== form.confirmPassword) {
-      setError("Your passwords do not match.");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const session = await registerGuest(details);
-      if (active.current) onLogin(session);
-    } catch (err) {
-      if (active.current) setError(err.message || "Unable to create your account.");
-    } finally {
-      if (active.current) setIsSubmitting(false);
-    }
+    alert("Registration successful!");
+    navigate("/guest/login");
   }
 
   return (
-    <section
-      className="auth-card registration-card"
-      aria-labelledby="register-heading"
-    >
-      <p className="eyebrow">GUEST REGISTRATION</p>
-      <h1 id="register-heading">Create your account</h1>
-      <p>{destination.pathname === "/make-booking" ? "Create an account to continue with your selected stay." : "Enter your details to get started with SkyNest Hotels."}</p>
+    <section style={{ maxWidth: "500px", margin: "2rem auto", padding: "1rem" }}>
+      <p className="eyebrow" style={{ textAlign: "center" }}>GUEST PORTAL</p>
+      <h1 style={{ textAlign: "center", marginBottom: "1.5rem" }}>Create Your Account</h1>
 
-      <form
-        className="auth-form registration-form"
-        onSubmit={handleSubmit}
-        aria-busy={isSubmitting}
-      >
-        {fields.map((field) => (
-          <div className="form-field" key={field.name}>
-            <label htmlFor={`register-${field.name}`}>
-              {field.label}
-            </label>
-
-            <input
-              id={`register-${field.name}`}
-              name={field.name}
-              type={field.type}
-              autoComplete={field.autoComplete}
-              maxLength={field.maxLength}
-              value={form[field.name]}
-              onChange={handleChange}
-              disabled={isSubmitting}
-              required={!["email", "address"].includes(field.name)}
-            />
-          </div>
-        ))}
-
+      <div style={{ background: "#fdfbf7", padding: "2.5rem 2rem", borderRadius: "10px", border: "1px solid #e2d9cc", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
+        
         {error && (
-          <p className="form-error" role="alert">
+          <div style={{ background: "#f8d7da", color: "#721c24", padding: "12px", borderRadius: "6px", marginBottom: "1.5rem", border: "1px solid #f5c6cb", fontSize: "0.9rem", textAlign: "center" }}>
             {error}
-          </p>
+          </div>
         )}
 
-        <button
-          className="button"
-          type="submit"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Creating account…" : "Create account"}
-        </button>
-      </form>
+        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+          
+          {/* Personal Details Group */}
+          <div>
+            <h3 style={{ fontSize: "1.1rem", marginBottom: "0.8rem", color: "#4a3b32", borderBottom: "1px solid #e2d9cc", paddingBottom: "4px" }}>Personal Details</h3>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "0.8rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Full Name:</label>
+                <input
+                  type="text"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  placeholder="Enter your full name"
+                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+                  required
+                />
+              </div>
 
-      <p className="auth-switch">
-        Already have an account?{" "}
-        <Link to="/guest/login" state={returnState}>Sign in</Link>
-      </p>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Phone Number:</label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Enter your phone number"
+                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Account Details Group */}
+          <div style={{ marginTop: "0.5rem" }}>
+            <h3 style={{ fontSize: "1.1rem", marginBottom: "0.8rem", color: "#4a3b32", borderBottom: "1px solid #e2d9cc", paddingBottom: "4px" }}>Account Credentials</h3>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "0.8rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Email Address:</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="Enter your email"
+                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Password:</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Create a password"
+                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Confirm Password:</label>
+                <input
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  placeholder="Confirm your password"
+                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            className="button" 
+            style={{ width: "100%", padding: "12px", marginTop: "0.8rem", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" }}
+          >
+            Create Account
+          </button>
+        </form>
+
+        <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "0.9rem" }}>
+          <p>Already have an account? <Link to="/guest/login" style={{ color: "#8c6d46", fontWeight: "bold", textDecoration: "underline" }}>Sign In</Link></p>
+        </div>
+      </div>
     </section>
   );
 }

@@ -223,6 +223,8 @@ function handleStaffLogout() {
               element={<GuestOnly session={session}><MyBookings key={session?.token} session={session} /></GuestOnly>}
             />
             <Route path="/guest/profile" element={<GuestProfile />} />
+            <Route path="/guest/login" element={<GuestLogin />} />
+            <Route path="/guest/register" element={<GuestRegister />} />
             <Route
               path="/staff/login"
               element={

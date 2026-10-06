@@ -1,106 +1,82 @@
-import { useEffect, useRef, useState } from "react";
-import { readSessionNotice } from "../services/session";
-import { loginGuest } from "../services/auth";
-import { Link, useLocation } from "react-router";
-import { guestReturnDestination, guestSignInState } from "../services/bookingIntent";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 
-export default function GuestLogin({ onLogin }) {
-  const { state } = useLocation();
-  const destination = guestReturnDestination(state);
-  const returnState = guestSignInState(destination.pathname, destination.state);
-  const active = useRef(true);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const [notice] = useState(() => readSessionNotice("guest"));
-  const [username, setUsername] = useState("");
+export default function GuestLogin() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    if (isSubmitting) return;
-
-    setError("");
-
-    if (!username.trim() || !password) {
-      setError("Please enter your username and password.");
+  function handleLogin(e) {
+    e.preventDefault();
+    
+    // වැරදි හෝ හිස් ඉන්පුට් සඳහා එරර් මැසේජස් හැසිරවීම
+    if (!email || !password) {
+      setError("Please fill in all required fields.");
       return;
     }
 
-    setIsSubmitting(true);
-
-    try {
-      const session = await loginGuest(username.trim(), password);
-      if (!active.current) return;
-      setPassword("");
-      onLogin(session);
-    } catch (err) {
-      if (active.current) setError(err.message || "Unable to sign in.");
-    } finally {
-      if (active.current) setIsSubmitting(false);
+    // සාම්පල් ලොගින් පරීක්ෂාව
+    if (email === "lakshan@gmail.com" && password === "123456") {
+      setError("");
+      alert("Login successful!");
+      navigate("/guest/profile");
+    } else {
+      setError("Invalid email or password. Please try again.");
     }
   }
 
   return (
-    <section className="auth-card" aria-labelledby="login-heading">
-      <p className="eyebrow">GUEST ACCESS</p>
-      <h1 id="login-heading">Guest login</h1>
-      <p>{destination.pathname === "/make-booking" ? "Sign in to continue with your selected stay." : "Sign in to manage your hotel stays."}</p>
+    <section style={{ maxWidth: "450px", margin: "2rem auto", padding: "1rem" }}>
+      <p className="eyebrow" style={{ textAlign: "center" }}>GUEST PORTAL</p>
+      <h1 style={{ textAlign: "center", marginBottom: "1.5rem" }}>Sign In to Your Account</h1>
 
-      {notice && <p role="status">{notice}</p>}
-
-      <form
-        className="auth-form"
-        onSubmit={handleSubmit}
-        aria-busy={isSubmitting}
-      >
-        <div className="form-field">
-          <label htmlFor="username">Username</label>
-          <input
-            id="username"
-            name="username"
-            type="text"
-            autoComplete="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            disabled={isSubmitting}
-            required
-          />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={isSubmitting}
-            required
-          />
-        </div>
-
+      <div style={{ background: "#fdfbf7", padding: "2.5rem 2rem", borderRadius: "10px", border: "1px solid #e2d9cc", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
+        
         {error && (
-          <p className="form-error" role="alert">
+          <div style={{ background: "#f8d7da", color: "#721c24", padding: "12px", borderRadius: "6px", marginBottom: "1.5rem", border: "1px solid #f5c6cb", fontSize: "0.9rem", textAlign: "center" }}>
             {error}
-          </p>
+          </div>
         )}
 
-        <button
-          className="button"
-          type="submit"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-        <p className="auth-switch">
-            New to SkyNest?{" "}
-            <Link to="/guest/register" state={returnState}>Create an account</Link>
-        </p>
+        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: "0.95rem" }}>Email Address:</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: "0.95rem" }}>Password:</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
+              required
+            />
+          </div>
+
+          <button 
+            type="submit" 
+            className="button" 
+            style={{ width: "100%", padding: "12px", marginTop: "0.5rem", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" }}
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "0.9rem" }}>
+          <p>Don't have an account? <Link to="/guest/register" style={{ color: "#8c6d46", fontWeight: "bold", textDecoration: "underline" }}>Register here</Link></p>
+        </div>
+      </div>
     </section>
   );
 }
