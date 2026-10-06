@@ -65,7 +65,7 @@ export default function StaffLogin({ onLogin }) {
 
       <h1 id="staff-login-heading">Staff login</h1>
 
-      <p>{destination === "/staff" ? "Sign in with your hotel staff account." : "Sign in with your staff account to continue to the requested booking page."}</p>
+      <p>{destination === "/staff" ? "Sign in with your hotel staff account." : "Sign in with your staff account to continue to the requested staff page."}</p>
 
       {notice && <p role="status">{notice}</p>}
 

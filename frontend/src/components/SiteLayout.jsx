@@ -65,6 +65,7 @@ function Header({ session, staffSession, staffContext }) {
               <Link to="/" className="sk-website-link"><span aria-hidden="true">↗</span> Hotel website</Link>
               {isStaffWorkspace && (
                 <>
+                  {canViewReports(staffSession.staff.role) && <NavLink to="/staff/dashboard">Dashboard</NavLink>}
                   <NavLink to="/staff/bookings">Bookings</NavLink>
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/reports">Reports</NavLink>}
                   <NavLink to="/staff" end className="sk-account-link">My account</NavLink>

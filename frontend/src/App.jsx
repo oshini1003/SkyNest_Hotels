@@ -28,6 +28,7 @@ import StaffBookings from "./pages/StaffBookings";
 import StaffBillDetails from "./pages/StaffBillDetails";
 import StaffPayment from "./pages/StaffPayment";
 import ManagerReports from "./pages/ManagerReports";
+import ManagerDashboard from "./pages/ManagerDashboard";
 import ManagerReportsPreview from "./pages/ManagerReportsPreview";
 import { demoStaffBookings } from "./data/demoStaffBookings";
 import ServiceUsagePreview from "./pages/ServiceUsagePreview";
@@ -247,6 +248,10 @@ function handleStaffLogout() {
               }
             />
 
+            <Route
+              path="/staff/dashboard"
+              element={<StaffOnly session={staffSession}><ManagerDashboard key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
             <Route
               path="/staff/reports"
               element={<StaffOnly session={staffSession}><ManagerReports key={staffSession?.token} session={staffSession} /></StaffOnly>}

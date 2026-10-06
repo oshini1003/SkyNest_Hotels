@@ -41,7 +41,7 @@ changes. Neither command starts MySQL or the backend.
 - Public pages show guest navigation. Guest and staff sessions remain independent,
   including when both are signed in in the same browser tab.
 - `/staff` pages use the staff workspace header. Signed-in staff can navigate to
-  bookings and their account. Manager/Admin accounts also see Reports. Backend
+  bookings and their account. Manager/Admin accounts also see Dashboard and Reports. Backend
   authorization continues to enforce access; hiding a navigation link is not an
   authorization control.
 - Staff sign-in has its own header context. Staff access remains in the public
@@ -51,7 +51,7 @@ changes. Neither command starts MySQL or the backend.
   link moves keyboard users to the main content.
 - Fictional previews are grouped under **Development previews** in the footer
   during development. Preview routes and links are absent in production builds.
-- `src/pages/StaffHome.jsx` and its stylesheet provide booking/report shortcuts,
+- `src/pages/StaffHome.jsx` and its stylesheet provide booking, dashboard and report shortcuts,
   the current staff identity, sign-out and the existing password-change form.
   They display no invented occupancy, revenue or booking counts.
 
@@ -69,9 +69,9 @@ After building successfully, inspect the site at desktop width and at roughly
    visible keyboard focus and footer staff access.
 2. Staff sign-in and account: sign in as a receptionist, inspect the booking
    shortcut, expand/cancel the password form, then sign out.
-3. Sign in as Manager: both booking and report shortcuts should appear. Visit
-   reports and a booking detail/bill page; the existing controls and scrollable
-   tables should remain usable.
+3. Sign in as Manager: booking, dashboard and report shortcuts should appear. Visit
+   the dashboard, reports and a booking detail/bill page; the existing controls and
+   scrollable tables should remain usable.
 4. Use keyboard Tab, Enter and Escape with the navigation. The closed mobile
    menu must not leave hidden links in the tab order.
 5. Check `npm run preview` after building: development preview links should be
@@ -129,3 +129,70 @@ Visual check with the backend running:
    confirming a new booking, and existing records can be viewed without cancelling.
 
 No database migration, dependency installation or additional payment is needed.
+
+## Live management dashboard
+
+`/staff/dashboard` presents the live hotel overview from `GET /api/dashboard/admin`.
+Manager and Admin accounts see its Dashboard header link and Hotel overview card
+on the staff account page. Receptionist and ServiceStaff accounts do not see those
+links and cannot load the dashboard by entering its address. The backend also
+enforces these roles. Signed-out visitors are sent to staff sign-in and return to
+the dashboard after signing in with an authorized account.
+
+The page starts with All branches. Select a branch in Viewing, or choose a branch
+name in the room table, to load that branch's overview. Refresh overview reads a
+new snapshot. Changing the selection hides the previous totals immediately;
+superseded requests cannot replace the current selection or another account's
+data. Loading, unavailable, access-restricted and retry states are shown explicitly.
+When a selection has no rooms, occupancy is Not applicable rather than 0%; the API
+represents that rate with `null`. A hotel without branches has an explicit empty
+branch table state.
+
+Read the figures as follows:
+
+- The snapshot date comes from the database response, not the browser's local date.
+- Payments received is the sum of recorded payments on that date, counted once
+  per payment. It is not finalized bill revenue. All branches includes payments
+  for mixed-branch and unassigned bookings; a branch selection includes only
+  bookings assigned entirely to that branch. Those amounts are not split among
+  branches.
+- Scheduled arrivals and departures count reservations with those scheduled
+  dates and show their current completion status. They are not counts of staff
+  actions performed that day. Cancelled reservations are excluded.
+- Active reservations includes Booked and Checked-In stays across all dates.
+- Current occupancy uses saved room status: occupied rooms divided by all rooms,
+  including maintenance rooms. It does not predict availability for future dates.
+
+This frontend stage adds no dependencies and requires no backend changes,
+database migration, setup or seed rerun. It uses the reviewed dashboard endpoint
+already in the backend. Guest account pages and their authentication forms are
+unchanged.
+
+From the repository root, run the focused client checks and build:
+
+```powershell
+node .\frontend\tests\dashboard-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The regression script uses mocked requests and sessions. It checks response
+validation, amount/date formatting, role and session handling, branch filters,
+timeouts and stale responses; it does not verify live MySQL totals or browser
+layout.
+
+Manual checks with the backend and frontend running:
+
+1. Sign in as Manager or Admin. Open Dashboard from the staff header or Hotel
+   overview from the staff account page. Confirm the date, payment count and room
+   totals load.
+2. Switch branches using the selector and table links, then return to All
+   branches. Refresh the overview. Old totals should disappear while loading.
+3. Open Manager reports and Booking workspace from the dashboard shortcuts.
+   Inspect saved records without creating payments or changing booking status.
+4. Sign out and open `/staff/dashboard`; sign-in should be required. Sign in as
+   Receptionist or ServiceStaff and confirm a direct visit shows restricted access.
+5. Stop the backend temporarily and refresh the dashboard. Check the error and
+   retry controls, then restart the backend and retry. Do not reset the database.
+6. Inspect desktop and phone widths, keyboard focus, branch selection, horizontal
+   table scrolling and the mobile navigation menu. If an existing branch has no
+   rooms, confirm occupancy shows Not applicable; do not delete rooms to test it.
