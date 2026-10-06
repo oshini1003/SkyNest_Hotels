@@ -178,3 +178,20 @@
     grid-template-columns: 1fr;
   }
 }
+.guest-register-intro {
+  margin: 18px 0 0;
+  color: #5d6d62;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.guest-register-field small {
+  color: #5d6d62;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.guest-register-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}

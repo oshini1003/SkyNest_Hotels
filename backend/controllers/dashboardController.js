@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const { canReadReports, validateReportQuery } = require('../utils/reportValidation');
+const { dashboardPaymentQuery } = require('../utils/dashboardPaymentQuery');
 
 function count(value) {
   const parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
@@ -101,21 +102,8 @@ const getAdminDashboardSummary = asyncHandler(async (req, res) => {
 
     // Each payment contributes once. As in the existing reports, a booking
     // spanning several branches has no defensible per-branch cash allocation.
-    const [[paymentRow]] = await connection.query(
-      `SELECT CAST(COALESCE(SUM(p.Amount), 0.00) AS CHAR) AS todayRevenue,
-              COUNT(p.PaymentID) AS todayPaymentsCount
-       FROM PAYMENT p
-       ${branchId === undefined ? '' : `JOIN (
-         SELECT br.BookingID, MIN(r.BranchID) AS BranchID
-         FROM BOOKED_ROOMS br
-         JOIN ROOM r ON r.RoomID = br.RoomID
-         GROUP BY br.BookingID
-         HAVING COUNT(DISTINCT r.BranchID) = 1
-       ) scope ON scope.BookingID = p.BookingID`}
-       WHERE DATE(p.PaymentDate) = ?
-       ${branchId === undefined ? '' : 'AND scope.BranchID = ?'}`,
-      datedParams
-    );
+    const paymentQuery = dashboardPaymentQuery(date, branchId);
+    const [[paymentRow]] = await connection.query(paymentQuery.sql, paymentQuery.params);
     if (typeof paymentRow.todayRevenue !== 'string' || !/^\d+\.\d{2}$/.test(paymentRow.todayRevenue)) {
       throw new Error('An invalid dashboard payment amount was returned by the database.');
     }

@@ -20,9 +20,12 @@ const bookings = [
   { id: 16, status: 'Booked', rooms: [2], arrival: '2099-01-01', departure: day },
 ];
 const payments = [
-  { booking: 10, cents: 5000n, date: day }, { booking: 10, cents: 5000n, date: day },
-  { booking: 11, cents: 10010n, date: day }, { booking: 12, cents: 3005n, date: day },
-  { booking: 15, cents: 2000n, date: day }, { booking: 13, cents: 99999n, date: '2099-01-01' },
+  { booking: 10, cents: 5000n, date: `${day} 00:00:00` },
+  { booking: 10, cents: 5000n, date: `${day} 23:59:59.999999` },
+  { booking: 11, cents: 10010n, date: `${day} 12:00:00` }, { booking: 12, cents: 3005n, date: day },
+  { booking: 15, cents: 2000n, date: day },
+  { booking: 13, cents: 99999n, date: '2099-01-01 23:59:59.999999' },
+  { booking: 10, cents: 88888n, date: '2099-01-03 00:00:00' },
 ];
 const money = cents => `${cents / 100n}.${String(cents % 100n).padStart(2, '0')}`;
 const localRooms = branch => rooms.filter(room => branch === undefined || room.branch === branch);
@@ -36,7 +39,7 @@ function branchIds(booking) { return [...new Set(booking.rooms.map(id => rooms.f
 function cash(branch) {
   const selected = payments.filter(payment => {
     const ids = branchIds(bookings.find(booking => booking.id === payment.booking));
-    return payment.date === day && (branch === undefined || (ids.length === 1 && ids[0] === branch));
+    return payment.date.slice(0, 10) === day && (branch === undefined || (ids.length === 1 && ids[0] === branch));
   });
   return { todayRevenue: money(selected.reduce((total, payment) => total + payment.cents, 0n)), todayPaymentsCount: selected.length };
 }
@@ -56,6 +59,10 @@ const connection = {
       assert.match(sql, /CAST\(COALESCE\(SUM\(p\.Amount\), 0\.00\) AS CHAR\)/);
       assert.match(sql, /COUNT\(p\.PaymentID\)/);
       assert.doesNotMatch(sql, /SUM\(DISTINCT/);
+      assert.match(sql, /WHERE p\.PaymentDate >= \? AND p\.PaymentDate < DATE_ADD\(\?, INTERVAL 1 DAY\)/);
+      assert.doesNotMatch(sql, /DATE\(p\.PaymentDate\)|CURDATE|CURRENT_DATE|BETWEEN|FORCE INDEX/);
+      assert.deepEqual(params, [day, day, ...(branch === undefined ? [] : [branch])],
+        'Reuse the captured DB day for both bounds and preserve branch parameter order.');
       if (branch !== undefined) {
         assert.match(sql, /JOIN \([\s\S]*GROUP BY br\.BookingID\s+HAVING COUNT\(DISTINCT r\.BranchID\) = 1\s*\) scope ON scope\.BookingID = p\.BookingID/);
         assert.match(sql, /MIN\(r\.BranchID\) AS BranchID/);
@@ -167,5 +174,5 @@ async function routeChecks() {
     if (!options.failConnect) assert.deepEqual(events.slice(-2), ['ROLLBACK','RELEASE']);
   }
   await routeChecks();
-  console.log('PASS: real dashboard route authorization, strict filters before SQL, one read-only snapshot and DB date, exact cash totals/one-booking branch attribution, scheduled-status counts, empty branches and connection/error handling (mock database; no live MySQL).');
+  console.log('PASS: real dashboard route authorization, strict filters before SQL, one read-only snapshot and DB date, indexable payment day bounds, exact cash totals/one-booking branch attribution, scheduled-status counts, empty branches and connection/error handling (mock database; no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

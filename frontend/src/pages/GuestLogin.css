@@ -142,3 +142,22 @@
     padding: 26px 20px;
   }
 }
+.guest-login-intro,
+.guest-login-notice {
+  color: #5d6d62;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.guest-login-intro {
+  margin: 18px 0 0;
+}
+
+.guest-login-notice {
+  margin: 0 0 22px;
+}
+
+.guest-login-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}

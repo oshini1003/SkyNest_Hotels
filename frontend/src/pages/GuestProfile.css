@@ -214,3 +214,22 @@
     width: 100%;
   }
 }
+
+.guest-profile-message--error {
+  color: #8b2929;
+  background: #fff3f0;
+  border-color: #e5c4bb;
+  border-left-color: #a43b30;
+}
+
+.guest-profile-button:disabled,
+.guest-profile-field input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.guest-profile-field small {
+  color: #637369;
+  font-size: 12px;
+  line-height: 1.5;
+}

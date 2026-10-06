@@ -196,3 +196,56 @@ Manual checks with the backend and frontend running:
 6. Inspect desktop and phone widths, keyboard focus, branch selection, horizontal
    table scrolling and the mobile navigation menu. If an existing branch has no
    rooms, confirm occupancy shows Not applicable; do not delete rooms to test it.
+
+## Guest account integration review (6 October 2026)
+
+The themed guest login, registration and profile pages use the existing live
+account services. Sign-in accepts the backend **username**, calls
+`/auth/guest/login`, and saves only the returned session through App's callback.
+Registration sends full name, contact number, NIC/passport, username and password;
+email and address remain optional. Letters are rejected for contact numbers and
+submission validates 7–15 digits after removing spaces/hyphens, with optional +.
+No account is created by a success alert alone.
+
+The account page reads `/guests/me` and saves editable name, contact number,
+email and address using PUT. It displays the saved username and identity number
+without offering unsupported edits. Backend errors are displayed, pending actions
+are disabled, and success is shown only after a successful server response.
+Password changes use `/auth/guest/password`; success clears the matching guest
+session and asks the user to sign in with the new password. A late response from
+an older password request must not clear a newer sign-in.
+
+`/guest` remains the protected account page; `/guest/profile` is an alias through
+that route. Login and registration each have one route. Existing selected-stay
+state is preserved when switching between the two forms and after successful
+sign-in or registration. Staff and guest sessions remain independent.
+
+### Local checks
+
+```powershell
+node .\frontend\tests\account-session-regression.mjs
+npm --prefix frontend run build
+```
+
+The service regression uses the actual Vite-loaded password/session modules with
+mocked network responses. It does not connect to MySQL or prove persistence in
+your local database. Confirm the UI and saved results using the steps below.
+
+With the backend and frontend running, verify against your integration database:
+
+1. Open `/guest/profile` while signed out: it should lead to sign-in. Sign in with
+   an existing guest's **username**, not a demonstration email/password pair.
+2. Check that the account shows that guest's saved details. Change an ordinary
+   profile field, save, then reload to confirm persistence. Restore it if desired.
+3. On registration, letters in the phone field must be rejected. Check password
+   confirmation and required username/NIC fields. Creating an account is a real
+   database write; use a new test username/identity if testing successful signup.
+4. Select a room, continue to sign-in, switch to registration and back: the selected
+   stay should remain available when sign-in completes. Do not create a booking
+   merely to test this navigation.
+5. If testing password changes, use a test account whose credentials you control.
+   A mismatched confirmation must be rejected before a request. A wrong current
+   password must show the server error. A successful change requires signing in
+   again with the new password; never post real passwords in screenshots or logs.
+
+No database installation, reseeding or reset is part of this interface repair.

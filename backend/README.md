@@ -593,6 +593,9 @@ Dashboard definitions:
   counted once regardless of room count. Specific-branch cash totals include only
   bookings wholly assigned to that branch. Mixed-branch and unassigned bookings
   remain included once in chain-wide cash totals, without inventing an allocation.
+  Payments use an inclusive start-of-day and exclusive next-day bound on
+  `PaymentDate`, allowing the existing `idx_payment_date` index to be considered.
+  Both bounds use the same captured database date, including at midnight.
 - Occupancy is current occupied rooms divided by all rooms, including maintenance
   rooms. `currentOccupancyPercentage` (and each breakdown `occupancyPercentage`)
   is null when there are no rooms. Room counts come from current `ROOM` statuses;
@@ -604,7 +607,7 @@ Dashboard definitions:
 
 No dashboard request creates or changes reservations, bills, service entries,
 payments or room statuses. No database schema installation is needed for this
-endpoint. It is currently a backend endpoint; this change adds no dashboard page.
+endpoint. The frontend manager dashboard consumes this endpoint.
 
 From the repository root:
 
@@ -620,6 +623,30 @@ the live API contract and room/occupancy consistency, including branch filters.
 Authentication creates/revokes only its own test session; it does not change hotel
 booking, billing or payment rows. This smoke check is not an independent audit of
 cash totals or proof of database concurrency behavior.
+
+### Payment query performance evidence
+
+From the repository root, after configuring `backend/.env` for the integration
+DB, run the regression and read-only comparison:
+
+```bash
+node backend/tests/dashboard-regression.cjs
+node backend/tests/payment-query-evidence-regression.cjs
+node backend/check-dashboard-payment-query.js --date 2026-10-06
+```
+
+Omit `--date` to inspect the current database day. The checker runs directly
+against MySQL; the API need not be running. It compares legacy and production
+query results and prints both `EXPLAIN` plans for all branches and each branch,
+using one read-only snapshot. Calendar-boundary fixtures execute as `SELECT`
+expressions without inserting sample data. It reads `backend/.env` explicitly,
+so it can run from the root or backend directory. No migration, index creation,
+authentication session, or hotel-data write is performed.
+
+See [Database/PERFORMANCE.md](Database/PERFORMANCE.md) for recorded preliminary
+measurements, interpretation, index choices and presentation evidence. An index
+plan is not a measured timing improvement; the optimizer may choose another plan
+as the dataset changes. This patch makes no database permission changes.
 
 ## Project layout
 

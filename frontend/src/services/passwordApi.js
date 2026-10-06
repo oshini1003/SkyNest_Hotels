@@ -1,11 +1,15 @@
-import { authenticatedRequest, clearSession } from "./session";
+import { authenticatedRequest, clearSession, readSession } from "./session";
 
 async function changePassword(kind, currentPassword, newPassword) {
+  const token = readSession(kind)?.token;
   const result = await authenticatedRequest(kind, `/auth/${kind}/password`, {
     method: "PUT",
     body: JSON.stringify({ currentPassword, newPassword }),
   });
-  clearSession(kind, "Password changed. Please sign in with your new password.");
+  // A delayed response must not sign out a newer account/session.
+  if (token && readSession(kind)?.token === token) {
+    clearSession(kind, "Password changed. Please sign in with your new password.");
+  }
   return result;
 }
 
