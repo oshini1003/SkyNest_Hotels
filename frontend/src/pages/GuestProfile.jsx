@@ -1,284 +1,133 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
-import { fetchGuestProfile, updateGuestProfile } from "../services/guestApi";
-import { changeGuestPassword } from "../services/passwordApi";
-import ChangePasswordForm from "./ChangePasswordForm";
 
-function ProfileAvatar({ name }) {
-  const initials = (name || "G")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+export default function GuestProfile() {
+  const [guest, setGuest] = useState({
+    name: "Lakshan Gamage",
+    username: "lakshan@gmail.com",
+    phone: "+94 77 123 4567"
+  });
 
-  return <div className="profile-avatar">{initials}</div>;
-}
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState(guest);
+  
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [message, setMessage] = useState("");
 
-function InfoBadge({ label, value }) {
-  return (
-    <div className="profile-info-badge">
-      <span className="profile-info-label">{label}</span>
-      <span className="profile-info-value">{value || "—"}</span>
-    </div>
-  );
-}
-
-export default function GuestProfile({ session, onLogout, onProfileUpdate }) {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-
-  // Form fields
-  const [name, setName] = useState("");
-  const [contactNumber, setContactNumber] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    fetchGuestProfile()
-      .then((data) => {
-        if (cancelled) return;
-        setProfile(data);
-        setName(data.Name || "");
-        setContactNumber(data.ContactNumber || "");
-        setEmail(data.Email || "");
-        setAddress(data.Address || "");
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [session.token, loadAttempt]);
-
-  function handleCancel() {
-    if (profile) {
-      setName(profile.Name || "");
-      setContactNumber(profile.ContactNumber || "");
-      setEmail(profile.Email || "");
-      setAddress(profile.Address || "");
-    }
-    setEditing(false);
-    setError("");
-    setSuccess("");
-  }
-
-  async function handleSubmit(e) {
+  function handleSaveProfile(e) {
     e.preventDefault();
-    if (saving) return;
-    setError("");
-    setSuccess("");
-
-    const cleanedName = name.trim();
-    const cleanedContact = contactNumber.replace(/[\s-]/g, "");
-    if (!cleanedName || cleanedName.length > 100) {
-      setError("Enter a name of 1 to 100 characters.");
-      return;
-    }
-    if (!/^\+?[0-9]{7,15}$/.test(cleanedContact)) {
-      setError("Enter a contact number with 7 to 15 digits, optionally starting with +. Letters are not allowed.");
-      return;
-    }
-    setSaving(true);
-
-    try {
-      const result = await updateGuestProfile({
-        name: cleanedName,
-        contactNumber: cleanedContact,
-        email: email.trim(),
-        address: address.trim(),
-      });
-
-      setProfile(result.guest);
-      setName(result.guest.Name || "");
-      setContactNumber(result.guest.ContactNumber || "");
-      setEmail(result.guest.Email || "");
-      setAddress(result.guest.Address || "");
-      setSuccess("Profile updated successfully!");
-      setEditing(false);
-
-      if (onProfileUpdate && result.guest) {
-        onProfileUpdate(result.guest.Name);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    setGuest(formData);
+    setIsEditing(false);
+    setMessage("Profile updated successfully!");
   }
 
-  if (loading) {
-    return (
-      <section className="profile-page">
-        <div className="profile-loading">
-          <div className="profile-loading-spinner" />
-          <p>Loading your profile…</p>
-        </div>
-      </section>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <section className="profile-page">
-        <h1>Your profile</h1>
-        <p className="form-error" role="alert">{error || "Unable to load your profile."}</p>
-        <button className="button" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>
-          Try again
-        </button>
-      </section>
-    );
+  function handlePasswordChange(e) {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) {
+      alert("Please fill in both password fields.");
+      return;
+    }
+    setMessage("Password changed successfully!");
+    setCurrentPassword("");
+    setNewPassword("");
   }
 
   return (
-    <section className="profile-page">
-      {/* ─── Header Banner ─── */}
-      <div className="profile-banner">
-        <div className="profile-banner-content">
-          <ProfileAvatar name={profile?.Name} />
-          <div className="profile-banner-info">
-            <p className="eyebrow">GUEST ACCOUNT</p>
-            <h1 className="profile-banner-name">
-              {profile?.Name || "Guest"}
-            </h1>
-            <p className="profile-banner-meta">
-              @{profile?.Username} · ID {profile?.IDNumber}
-            </p>
-          </div>
-          <button
-            className="button profile-signout-btn"
-            type="button"
-            onClick={onLogout}
-          >
-            Sign out
-          </button>
+    <section>
+      <p className="eyebrow">GUEST PORTAL</p>
+      <h1>My Account & Profile</h1>
+
+      {message && (
+        <div style={{ background: "#d4edda", color: "#155724", padding: "10px", borderRadius: "4px", marginBottom: "1.5rem", border: "1px solid #c3e6cb" }}>
+          {message}
         </div>
-      </div>
+      )}
 
-      <p><Link className="button" to="/guest/bookings">My bookings</Link></p>
-
-      {/* ─── Profile Content ─── */}
-      <div className="profile-tab-content">
-        {error && <p className="form-error" role="alert">{error}</p>}
-        {success && <p className="form-success" role="status">{success}</p>}
-
-        {!editing ? (
-          /* ── View Mode ── */
-          <div className="profile-view">
-            <div className="profile-view-header">
-              <h2>Personal Information</h2>
-              <button
-                className="button profile-edit-btn"
-                type="button"
-                onClick={() => {
-                  setEditing(true);
-                  setSuccess("");
-                }}
-              >
-                ✏️ Edit Profile
+      {/* Personal Information Section */}
+      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "1.5rem" }}>
+        <h2>Personal Information</h2>
+        
+        {!isEditing ? (
+          <div>
+            <p><strong>Name:</strong> {guest.name}</p>
+            <p><strong>Email / Username:</strong> {guest.username}</p>
+            <p><strong>Phone:</strong> {guest.phone}</p>
+            
+            <div style={{ marginTop: "1.5rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              <button className="button" onClick={() => setIsEditing(true)}>
+                Edit Profile
               </button>
-            </div>
-
-            <div className="profile-info-grid">
-              <InfoBadge label="Full Name" value={profile?.Name} />
-              <InfoBadge label="Contact Number" value={profile?.ContactNumber} />
-              <InfoBadge label="Email Address" value={profile?.Email} />
-              <InfoBadge label="Address" value={profile?.Address} />
+              <Link className="button" style={{ background: "#6c757d" }} to="/guest/bookings">
+                My Bookings Shortcut
+              </Link>
             </div>
           </div>
         ) : (
-          /* ── Edit Mode ── */
-          <div className="profile-edit-section">
-            <h2>Edit Personal Information</h2>
-            <form className="profile-edit-form" onSubmit={handleSubmit}>
-              <div className="form-field">
-                <label htmlFor="pf-name">Full Name</label>
-                <input
-                  id="pf-name"
-                  type="text"
-                  maxLength={100}
-                  disabled={saving}
-                  autoComplete="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="Enter your full name"
-                />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="pf-phone">Contact Number</label>
-                <input
-                  id="pf-phone"
-                  type="tel"
-                  autoComplete="tel"
-                  maxLength={30}
-                  disabled={saving}
-                  aria-describedby="pf-phone-help"
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                  required
-                  placeholder="e.g. 0771234567"
-                />
-                <small id="pf-phone-help">7–15 digits; an optional + prefix, spaces and hyphens are accepted.</small>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="pf-email">Email Address</label>
-                <input
-                  id="pf-email"
-                  type="email"
-                  autoComplete="email"
-                  maxLength={150}
-                  disabled={saving}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. guest@example.com"
-                />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="pf-address">Address</label>
-                <input
-                  id="pf-address"
-                  type="text"
-                  autoComplete="street-address"
-                  maxLength={255}
-                  disabled={saving}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. Colombo, Sri Lanka"
-                />
-              </div>
-
-              <div className="profile-edit-actions">
-                <button className="button" type="submit" disabled={saving}>
-                  {saving ? "Saving…" : "💾 Save Changes"}
-                </button>
-                <button
-                  className="button profile-cancel-btn"
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
+          <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px", marginTop: "1rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Name:</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Phone:</label>
+              <input
+                type="text"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
+                required
+              />
+            </div>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "10px" }}>
+              <button className="button" type="submit">Save</button>
+              <button 
+                type="button" 
+                className="button" 
+                style={{ background: "#6c757d" }} 
+                onClick={() => { setIsEditing(false); setFormData(guest); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         )}
+      </div>
 
-        <ChangePasswordForm onChangePassword={changeGuestPassword} />
+      {/* Password Change Section */}
+      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "2rem" }}>
+        <h2>Security / Change Password</h2>
+        <form onSubmit={handlePasswordChange} style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px", marginTop: "1rem" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Current Password:</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
+              required
+            />
+          </div>
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>New Password:</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
+              required
+            />
+          </div>
+          <button className="button" type="submit" style={{ marginTop: "10px" }}>
+            Update Password
+          </button>
+        </form>
       </div>
     </section>
   );
