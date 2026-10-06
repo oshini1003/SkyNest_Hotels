@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
+import "./GuestRegister.css";
 
 export default function GuestRegister() {
   const [formData, setFormData] = useState({
@@ -31,105 +32,105 @@ export default function GuestRegister() {
   }
 
   return (
-    <section style={{ maxWidth: "500px", margin: "2rem auto", padding: "1rem" }}>
-      <p className="eyebrow" style={{ textAlign: "center" }}>GUEST PORTAL</p>
-      <h1 style={{ textAlign: "center", marginBottom: "1.5rem" }}>Create Your Account</h1>
+    <section className="guest-register-page">
+      <header className="guest-register-heading">
+        <p className="guest-register-eyebrow">GUEST PORTAL</p>
+        <h1>Create Your Account</h1>
+      </header>
 
-      <div style={{ background: "#fdfbf7", padding: "2.5rem 2rem", borderRadius: "10px", border: "1px solid #e2d9cc", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
-        
+      <div className="guest-register-panel">
         {error && (
-          <div style={{ background: "#f8d7da", color: "#721c24", padding: "12px", borderRadius: "6px", marginBottom: "1.5rem", border: "1px solid #f5c6cb", fontSize: "0.9rem", textAlign: "center" }}>
+          <div className="guest-register-error" role="alert">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-          
-          {/* Personal Details Group */}
-          <div>
-            <h3 style={{ fontSize: "1.1rem", marginBottom: "0.8rem", color: "#4a3b32", borderBottom: "1px solid #e2d9cc", paddingBottom: "4px" }}>Personal Details</h3>
-            
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "0.8rem" }}>
-              <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Full Name:</label>
+        <form className="guest-register-form" onSubmit={handleRegister}>
+          <section className="guest-register-group">
+            <header className="guest-register-group-heading">
+              <p>01 / PERSONAL DETAILS</p>
+              <h2>Your details</h2>
+            </header>
+
+            <div className="guest-register-fields">
+              <div className="guest-register-field">
+                <label htmlFor="guest-register-name">Full Name</label>
                 <input
+                  id="guest-register-name"
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   placeholder="Enter your full name"
-                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Phone Number:</label>
+              <div className="guest-register-field">
+                <label htmlFor="guest-register-phone">Phone Number</label>
                 <input
+                  id="guest-register-phone"
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="Enter your phone number"
-                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
                   required
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Account Details Group */}
-          <div style={{ marginTop: "0.5rem" }}>
-            <h3 style={{ fontSize: "1.1rem", marginBottom: "0.8rem", color: "#4a3b32", borderBottom: "1px solid #e2d9cc", paddingBottom: "4px" }}>Account Credentials</h3>
-            
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "0.8rem" }}>
-              <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Email Address:</label>
+          <section className="guest-register-group">
+            <header className="guest-register-group-heading">
+              <p>02 / ACCOUNT ACCESS</p>
+              <h2>Login credentials</h2>
+            </header>
+
+            <div className="guest-register-fields">
+              <div className="guest-register-field guest-register-field--wide">
+                <label htmlFor="guest-register-email">Email Address</label>
                 <input
+                  id="guest-register-email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="Enter your email"
-                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Password:</label>
+              <div className="guest-register-field">
+                <label htmlFor="guest-register-password">Password</label>
                 <input
+                  id="guest-register-password"
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Create a password"
-                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.95rem" }}>Confirm Password:</label>
+              <div className="guest-register-field">
+                <label htmlFor="guest-register-confirm-password">Confirm Password</label>
                 <input
+                  id="guest-register-confirm-password"
                   type="password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   placeholder="Confirm your password"
-                  style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
                   required
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          <button 
-            type="submit" 
-            className="button" 
-            style={{ width: "100%", padding: "12px", marginTop: "0.8rem", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" }}
-          >
+          <button type="submit" className="guest-register-submit">
             Create Account
           </button>
         </form>
 
-        <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "0.9rem" }}>
-          <p>Already have an account? <Link to="/guest/login" style={{ color: "#8c6d46", fontWeight: "bold", textDecoration: "underline" }}>Sign In</Link></p>
+        <div className="guest-register-signin">
+          <p>Already have an account? <Link to="/guest/login">Sign In</Link></p>
         </div>
       </div>
     </section>

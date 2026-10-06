@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
+import "./GuestLogin.css";
 
 export default function GuestLogin() {
   const [email, setEmail] = useState("");
@@ -25,54 +26,51 @@ export default function GuestLogin() {
   }
 
   return (
-    <section style={{ maxWidth: "450px", margin: "2rem auto", padding: "1rem" }}>
-      <p className="eyebrow" style={{ textAlign: "center" }}>GUEST PORTAL</p>
-      <h1 style={{ textAlign: "center", marginBottom: "1.5rem" }}>Sign In to Your Account</h1>
+    <section className="guest-login-page">
+      <header className="guest-login-heading">
+        <p className="guest-login-eyebrow">GUEST PORTAL</p>
+        <h1>Sign In to Your Account</h1>
+      </header>
 
-      <div style={{ background: "#fdfbf7", padding: "2.5rem 2rem", borderRadius: "10px", border: "1px solid #e2d9cc", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
-        
+      <div className="guest-login-panel">
         {error && (
-          <div style={{ background: "#f8d7da", color: "#721c24", padding: "12px", borderRadius: "6px", marginBottom: "1.5rem", border: "1px solid #f5c6cb", fontSize: "0.9rem", textAlign: "center" }}>
+          <div className="guest-login-error" role="alert">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+        <form className="guest-login-form" onSubmit={handleLogin}>
           <div>
-            <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: "0.95rem" }}>Email Address:</label>
+            <label htmlFor="guest-login-email">Email Address</label>
             <input
+              id="guest-login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
-              style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
               required
             />
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: "0.95rem" }}>Password:</label>
+            <label htmlFor="guest-login-password">Password</label>
             <input
+              id="guest-login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              style={{ padding: "10px 12px", width: "100%", borderRadius: "6px", border: "1px solid #ccc", fontSize: "1rem" }}
               required
             />
           </div>
 
-          <button 
-            type="submit" 
-            className="button" 
-            style={{ width: "100%", padding: "12px", marginTop: "0.5rem", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" }}
-          >
+          <button type="submit" className="guest-login-submit">
             Sign In
           </button>
         </form>
 
-        <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "0.9rem" }}>
-          <p>Don't have an account? <Link to="/guest/register" style={{ color: "#8c6d46", fontWeight: "bold", textDecoration: "underline" }}>Register here</Link></p>
+        <div className="guest-login-register">
+          <p>Don't have an account? <Link to="/guest/register">Register here</Link></p>
         </div>
       </div>
     </section>

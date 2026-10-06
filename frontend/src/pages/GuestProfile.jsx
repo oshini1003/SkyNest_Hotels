@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
+import "./GuestProfile.css";
 
 export default function GuestProfile() {
   const [guest, setGuest] = useState({
@@ -34,100 +35,109 @@ export default function GuestProfile() {
   }
 
   return (
-    <section>
-      <p className="eyebrow">GUEST PORTAL</p>
-      <h1>My Account & Profile</h1>
+    <section className="guest-profile-page">
+      <header className="guest-profile-heading">
+        <p className="guest-profile-eyebrow">GUEST PORTAL</p>
+        <h1>My Account &amp; Profile</h1>
+      </header>
 
       {message && (
-        <div style={{ background: "#d4edda", color: "#155724", padding: "10px", borderRadius: "4px", marginBottom: "1.5rem", border: "1px solid #c3e6cb" }}>
+        <div className="guest-profile-message" role="status">
           {message}
         </div>
       )}
 
-      {/* Personal Information Section */}
-      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "1.5rem" }}>
-        <h2>Personal Information</h2>
+      <div className="guest-profile-panels">
+        <section className="guest-profile-panel">
+          <header className="guest-profile-panel-heading">
+            <p className="guest-profile-section-label">ACCOUNT</p>
+            <h2>Personal Information</h2>
+          </header>
         
-        {!isEditing ? (
-          <div>
-            <p><strong>Name:</strong> {guest.name}</p>
-            <p><strong>Email / Username:</strong> {guest.username}</p>
-            <p><strong>Phone:</strong> {guest.phone}</p>
+          {!isEditing ? (
+            <div>
+              <dl className="guest-profile-details">
+                <div><dt>Name</dt><dd>{guest.name}</dd></div>
+                <div><dt>Email / Username</dt><dd>{guest.username}</dd></div>
+                <div><dt>Phone</dt><dd>{guest.phone}</dd></div>
+              </dl>
             
-            <div style={{ marginTop: "1.5rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              <button className="button" onClick={() => setIsEditing(true)}>
-                Edit Profile
-              </button>
-              <Link className="button" style={{ background: "#6c757d" }} to="/guest/bookings">
-                My Bookings Shortcut
-              </Link>
+              <div className="guest-profile-actions">
+                <button className="guest-profile-button guest-profile-button--primary" onClick={() => setIsEditing(true)}>
+                  Edit Profile
+                </button>
+                <Link className="guest-profile-button guest-profile-button--secondary" to="/guest/bookings">
+                  My Bookings
+                </Link>
+              </div>
             </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px", marginTop: "1rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Name:</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
-                required
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Phone:</label>
-              <input
-                type="text"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
-                required
-              />
-            </div>
-            <div style={{ display: "flex", gap: "1rem", marginTop: "10px" }}>
-              <button className="button" type="submit">Save</button>
-              <button 
-                type="button" 
-                className="button" 
-                style={{ background: "#6c757d" }} 
-                onClick={() => { setIsEditing(false); setFormData(guest); }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+          ) : (
+            <form className="guest-profile-form" onSubmit={handleSaveProfile}>
+              <div className="guest-profile-field">
+                <label htmlFor="guest-profile-name">Name</label>
+                <input
+                  id="guest-profile-name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="guest-profile-field">
+                <label htmlFor="guest-profile-phone">Phone</label>
+                <input
+                  id="guest-profile-phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="guest-profile-actions">
+                <button className="guest-profile-button guest-profile-button--primary" type="submit">Save</button>
+                <button
+                  type="button"
+                  className="guest-profile-button guest-profile-button--secondary"
+                  onClick={() => { setIsEditing(false); setFormData(guest); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
 
-      {/* Password Change Section */}
-      <div style={{ background: "#fdfbf7", padding: "2rem", borderRadius: "8px", border: "1px solid #e2d9cc", marginTop: "2rem" }}>
-        <h2>Security / Change Password</h2>
-        <form onSubmit={handlePasswordChange} style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px", marginTop: "1rem" }}>
-          <div>
-            <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Current Password:</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
-              required
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>New Password:</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              style={{ padding: "8px", width: "100%", borderRadius: "4px", border: "1px solid #ccc" }}
-              required
-            />
-          </div>
-          <button className="button" type="submit" style={{ marginTop: "10px" }}>
-            Update Password
-          </button>
-        </form>
+        <section className="guest-profile-panel guest-profile-security">
+          <header className="guest-profile-panel-heading">
+            <p className="guest-profile-section-label">SECURITY</p>
+            <h2>Change Password</h2>
+          </header>
+          <form className="guest-profile-form" onSubmit={handlePasswordChange}>
+            <div className="guest-profile-field">
+              <label htmlFor="guest-current-password">Current Password</label>
+              <input
+                id="guest-current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="guest-profile-field">
+              <label htmlFor="guest-new-password">New Password</label>
+              <input
+                id="guest-new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            <button className="guest-profile-button guest-profile-button--primary" type="submit">
+              Update Password
+            </button>
+          </form>
+        </section>
       </div>
     </section>
   );

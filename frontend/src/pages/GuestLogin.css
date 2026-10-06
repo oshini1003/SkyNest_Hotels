@@ -1,0 +1,144 @@
+.guest-login-page {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: 72px 24px 88px;
+  color: #173d35;
+}
+
+.guest-login-heading {
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.guest-login-eyebrow {
+  margin: 0 0 13px;
+  color: #86632e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+}
+
+.guest-login-heading h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(32px, 5vw, 45px);
+  font-weight: 400;
+  line-height: 1.16;
+}
+
+.guest-login-panel {
+  padding: 34px;
+  border: 1px solid #dce0d5;
+  border-top: 3px solid #b68a45;
+  border-radius: 3px;
+  background: #fffefa;
+}
+
+.guest-login-error {
+  margin-bottom: 24px;
+  padding: 13px 15px;
+  border: 1px solid #ecd1cd;
+  border-radius: 3px;
+  color: #982e24;
+  background: #fff4f1;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.guest-login-form {
+  display: grid;
+  gap: 21px;
+}
+
+.guest-login-form > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.guest-login-form label {
+  color: #173d35;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.guest-login-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 11px 12px;
+  border: 1px solid #ccd5c8;
+  border-radius: 3px;
+  color: #173d35;
+  background: #fffefa;
+  font: inherit;
+  font-size: 13px;
+}
+
+.guest-login-form input::placeholder {
+  color: #7a877d;
+}
+
+.guest-login-submit {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 3px;
+  padding: 12px 20px;
+
+  
+  border: 1px solid #173d35;
+  border-radius: 3px;
+  color: #fffefa;
+  background: #173d35;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.guest-login-submit:hover {
+  border-color: #285448;
+  background: #285448;
+}
+
+.guest-login-register {
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px solid #e6e8df;
+  color: #5d6d62;
+  font-size: 12px;
+  text-align: center;
+}
+
+.guest-login-register p {
+  margin: 0;
+}
+
+.guest-login-register a {
+  color: #173d35;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: #b68a45;
+  text-underline-offset: 4px;
+}
+
+.guest-login-register a:hover {
+  color: #795c30;
+}
+
+.guest-login-page a:focus-visible,
+.guest-login-page input:focus-visible,
+.guest-login-page button:focus-visible {
+  outline: 3px solid #b68a45;
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .guest-login-page {
+    padding: 52px 16px 64px;
+  }
+
+  .guest-login-panel {
+    padding: 26px 20px;
+  }
+}
