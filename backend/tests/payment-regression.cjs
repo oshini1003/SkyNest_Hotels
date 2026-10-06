@@ -24,8 +24,9 @@ const pool = {
       if (lookupError) throw lookupError;
       return [bookings.has(params[0]) ? [bookings.get(params[0])] : []];
     }
-    assert.equal(sql, 'CALL sp_process_payment(?, ?, ?)');
-    assert.equal(params.length, 3);
+    assert.equal(sql, 'CALL sp_process_payment(?, ?, ?, ?)');
+    assert.equal(params.length, 4);
+    assert.ok(Number.isInteger(params[3]) && params[3] > 0);
     assert.equal(positiveBookingId(params[0]), params[0]);
     assert.equal(typeof params[1], 'string', 'SQL must receive the exact decimal string.');
     assert.match(params[1], /^\d+\.\d{2}$/);
@@ -120,19 +121,19 @@ function reset() {
     });
     assert.equal(calls.length, 3);
     assert.deepEqual(calls[0].params, [11]);
-    assert.deepEqual(calls[1].params, [11, normalized, 'Cash']);
+    assert.deepEqual(calls[1].params, [11, normalized, 'Cash', 4]);
     assert.deepEqual(calls[2].params, [11]);
   }
   for (const role of ['Admin', 'Manager', 'Receptionist']) {
     for (const paymentMethod of ['Cash', 'Card', 'Bank Transfer']) {
       reset();
       assert.equal((await post({ ...validBody, paymentMethod }, { ...staff, role })).status, 201);
-      assert.deepEqual(calls[1].params, [11, '25.00', paymentMethod]);
+      assert.deepEqual(calls[1].params, [11, '25.00', paymentMethod, 4]);
     }
   }
   reset();
   assert.equal((await post({ ...validBody, bookingId: '2147483647' }, { ...staff, id: 2147483647 })).status, 201);
-  assert.deepEqual(calls[1].params, [2147483647, '25.00', 'Cash']);
+  assert.deepEqual(calls[1].params, [2147483647, '25.00', 'Cash', 2147483647]);
 
   reset();
   assert.deepEqual(await post({ ...validBody, bookingId: 404 }), {
@@ -151,7 +152,7 @@ function reset() {
     role: 'Admin', BillID: 999, PaymentID: 999, PaymentType: 'Full', paymentType: 'Full',
     BillStatus: 'Paid', totalAmount: 0, outstandingBalance: 0, paidAmount: 100000 });
   assert.deepEqual(response, { status: 201, data: { bookingId: 11, amount: 25, outstandingBalance: 75 } });
-  assert.deepEqual(calls[1].params, [11, '25.00', 'Cash']);
+  assert.deepEqual(calls[1].params, [11, '25.00', 'Cash', 4]);
   assert.ok(calls.every(({ sql }) => !/\b(?:INSERT|UPDATE|START TRANSACTION|COMMIT|ROLLBACK)\b/.test(sql)));
 
   for (const sqlMessage of [

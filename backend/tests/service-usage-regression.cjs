@@ -30,9 +30,11 @@ const pool = {
       return [booking && (params.length === 1 || booking.GuestID === params[1]) ? [booking] : []];
     }
     if (/^CALL sp_log_service_usage/.test(sql)) {
-      assert.equal(sql, 'CALL sp_log_service_usage(?, ?, ?)');
-      assert.equal(params.length, 3);
-      assert.ok(params.every(value => positiveInteger(value) === value));
+      assert.equal(sql, 'CALL sp_log_service_usage(?, ?, ?, ?, ?)');
+      assert.equal(params.length, 5);
+      assert.ok(params.slice(0, 3).every(value => positiveInteger(value) === value));
+      assert.ok((params[3] === null) !== (params[4] === null));
+      assert.ok(params.slice(3).every(value => value === null || positiveInteger(value) === value));
       if (procedureError) throw procedureError;
       if ([98, 99].includes(params[1])) {
         throw { sqlState: '45000', sqlMessage: 'Choose an active service.' };
@@ -108,7 +110,7 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
   assert.equal(calls.length, 2);
   assert.match(calls[0].sql, /WHERE BookingID = \? AND GuestID = \?/);
   assert.deepEqual(calls[0].params, [11, 1]);
-  assert.deepEqual(calls[1].params, [11, 5, 2]);
+  assert.deepEqual(calls[1].params, [11, 5, 2, null, 1]);
 
   for (const role of ['Admin', 'Manager', 'Receptionist', 'ServiceStaff']) {
     reset();
@@ -118,7 +120,7 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
     assert.equal(calls.length, 2);
     assert.deepEqual(calls[0].params, [22]);
     assert.doesNotMatch(calls[0].sql, /GuestID/);
-    assert.deepEqual(calls[1].params, [22, 5, 2]);
+    assert.deepEqual(calls[1].params, [22, 5, 2, 9, null]);
   }
 
   reset();
@@ -126,7 +128,7 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
   assert.deepEqual(await post({ bookingId: String(max), serviceId: String(max), quantity: String(max) }), {
     status: 201, data: { bookingId: max, serviceId: max, quantity: max },
   });
-  assert.deepEqual(calls[1].params, [max, max, max]);
+  assert.deepEqual(calls[1].params, [max, max, max, null, 1]);
 
   for (const bookingId of [22, 404]) {
     reset();
@@ -151,10 +153,10 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
   }
 
   reset();
-  assert.deepEqual(await post({ ...validBody, guestId: 999, GuestID: 999, bookingGuestId: 999,
+  assert.deepEqual(await post({ ...validBody, guestId: 999, GuestID: 999, bookingGuestId: 999, staffId: 888, StaffID: 888, actorType: "staff",
     price: 0, unitPrice: 0, PriceAtUsage: 0, lineTotal: 0 }), { status: 201, data: validBody });
   assert.deepEqual(calls[0].params, [11, 1]);
-  assert.deepEqual(calls[1].params, [11, 5, 2], 'Browser-supplied price and guest identity cannot reach the procedure.');
+  assert.deepEqual(calls[1].params, [11, 5, 2, null, 1], 'Browser-supplied price and guest identity cannot reach the procedure.');
   assert.ok(calls.every(({ sql }) => !/\b(?:INSERT|UPDATE|START TRANSACTION|COMMIT|ROLLBACK)\b/.test(sql)));
 
   for (const serviceId of [98, 99]) {

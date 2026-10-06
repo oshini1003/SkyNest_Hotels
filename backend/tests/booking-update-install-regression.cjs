@@ -144,7 +144,7 @@ const wasReleased = connection => connection.calls.some(call => call.sql.startsW
   assert.match(checkin.sql, /DATE\(CheckOutDateTime\) <= CURDATE\(\)/);
   assert.equal((checkin.sql.match(/LIMIT 1 FOR SHARE/g) || []).length, 2);
   const setup = fs.readFileSync(path.join(__dirname, '../Database/setupIntegrationDb.js'), 'utf8');
-  assert.match(setup, /Number\(counts\.triggers_count\) !== 6/);
+  assert.match(setup, /Number\(counts\.triggers_count\) !== 8/);
 
   console.log('PASS: exact database/stopped-backend gates, Windows identifier rules, definition preflight, guard-first install, no overwrite or row writes, idempotence, partial-failure recovery and check-in SQL contracts (mock connection/static SQL; no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

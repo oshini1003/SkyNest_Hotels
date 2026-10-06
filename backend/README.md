@@ -19,8 +19,8 @@ npm run dev
 
 The setup command refuses to touch an existing database. It loads `schema.sql`
 and `seed.sql` into the configured integration database, ignoring their default
-`SkyNest_Hotels` selection. It verifies 16 tables, 4 functions, 7 procedures and
-6 triggers. An import failure leaves the new database intact for inspection.
+`SkyNest_Hotels` selection. It verifies 17 tables, 4 functions, 7 procedures and
+8 triggers. An import failure leaves the new database intact for inspection.
 `schema.sql` and `setupIntegrationDb.js` are for new databases only. Do not rerun
 setup or seeds on an existing database; use the specific update command below.
 
@@ -632,3 +632,47 @@ backend/
 ├── utils/asyncHandler.js
 └── server.js            App entry point
 ```
+
+
+## Audit trail (migration 002)
+
+Successful check-in, service recording, payments and checkout now write paired actor-attributed audit records and bill snapshots in the same transaction. See [Database/AUDIT_TRAIL.md](Database/AUDIT_TRAIL.md) for the ERD relationships, event coverage, installation and limitations. Past rows are not backfilled.
+
+API request/response shapes remain unchanged. The server passes the authenticated actor to SQL:
+
+- `sp_check_in(bookingId, staffId)`
+- `sp_check_out(bookingId, staffId)`
+- `sp_process_payment(bookingId, exactAmount, paymentMethod, staffId)`
+- `sp_log_service_usage(bookingId, serviceId, quantity, staffIdOrNull, guestIdOrNull)`
+
+Use the new controllers and database procedures together. The internal `sp_recalculate_bill(bookingId)` helper retains its signature and saved-room-charge behavior.
+
+From the repository root, run:
+
+```powershell
+node .\backend\tests\audit-regression.cjs
+node .\backend\tests\audit-install-regression.cjs
+node .\backend\tests\staff-booking-regression.cjs
+node .\backend\tests\service-usage-regression.cjs
+node .\backend\tests\payment-regression.cjs
+node .\backend\tests\checkout-regression.cjs
+node .\backend\tests\bill-read-regression.cjs
+npm --prefix frontend run build
+```
+
+Stop the backend before updating the existing local integration database:
+
+```powershell
+node .\backend\Database\addAuditLog.js --backend-stopped
+```
+
+Keep the backend stopped if installation fails, and retain the external backup path printed by the installer. Do not reset the database or manually run the original forwarded `002_add_audit_log.sql`.
+
+After installation succeeds, start the backend and use a new booking to verify each workflow stage through the existing pages. The following command inspects the saved result only:
+
+```powershell
+$env:TEST_AUDIT_BOOKING_ID = Read-Host "Enter the new audited booking reference"
+node .\backend\test-audit-log.js checkin
+```
+
+Run `service`, `payment` and `checkout` in place of `checkin` after completing those actions. The optional `TEST_AUDIT_EXPECTED_ACTOR_TYPE` (`staff` or `guest`) and `TEST_AUDIT_EXPECTED_ACTOR_ID` check the actor of the latest operation for that stage. No API test password is required; the verifier reads the existing backend MySQL configuration and prints no credentials.

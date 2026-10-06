@@ -86,7 +86,13 @@ const logServiceUsage = asyncHandler(async (req, res) => {
     // The procedure locks and rechecks the booking, captures the current price,
     // and atomically inserts usage and recalculates the bill in its transaction.
     // Do not wrap it in another transaction or retry a failed request here.
-    await pool.execute(`CALL sp_log_service_usage(?, ?, ?)`, [bookingId, serviceId, quantity]);
+    // Exactly one authenticated actor reaches SQL. Ignore browser actor fields;
+    // the procedure rechecks guest ownership under the booking lock.
+    await pool.execute(`CALL sp_log_service_usage(?, ?, ?, ?, ?)`, [
+      bookingId, serviceId, quantity,
+      own ? null : positiveInteger(req.user.id),
+      own ? positiveInteger(req.user.id) : null,
+    ]);
     res.status(201).json({ bookingId, serviceId, quantity });
   } catch (err) {
     if (serviceUsageConflict(err, res)) return;

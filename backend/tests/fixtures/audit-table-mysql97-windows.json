@@ -1,0 +1,249 @@
+{
+  "TABLE_NAME": "audit_log",
+  "TABLE_TYPE": "BASE TABLE",
+  "ENGINE": "InnoDB",
+  "TABLE_COLLATION": "utf8mb4_unicode_ci",
+  "columns": [
+    {
+      "COLUMN_NAME": "AuditID",
+      "COLUMN_TYPE": "bigint unsigned",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "auto_increment",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "OperationID",
+      "COLUMN_TYPE": "char(36)",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": "utf8mb4_unicode_ci"
+    },
+    {
+      "COLUMN_NAME": "ActorType",
+      "COLUMN_TYPE": "enum('staff','guest')",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": "utf8mb4_unicode_ci"
+    },
+    {
+      "COLUMN_NAME": "StaffID",
+      "COLUMN_TYPE": "int",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "GuestID",
+      "COLUMN_TYPE": "int",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "BookingID",
+      "COLUMN_TYPE": "int",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "Action",
+      "COLUMN_TYPE": "varchar(64)",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": "utf8mb4_unicode_ci"
+    },
+    {
+      "COLUMN_NAME": "TableAffected",
+      "COLUMN_TYPE": "varchar(32)",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": "utf8mb4_unicode_ci"
+    },
+    {
+      "COLUMN_NAME": "RecordID",
+      "COLUMN_TYPE": "int",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "OldValues",
+      "COLUMN_TYPE": "json",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "NewValues",
+      "COLUMN_TYPE": "json",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    },
+    {
+      "COLUMN_NAME": "Details",
+      "COLUMN_TYPE": "varchar(255)",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": null,
+      "EXTRA": "",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": "utf8mb4_unicode_ci"
+    },
+    {
+      "COLUMN_NAME": "CreatedAt",
+      "COLUMN_TYPE": "datetime(6)",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "CURRENT_TIMESTAMP(6)",
+      "EXTRA": "DEFAULT_GENERATED",
+      "GENERATION_EXPRESSION": "",
+      "COLLATION_NAME": null
+    }
+  ],
+  "indexes": [
+    {
+      "INDEX_NAME": "GuestID",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 1,
+      "COLUMN_NAME": "GuestID",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "idx_audit_booking_created",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 1,
+      "COLUMN_NAME": "BookingID",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "idx_audit_booking_created",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 2,
+      "COLUMN_NAME": "CreatedAt",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "idx_audit_booking_created",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 3,
+      "COLUMN_NAME": "AuditID",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "idx_audit_operation",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 1,
+      "COLUMN_NAME": "OperationID",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "idx_audit_staff_created",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 1,
+      "COLUMN_NAME": "StaffID",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "idx_audit_staff_created",
+      "NON_UNIQUE": 1,
+      "SEQ_IN_INDEX": 2,
+      "COLUMN_NAME": "CreatedAt",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    },
+    {
+      "INDEX_NAME": "PRIMARY",
+      "NON_UNIQUE": 0,
+      "SEQ_IN_INDEX": 1,
+      "COLUMN_NAME": "AuditID",
+      "SUB_PART": null,
+      "COLLATION": "A",
+      "INDEX_TYPE": "BTREE",
+      "IS_VISIBLE": "YES",
+      "EXPRESSION": null
+    }
+  ],
+  "foreignKeys": [
+    {
+      "COLUMN_NAME": "BookingID",
+      "REFERENCED_TABLE_SCHEMA": "skynest_integration_20261002",
+      "REFERENCED_TABLE_NAME": "booking",
+      "REFERENCED_COLUMN_NAME": "BookingID",
+      "UPDATE_RULE": "NO ACTION",
+      "DELETE_RULE": "NO ACTION"
+    },
+    {
+      "COLUMN_NAME": "GuestID",
+      "REFERENCED_TABLE_SCHEMA": "skynest_integration_20261002",
+      "REFERENCED_TABLE_NAME": "guest",
+      "REFERENCED_COLUMN_NAME": "GuestID",
+      "UPDATE_RULE": "NO ACTION",
+      "DELETE_RULE": "NO ACTION"
+    },
+    {
+      "COLUMN_NAME": "StaffID",
+      "REFERENCED_TABLE_SCHEMA": "skynest_integration_20261002",
+      "REFERENCED_TABLE_NAME": "staff",
+      "REFERENCED_COLUMN_NAME": "StaffID",
+      "UPDATE_RULE": "NO ACTION",
+      "DELETE_RULE": "NO ACTION"
+    }
+  ],
+  "checks": [
+    {
+      "CONSTRAINT_NAME": "chk_audit_actor",
+      "ENFORCED": "YES",
+      "CHECK_CLAUSE": "(((`ActorType` = _utf8mb4\\'staff\\') and (`StaffID` is not null) and (`GuestID` is null)) or ((`ActorType` = _utf8mb4\\'guest\\') and (`GuestID` is not null) and (`StaffID` is null)))"
+    }
+  ],
+  "triggers": []
+}

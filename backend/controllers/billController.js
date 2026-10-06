@@ -137,7 +137,8 @@ const processPayment = asyncHandler(async (req, res) => {
     // The procedure owns its transaction, locks the booking first, rechecks
     // status and balance, and atomically inserts payment/update bill status.
     // Never wrap this call in another transaction or automatically retry it.
-    await pool.execute(`CALL sp_process_payment(?, ?, ?)`, [bookingId, amount, paymentMethod]);
+    // The same transaction records the staff actor and before/after bill values.
+    await pool.execute(`CALL sp_process_payment(?, ?, ?, ?)`, [bookingId, amount, paymentMethod, req.user.id]);
   } catch (err) {
     if (paymentConflict(err, res)) return;
     throw err;

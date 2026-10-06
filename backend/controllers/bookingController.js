@@ -164,7 +164,8 @@ const checkIn = asyncHandler(async (req, res) => {
     if (!eligibility.allowed) return res.status(409).json({ error: eligibility.reason });
     // The procedure owns its transaction. Its booking lock and room-status
     // trigger recheck state after these reads, including concurrent check-ins.
-    await pool.execute('CALL sp_check_in(?)', [id]);
+    // Audit identity comes only from the authenticated staff token.
+    await pool.execute('CALL sp_check_in(?, ?)', [id, positiveInteger(req.user.id)]);
     res.json({ bookingId: id, status: 'Checked-In' });
   } catch (err) {
     if (conflictResponse(err, res)) return;

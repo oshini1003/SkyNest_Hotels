@@ -33,12 +33,13 @@ function invoke(action, values = {}) {
 }
 function storedState(header = booking, rooms = [room], procedureError) {
   return async (sql, params) => {
-    assert.deepEqual(params, [25]);
     if (sql.startsWith('CALL ')) {
-      assert.equal(sql, 'CALL sp_check_in(?)');
+      assert.equal(sql, 'CALL sp_check_in(?, ?)');
+      assert.deepEqual(params, [25, 3]);
       if (procedureError) throw procedureError;
       return [[]];
     }
+    assert.deepEqual(params, [25]);
     if (sql.includes('FROM BOOKING')) {
       assert.match(sql, /DATE_FORMAT\(CURDATE\(\), '%Y-%m-%d'\) AS ServerToday/);
       return [header ? [header] : []];
@@ -105,6 +106,10 @@ function storedState(header = booking, rooms = [room], procedureError) {
         'The procedure owns its transaction; the controller must not wrap it.');
     }
   }
+
+  reset(storedState());
+  assert.equal((await invoke('checkIn', { body: { staffId: 999, StaffID: 999, actorType: 'guest' } })).status, 200);
+  assert.deepEqual(calls.find(call => call.sql.startsWith('CALL ')).params, [25, 3], 'Check-in audit actor must come from the token.');
 
   reset(storedState());
   const detail = await invoke('getBooking');
