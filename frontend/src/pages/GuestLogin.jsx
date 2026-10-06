@@ -10,13 +10,11 @@ export default function GuestLogin() {
   function handleLogin(e) {
     e.preventDefault();
     
-    // වැරදි හෝ හිස් ඉන්පුට් සඳහා එරර් මැසේජස් හැසිරවීම
     if (!email || !password) {
       setError("Please fill in all required fields.");
       return;
     }
 
-    // සාම්පල් ලොගින් පරීක්ෂාව
     if (email === "lakshan@gmail.com" && password === "123456") {
       setError("");
       alert("Login successful!");
