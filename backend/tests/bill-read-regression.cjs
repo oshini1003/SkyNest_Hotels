@@ -28,7 +28,8 @@ function invoke(bookingId, user) {
       status(code) { this.statusCode = code; return this; },
       json(data) { resolve({ status: this.statusCode, data }); return this; },
     };
-    getBill({ params: { bookingId }, user }, res, reject);
+    const staffScope = user?.type === 'staff' ? { staffId: user.id, role: user.role, branchId: 3, branchName: 'SkyNest Galle' } : undefined;
+    getBill({ params: { bookingId }, user, staffScope }, res, reject);
   });
 }
 
@@ -77,8 +78,15 @@ function connection(options = {}) {
     if (sql.startsWith('SELECT BookingID, BookingStatus FROM BOOKING')) {
       assert.equal(events.length, 3, 'Booking permission check must be the first data read.');
       const booking = snapshot.booking;
+      if (values.length === 2) assert.match(sql, /AND BOOKING\.GuestID = \?$/);
+      else {
+        assert.deepEqual(values, [values[0], 3, values[2], 3, 3]);
+        assert.ok(['Receptionist', 'ServiceStaff'].includes(values[2]));
+        assert.match(sql, /scope_staff\.StaffID = \?/);
+        assert.match(sql, /NOT EXISTS[\s\S]*scope_room\.BranchID <> \?/);
+      }
       const visible = booking && booking.BookingID === values[0]
-        && (values.length === 1 || booking.GuestID === values[1]);
+        && (values.length !== 2 || booking.GuestID === values[1]);
       if (options.afterBookingRead) options.afterBookingRead(current);
       return [visible ? [{ BookingID: booking.BookingID, BookingStatus: booking.BookingStatus }] : []];
     }
@@ -126,20 +134,26 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
     assert.equal(acquisitions, count, 'Invalid identities must be rejected before SQL.');
   }
 
+  for (const role of [undefined, 'Service Staff', 'Housekeeping', 'admin']) {
+    const count = acquisitions;
+    assert.equal((await invoke('12', { type: 'staff', id: 3, role })).status, 403);
+    assert.equal(acquisitions, count, 'Unrecognized staff roles must not acquire a bill-read connection.');
+  }
+
   for (const scenario of [
     { booking: null, user: { type: 'guest', id: 7 } },
     { booking: { BookingID: 12, GuestID: 8 }, user: { type: 'guest', id: 7 } },
-    { booking: null, user: { type: 'staff', id: 3 } },
+    { booking: null, user: { type: 'staff', id: 3, role: 'Receptionist' } },
   ]) {
     const conn = connection(scenario);
     assert.deepEqual(await invoke('12', scenario.user), { status: 404, data: { error: 'Booking not found.' } });
     assert.equal(dataReads(conn).length, 1, 'No bill information may be read for a missing/foreign booking.');
     const first = dataReads(conn)[0];
     if (scenario.user.type === 'guest') {
-      assert.match(first.sql, /BookingID = \? AND GuestID = \?$/);
+      assert.match(first.sql, /BookingID = \? AND BOOKING\.GuestID = \?$/);
       assert.deepEqual(first.values, [12, 7]);
     } else {
-      assert.deepEqual(first.values, [12]);
+      assert.deepEqual(first.values, [12, 3, 'Receptionist', 3, 3]);
     }
     assert.deepEqual(lifecycle(conn), ['commit', 'release']);
   }
@@ -161,7 +175,7 @@ const dataReads = (conn) => conn.events.filter(event => event.sql?.startsWith('S
   const serviceUsage = [{ UsageID: 4, ServiceName: 'Historical service', Quantity: 3,
     PriceAtUsage: '19.99', LineTotal: '59.97', UsageDateDisplay: '2026-10-02 23:59:59' }];
   conn = connection({ bill, payments, serviceUsage, estimate: { RoomCharges: 100, ServiceCharges: 500 } });
-  response = await invoke('12', { type: 'staff', id: 3, role: 'Service Staff' });
+  response = await invoke('12', { type: 'staff', id: 3, role: 'ServiceStaff' });
   assert.equal(response.status, 200);
   assert.deepEqual(Object.keys(response.data), ['bookingId', 'bookingStatus', 'roomCharges', 'serviceCharges', 'totalAmount', 'paidAmount',
     'outstandingBalance', 'bill', 'payments', 'serviceUsage']);

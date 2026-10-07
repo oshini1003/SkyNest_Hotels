@@ -13,7 +13,7 @@ const TABLE_NAMES = new Set(['AUDIT_LOG', 'BOOKING', 'BOOKED_ROOMS', 'ROOM', 'RO
   'BILL', 'PAYMENT', 'SERVICE_CATALOGUE', 'SERVICE_USAGE', 'STAFF', 'GUEST']);
 const KEYWORDS = new Set(`CREATE PROCEDURE TRIGGER BEFORE AFTER UPDATE INSERT DELETE ON FOR EACH ROW
 BEGIN END DECLARE INT BIGINT DATETIME VARCHAR DEFAULT NULL IF THEN ELSE ELSEIF SELECT COUNT SUM
-INTO FROM JOIN WHERE AND OR NOT IN IS AS SET SIGNAL SQLSTATE MESSAGE_TEXT START TRANSACTION
+INTO FROM LEFT JOIN WHERE AND OR NOT IN IS AS SET SIGNAL SQLSTATE MESSAGE_TEXT START TRANSACTION
 COMMIT ROLLBACK RESIGNAL EXIT HANDLER SQLEXCEPTION LIMIT ORDER BY SHARE OF DATE CURDATE
 IFNULL COALESCE NEW OLD DECIMAL CASE WHEN VALUES JSON_OBJECT JSON CHAR CAST EXISTS UNSIGNED
 CURRENT_TIMESTAMP LAST_INSERT_ID SQL SECURITY DEFINER READS MODIFIES DATA DETERMINISTIC`.split(/\s+/));
@@ -41,7 +41,9 @@ function canonicalSql(sql, foldNames = false) {
 }
 
 function definitions() {
-  const current = projectStatements(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+  // Keep migration 002 pinned to its reviewed release. Later schema changes
+  // are installed by their own migration, never silently adopted here.
+  const current = projectStatements(fs.readFileSync(path.join(__dirname, 'migrations', '002_add_audit_log.sql'), 'utf8'));
   const before = projectStatements(fs.readFileSync(path.join(__dirname, 'migrations', '002_audit_before.sql'), 'utf8'));
   function exactly(statements, type, name) {
     const matches = statements.filter(sql => new RegExp(`^CREATE ${type} ${name}\\b`).test(sql));

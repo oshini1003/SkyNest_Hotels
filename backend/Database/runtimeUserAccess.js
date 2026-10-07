@@ -65,6 +65,15 @@ async function checkRuntimeAccess(connection, config) {
       WHERE r.RoomID = 0 FOR UPDATE OF r`);
     await connection.query(`SELECT br.BookedRoomID FROM BOOKED_ROOMS br JOIN BOOKING b ON b.BookingID = br.BookingID
       WHERE br.RoomID = 0 AND b.BookingStatus IN ('Booked','Checked-In') LIMIT 1 FOR SHARE`);
+    // Branch-scoped cancellation, staff identity and room-status edits use
+    // these additional lock shapes. Zero IDs keep the probes read-only/empty.
+    await connection.query('SELECT BookingStatus FROM BOOKING WHERE BookingID = 0 FOR UPDATE');
+    await connection.query(`SELECT s.StaffID, s.Role, s.BranchID FROM STAFF s
+      JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID WHERE s.StaffID = 0 FOR SHARE`);
+    await connection.query('SELECT RoomID, BranchID FROM ROOM WHERE RoomID = 0 FOR UPDATE');
+    await connection.query(`SELECT br.BookedRoomID, r.BranchID FROM BOOKED_ROOMS br
+      LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+      WHERE br.BookingID = 0 ORDER BY br.BookedRoomID FOR SHARE OF br`);
     const denied = [
       'SELECT User FROM mysql.user LIMIT 0',
       'UPDATE AUDIT_LOG SET Details = Details WHERE 1 = 0',
@@ -84,6 +93,6 @@ async function checkRuntimeAccess(connection, config) {
       if (!blocked) throw new Error('A permission-denial check unexpectedly succeeded. Do not activate this account.');
     }
   } finally { await connection.rollback(); }
-  return { database, currentUser: identity.currentUser, grants: grants.length };
+  return { database, currentUser: identity.currentUser, grants: grants.length, lockingReads: 9 };
 }
 module.exports = { verifyTarget, identityOf, verifyObjects, checkRuntimeAccess, TABLES, ROUTINES };

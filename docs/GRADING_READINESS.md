@@ -1,7 +1,7 @@
 # SkyNest Hotels: grading readiness and evidence
 
-Reviewed on 7 October 2026 against the source snapshot for the user-reported
-`main` commit `96c39cc`. This is a working checklist, not a claim of awarded marks
+Updated on 7 October 2026 after the user-reported `main` commit `bb41f35` and
+preparation of the staff branch access patch. This is a working checklist, not a claim of awarded marks
 or complete SRS compliance. Live results below are the developer's supplied
 terminal output from their Windows/MySQL installation. Local regression tests
 with mocks are identified separately.
@@ -20,7 +20,7 @@ Sources supplied by the team:
 | Rubric area | Maximum | Current evidence | Still to prepare or verify |
 | --- | ---: | --- | --- |
 | Demonstration, plan and communication | 5 | A working booking-to-checkout sequence has been exercised | Rehearse the short sequence below; agree who explains each part |
-| Required functionality and database/UI use | 8 | Guest booking/cancellation; staff check-in, services, payments and checkout; five report endpoints and manager dashboard | Minimum data counts; guest bill/service pages; management forms; reporting coverage and branch authorization gaps below |
+| Required functionality and database/UI use | 8 | Guest booking/cancellation; staff check-in, services, payments and checkout; five report endpoints and manager dashboard; latest data counts meet the listed minimums | Guest bill/service pages; management forms; reporting coverage; live verification of the new branch controls |
 | Database design, normalization, triggers and methods | 8 | 17 tables, 4 functions, 7 procedures and 8 triggers in source; PK/FK/CHECK/UNIQUE constraints | Updated ERD, functional dependencies and explanation of stored summaries; do not claim blanket 3NF |
 | Performance tuning / advanced features | 4 | Index-friendly payment query and restricted database runtime account | Present why both are appropriate, the actual comparison/grant outputs, and their limits |
 | Bonus features | 5 | Custom React layouts and UX improvements are available for demonstration | Examiner judges UI/UX; CI/CD, public cloud hosting and notifications have not been demonstrated |
@@ -81,10 +81,12 @@ meet these counts. Add the missing catalogue entries with the reviewed local
 helper, then use the existing API/UI workflows for guests, bookings and payments,
 preserving existing history. See [demonstration data completion](DEMO_DATA_COMPLETION.md).
 
-The developer's live inspection on 7 October 2026 returned 3 branches, 7 rooms,
-3 used room types, 4 services, 3 guests, 7 bookings, 2 Partial payments,
-7 booked-room rows and 4 service-usage rows. Two distinct guests had bookings.
-This is a successful inspection with data gaps, not a database failure.
+The developer's latest live inspection on 7 October 2026 returned **3 branches,
+10 rooms, 3 used room types, 6 services, 5 guests, 12 bookings, 3 Partial payments,
+12 booked-room rows and 5 service-usage rows**. Five distinct guests had bookings.
+This supersedes the initial count gaps and meets the listed numeric minimums,
+including representation of all five guests. It is not proof of every workflow,
+every SRS requirement or awarded marks.
 
 ## 3. Evidence already supplied
 
@@ -96,6 +98,8 @@ This is a successful inspection with data gaps, not a database failure.
 | Audited workflow | Booking #6: checkout PASS | Five paired operations, ten events, one service entry and two payments reconcile |
 | Restricted runtime permissions | `check-runtime-user.js` PASS | `skynest_app@localhost`; exact grants, 17 empty reads, 5 empty locking reads, 7 permission denials |
 | Workflow after account activation | Booking #7: audit checkout PASS | Four paired operations, eight events, one service entry and one payment reconcile under the reported runtime setup; no total amount was supplied |
+| Additional partial-payment scenario | Booking #8: audit payment PASS | Three paired operations, six events, one service entry and one payment reconcile; preserve this active stay for the guest bill UI |
+| Demonstration data | Latest `check-grading-data.js` PASS, 7 October 2026 | Listed count thresholds met; five distinct guests represented in twelve bookings |
 | Manager dashboard | `test-dashboard.js` PASS after activation | Live response formats, totals of room counts, branch filters, authentication and invalid filters; not independent proof of payment history |
 | Manager reports | `test-manager-reports.js` PASS for booking #4 | Five live reports, saved finalized totals counted once, tested filters and unchanged history for that dataset |
 | Payment query | Read-only legacy/production comparison previously supplied | Result agreement and date-boundary checks; small-data plan observations are not a throughput benchmark |
@@ -169,8 +173,8 @@ Detailed explanations and existing checks:
 
 | Priority | Work | Current finding |
 | --- | --- | --- |
-| Next inspection | Demonstration data coverage | Run the new checker; fill only confirmed gaps |
-| High: authorization | Branch-local front-desk access (SRS 3.3.7) | Staff tokens include `branchId`, but booking/billing/service access currently uses roles and optional filters, not enforced branch ownership. Restricted SQL grants do not solve this application policy gap |
+| Data coverage complete for listed counts | Preserve demonstration history | Latest live checker meets the numeric minimums; keep the records and retain the supplied evidence |
+| In progress: live verification | Branch-local front-desk access (SRS 3.3.7) | API, procedure and frontend enforcement prepared with mocked/static regressions. Install migration 003 with the matching backend, verify runtime grants and perform the documented live scope checks before claiming deployment |
 | Required guest UI | Own itemized bill and in-stay service request (SRS 3.2.4–3.2.5) | APIs have ownership checks; live React routes currently expose these workflows to staff, not guests. Guest My Bookings offers cancellation only |
 | Required management UI/API | Manage branches, rooms, types and services (SRS 3.2.9–3.2.10) | Creation/status and service-update APIs exist; management forms and general room/type/branch editing are incomplete |
 | Reports | Complete report semantics from the brief | Occupancy is current room status, without selected historical date/period. Service usage groups by service with branch filtering, not per-room usage attribution. Multi-room service attribution needs an explicit design decision |
@@ -181,6 +185,12 @@ Detailed explanations and existing checks:
 
 The earlier task list's labels such as "guest portal complete" and "manager
 console complete" must not be used as proof of these missing current screens.
+
+The branch access implementation and its test limits are documented in
+[STAFF_BRANCH_ACCESS.md](../backend/Database/STAFF_BRANCH_ACCESS.md). A restricted
+SQL account alone is not branch authorization; the new API/procedure checks add
+that application policy. The supplied live GET checker does not exercise write
+guards or concurrent room-edit races.
 
 The SRS also mentions a 10% tax/service charge, late-checkout fees, refund/no-show
 policies, payment-gateway authorization, notifications and deployment networking.

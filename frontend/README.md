@@ -249,3 +249,18 @@ With the backend and frontend running, verify against your integration database:
    again with the new password; never post real passwords in screenshots or logs.
 
 No database installation, reseeding or reset is part of this interface repair.
+
+## Staff branch access update
+
+The staff booking list resolves `/api/staff/scope` before every search.
+Receptionist/ServiceStaff see their assigned branch as a fixed field; clearing
+filters cannot expand access. Manager/Admin retain the branch selector. The server
+independently enforces the policy on booking, bill, service and room-status actions.
+Guest ownership and the established visual theme remain unchanged.
+
+Apply the matching backend migration before using this frontend with the updated
+server: [staff branch installation and checks](../backend/Database/STAFF_BRANCH_ACCESS.md).
+The frontend client regression is
+`node frontend/tests/staff-branch-api-regression.mjs` from the repository root.
+It loads the actual module through Vite with mocked fetch; it is not a browser or
+live MySQL test.

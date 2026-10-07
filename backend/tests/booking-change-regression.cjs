@@ -12,7 +12,13 @@ const execute = async (sql, params = []) => {
   return handler(sql, params);
 };
 const connection = {
-  execute, query: execute,
+  execute,
+  async query(sql, params) {
+    if (sql === 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ' || sql === 'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY') {
+      events.push(sql); return [[]];
+    }
+    return execute(sql, params);
+  },
   beginTransaction: async () => events.push('BEGIN'),
   commit: async () => events.push('COMMIT'),
   rollback: async () => events.push('ROLLBACK'),
@@ -34,6 +40,7 @@ const line = { BookedRoomID: 9, CheckInDate: '2096-03-01', CheckOutDate: '2096-0
 function invoke(action, values = {}) {
   return new Promise((resolve, reject) => {
     const req = { user: guest, query: {}, params: { id: '25' }, body: multi, ...values };
+    if (req.user?.type === 'staff') req.staffScope = { staffId: req.user.id, role: req.user.role, branchId: 3, branchName: 'SkyNest Galle' };
     const res = {
       statusCode: 200,
       status(code) { this.statusCode = code; return this; },
@@ -43,7 +50,11 @@ function invoke(action, values = {}) {
   });
 }
 function reset(nextHandler) { calls.length = 0; events.length = 0; handler = nextHandler; }
-const roomDb = (room = { RoomStatus: 'Available', Capacity: 2 }) => async sql => {
+const roomDb = (room = { BranchID: 3, RoomStatus: 'Available', Capacity: 2 }) => async (sql, params) => {
+  if (/FROM STAFF s/.test(sql)) {
+    assert.match(sql, /FOR SHARE$/); assert.deepEqual(params, [3]);
+    return [[{ StaffID: 3, Role: 'Receptionist', BranchID: 3 }]];
+  }
   if (/^INSERT INTO BOOKING\b/.test(sql)) return [{ insertId: 55 }];
   if (/FROM ROOM r/.test(sql)) return [[room]];
   if (/FROM BOOKED_ROOMS br/.test(sql)) return [[]];      // locking overlap read: no clash
@@ -51,7 +62,8 @@ const roomDb = (room = { RoomStatus: 'Available', Capacity: 2 }) => async sql =>
 };
 const updateDb = (lines = [line]) => async sql =>
   sql.includes('FROM BOOKING WHERE') ? [[{ BookingID: 25 }]]
-    : sql.includes('FROM BOOKED_ROOMS WHERE') ? [lines] : [[]];
+    : sql.includes('FROM BOOKED_ROOMS WHERE') ? [lines]
+      : sql.startsWith('SELECT r.RoomID') ? [[{ RoomID: 2 }]] : [[]];
 const patch = (body, user = guest) => invoke('updateBooking', { user, body });
 
 (async () => {
@@ -105,6 +117,10 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   reset(roomDb());
   await invoke('makeBooking', { user: receptionist, body: { ...multi, guestId: '9' } });
   assert.deepEqual(calls.find(c => c.sql.startsWith('INSERT INTO BOOKING ')).params, [9, 3, 'Card']);
+  const headerIndex = calls.findIndex(c => c.sql.startsWith('INSERT INTO BOOKING '));
+  assert.ok(calls.findIndex(c => c.sql.includes('FROM STAFF s')) < headerIndex);
+  assert.ok(calls.filter(c => c.sql.includes('FOR UPDATE OF r')).every(c => calls.indexOf(c) < headerIndex),
+    'All destination rooms are authorized under locks before the booking insert.');
 
   // Any failure rolls back the whole booking and releases the connection.
   const rolledBack = ['CONNECT', 'BEGIN', 'ROLLBACK', 'RELEASE'];
@@ -130,19 +146,22 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   reset(updateDb());
   assert.deepEqual(await patch({ checkin: '2096-04-10', checkout: '2096-04-12' }),
     { status: 200, data: { bookingId: 25, bookedRoomId: 9, status: 'Booked', updated: true } });
-  assert.deepEqual(calls.at(-1).params, [25, 9, null, '2096-04-10', '2096-04-12', null]);
+  assert.deepEqual(calls.at(-1).params, [25, 9, null, '2096-04-10', '2096-04-12', null, null]);
   assert.deepEqual(calls[0].params, [25, 4], 'A guest can only reach their own booking.');
   reset(updateDb());
   await patch({ roomId: '2', guestCount: 1 });
-  assert.deepEqual(calls.at(-1).params, [25, 9, 2, null, null, 1]);
+  assert.deepEqual(calls.at(-1).params, [25, 9, 2, null, null, 1, null]);
   reset(updateDb());
   await patch({ roomId: 2 }, receptionist);
-  assert.deepEqual(calls[0].params, [25]);
+  assert.deepEqual(calls[0].params, [25, 3, 'Receptionist', 3, 3]);
+  assert.deepEqual(calls.at(-1).params, [25, 9, 2, null, null, null, 3]);
+  assert.deepEqual(events, ['CONNECT', 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+    'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY', 'COMMIT', 'RELEASE']);
   reset(updateDb());
   assert.equal((await patch({ checkout: '2096-03-01' })).status, 400, 'Checkout equals the stored check-in.');
   assert.ok(calls.every(c => !c.sql.startsWith('CALL')));
   await patch({ checkout: '2096-03-05' });
-  assert.deepEqual(calls.at(-1).params, [25, 9, null, null, '2096-03-05', null]);
+  assert.deepEqual(calls.at(-1).params, [25, 9, null, null, '2096-03-05', null, null]);
 
   // Both requests read the same old dates before either reaches the locked
   // procedure. The fake procedure preserves each omitted field, just as its
@@ -185,7 +204,7 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   assert.equal((await patch({ roomId: 2 })).status, 400, 'bookedRoomId is required for several rooms.');
   assert.equal((await patch({ roomId: 2, bookedRoomId: 11 })).status, 400);
   await patch({ roomId: 2, bookedRoomId: 10 });
-  assert.deepEqual(calls.at(-1).params, [25, 10, 2, null, null, null]);
+  assert.deepEqual(calls.at(-1).params, [25, 10, 2, null, null, null, null]);
   reset(async () => [[]]);
   assert.equal((await patch({ roomId: 2 })).status, 404);
   assert.equal(calls.length, 1, 'Do not read rooms for a missing or foreign booking.');

@@ -6,8 +6,10 @@ const { canReadReports, validateReportQuery } = require('../utils/reportValidati
 const queries = [];
 let databaseError;
 let overrideRows;
-const manager = { type: 'staff', id: 2, role: 'Manager' };
-const admin = { type: 'staff', id: 1, role: 'Admin' };
+const scopeQueries = [];
+let scopeOptions = {};
+const manager = { type: 'staff', id: 2, role: 'Manager', branchId: 1 };
+const admin = { type: 'staff', id: 1, role: 'Admin', branchId: null };
 const branches = [{ id: 1, name: 'Colombo' }, { id: 2, name: 'Kandy' }, { id: 3, name: 'Empty branch' }];
 const rooms = [
   { id: 1, branch: 1, status: 'Occupied' },
@@ -98,6 +100,17 @@ function fixtureServices(branchId, top, limit) {
   return top ? result.slice(0, limit) : result;
 }
 const pool = {
+  execute: async (sql, params) => {
+    scopeQueries.push({ sql, params });
+    assert.match(sql, /FROM STAFF s JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID/);
+    assert.match(sql, /LEFT JOIN BRANCH b ON b.BranchID = s.BranchID WHERE s.StaffID = \?/);
+    if (scopeOptions.fail) throw new Error('Private staff database failure');
+    const currentStaff = [
+      { StaffID: 1, Role: 'Admin', BranchID: null, BranchName: null },
+      { StaffID: 2, Role: 'Manager', BranchID: 1, BranchName: 'Colombo' },
+    ].find(staff => staff.StaffID === params[0]);
+    return [scopeOptions.missing || !currentStaff ? [] : [{ ...currentStaff, ...scopeOptions.override }]];
+  },
   query: async (sql, params) => {
     queries.push({ sql, params });
     if (databaseError) throw databaseError;
@@ -151,7 +164,7 @@ function checkMapping(sql) {
 
 async function checkHttpAuthorization() {
   // Only token verification is stubbed. Exercise the real Express router,
-  // authenticate/requireRole middleware and controller guards together.
+  // authenticate/requireRole/current staff scope and controller guards together.
   const tokens = {
     manager, admin,
     guest: { type: 'guest', id: 1 },
@@ -192,21 +205,40 @@ async function checkHttpAuthorization() {
     });
   }
   for (const route of ['occupancy', 'billing-summary', 'service-usage', 'revenue', 'top-services']) {
-    for (const [token, expected] of [[null, 401], ['invalid', 401], ['guest', 403], ['receptionist', 403], ['service', 403], ['malformed', 403], ['manager', 200], ['admin', 200]]) {
+    for (const [token, expected] of [[null, 401], ['invalid', 401], ['guest', 403], ['receptionist', 403], ['service', 403], ['malformed', 401], ['manager', 200], ['admin', 200]]) {
       const before = queries.length;
+      const scopeBefore = scopeQueries.length;
       const response = await requestReport(route, token);
       const body = response.body;
       assert.equal(response.status, expected, `${route}: ${token || 'no token'}`);
       if (expected === 200) {
         assert.ok(Array.isArray(body));
         assert.equal(response.headers['cache-control'], 'no-store');
-      } else assert.equal(queries.length, before, 'Unauthorized HTTP requests must not query the database.');
+      } else {
+        assert.equal(queries.length, before, 'Unauthorized HTTP requests must not query report data.');
+        assert.equal(scopeQueries.length, scopeBefore, 'Invalid tokens/roles stop before staff lookup.');
+      }
     }
+    for (const changed of [{ override: { Role: 'Receptionist' } }, { override: { Role: 'Admin' } },
+      { override: { BranchID: 2 } }, { missing: true }]) {
+      scopeOptions = changed;
+      const before = queries.length;
+      const response = await requestReport(route, 'manager');
+      assert.equal(response.status, 401, 'Stale manager identity cannot read reports.');
+      assert.deepEqual(response.body, { error: 'Your staff access has changed. Please sign in again.' });
+      assert.equal(queries.length, before, 'Staff revalidation failure stops before any report query.');
+    }
+    scopeOptions = { fail: true };
+    const beforeScopeError = queries.length;
+    const scopeError = await requestReport(route, 'manager');
+    assert.equal(scopeError.status, 500); assert.deepEqual(scopeError.body, { error: 'Unable to load reports.' });
+    assert.equal(queries.length, beforeScopeError);
+    scopeOptions = {};
     for (const query of ['branchId=1&branchId=2', 'branchId[evil]=1', 'unknown=1']) {
       const before = queries.length;
       const response = await requestReport(`${route}?${query}`, 'manager');
       assert.equal(response.status, 400);
-      assert.equal(queries.length, before, 'Malformed HTTP query filters must not reach SQL.');
+      assert.equal(queries.length, before, 'Malformed HTTP query filters must not reach report SQL.');
     }
   }
   databaseError = new Error('Private database failure');
@@ -334,5 +366,5 @@ async function checkHttpAuthorization() {
   for (const endpoint of Object.keys(endpoints)) await assert.rejects(invoke(endpoint), /database unavailable/);
   databaseError = undefined;
   await checkHttpAuthorization();
-  console.log('PASS: real Express route authorization; manager/admin identities; strict report filters before SQL; parameterized read-only queries; zero-room branches; one-bill/one-booking branch mapping; exact saved amounts and payments; historical service prices; deterministic rankings; safe counts and error forwarding (mock tokens/database and independent fixtures, no live MySQL).');
+  console.log('PASS: real Express route authorization and current manager/admin identities; strict report filters before report SQL; parameterized read-only queries; zero-room branches; one-bill/one-booking branch mapping; exact saved amounts and payments; historical service prices; deterministic rankings; safe counts and error forwarding (mock tokens/database and independent fixtures, no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

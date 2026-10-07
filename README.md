@@ -84,8 +84,10 @@ Change demo credentials before public deployment.
   maintenance uses separate credentials.
 - **Backend** — Express REST API with access JWTs, rotating refresh-token digests
   stored in MySQL, guest ownership checks and role-based access for Admin,
-  Manager, Receptionist and ServiceStaff. Branch filters are not branch access
-  restrictions; see the readiness notes for current limits.
+  Manager, Receptionist and ServiceStaff. Receptionist/ServiceStaff booking,
+  billing and service access is limited to their assigned branch; room-status
+  changes are also scoped. Existing databases need the matching
+  [staff branch migration](backend/Database/STAFF_BRANCH_ACCESS.md) before restart.
 - **Frontend** — React, JavaScript and CSS with Vite development and production
   builds. It communicates with the backend through the REST API.
 

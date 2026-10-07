@@ -1,8 +1,10 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
-const { positiveInteger, canLogServiceUsage, validateServiceUsage } = require('../utils/serviceUsageValidation');
+const { canRead, canAct, bookingAccess, bookingRead, scopeConflict } = require('../utils/staffScope');
+const { positiveInteger, validateServiceUsage } = require('../utils/serviceUsageValidation');
 
 function serviceUsageConflict(err, res) {
+  if (scopeConflict(err, res)) return true;
   if (err.sqlState === '45000') {
     res.status(409).json({ error: err.sqlMessage || 'The service cannot be recorded in the current booking state.' });
     return true;
@@ -65,9 +67,9 @@ const updateService = asyncHandler(async (req, res) => {
 });
 
 // POST /api/service-usage   { bookingId, serviceId, quantity }
-// Guests may only request for their own booking; front desk / service staff may log for any booking.
+// Guests request only for their own booking; front desk/service staff use their assigned branch.
 const logServiceUsage = asyncHandler(async (req, res) => {
-  if (!canLogServiceUsage(req.user)) {
+  if (!canAct(req, ['Admin', 'Manager', 'Receptionist', 'ServiceStaff'], true)) {
     return res.status(403).json({ error: 'You do not have permission to perform this action.' });
   }
   const parsed = validateServiceUsage(req.body);
@@ -75,9 +77,9 @@ const logServiceUsage = asyncHandler(async (req, res) => {
   const { bookingId, serviceId, quantity } = parsed.value;
   const own = req.user.type === 'guest';
   try {
+    const access = bookingAccess(req);
     const [[booking]] = await pool.execute(
-      `SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${own ? ' AND GuestID = ?' : ''}`,
-      own ? [bookingId, positiveInteger(req.user.id)] : [bookingId]
+      `SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${access.sql}`, [bookingId, ...access.params]
     );
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     if (booking.BookingStatus !== 'Checked-In') {
@@ -109,21 +111,20 @@ const listServiceUsageForBooking = asyncHandler(async (req, res) => {
   }
   const bookingId = Number(rawBookingId);
 
-  if (req.user.type === 'guest') {
-    const [[booking]] = await pool.execute(
-      `SELECT BookingID FROM BOOKING WHERE BookingID = ? AND GuestID = ?`,
-      [bookingId, req.user.id]
-    );
-    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-  }
-
-  const [rows] = await pool.execute(
-    `SELECT su.*, sc.ServiceName, (su.Quantity * su.PriceAtUsage) AS LineTotal,
-            DATE_FORMAT(su.UsageDate, '%Y-%m-%d %H:%i:%s') AS UsageDateDisplay
-     FROM SERVICE_USAGE su JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
-     WHERE su.BookingID = ? ORDER BY su.UsageDate DESC, su.UsageID DESC`,
-    [bookingId]
-  );
+  if (!canRead(req)) return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+  const access = bookingAccess(req);
+  const rows = await bookingRead(req, async conn => {
+    const [[booking]] = await conn.execute(
+      `SELECT BookingID FROM BOOKING WHERE BookingID = ?${access.sql}`, [bookingId, ...access.params]);
+    if (!booking) return null;
+    const [usage] = await conn.execute(
+      `SELECT su.*, sc.ServiceName, (su.Quantity * su.PriceAtUsage) AS LineTotal,
+              DATE_FORMAT(su.UsageDate, '%Y-%m-%d %H:%i:%s') AS UsageDateDisplay
+       FROM SERVICE_USAGE su JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
+       WHERE su.BookingID = ? ORDER BY su.UsageDate DESC, su.UsageID DESC`, [bookingId]);
+    return usage;
+  });
+  if (!rows) return res.status(404).json({ error: 'Booking not found.' });
   res.json(rows);
 });
 

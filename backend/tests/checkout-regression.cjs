@@ -22,12 +22,14 @@ const bill = { BillID: 8, BookingID: 25, RoomCharges: '100.00', ServiceCharges: 
   TotalAmount: '125.00', BillStatus: 'Paid' };
 const preflightSql = 'SELECT BookingStatus FROM BOOKING WHERE BookingID = ?';
 const procedureSql = 'CALL sp_check_out(?, ?)';
-const billSql = 'SELECT * FROM BILL WHERE BookingID = ?';
+const billSql = 'SELECT bill.* FROM BILL bill JOIN BOOKING b ON b.BookingID = bill.BookingID WHERE b.BookingID = ?';
+const sqlKind = sql => sql.startsWith(preflightSql) ? preflightSql : sql.startsWith(billSql) ? billSql : sql;
 
 function reset(handler) { calls.length = 0; db = handler; }
 function invoke(values = {}) {
   return new Promise((resolve, reject) => {
     const req = { user: staff, params: { id: '25' }, body: {}, ...values };
+    if (req.user?.type === 'staff') req.staffScope = { staffId: req.user.id, role: req.user.role, branchId: 3, branchName: 'SkyNest Galle' };
     const res = { statusCode: 200,
       status(code) { this.statusCode = code; return this; },
       json(data) { resolve({ status: this.statusCode, data }); return this; },
@@ -37,9 +39,11 @@ function invoke(values = {}) {
 }
 function storedState(options = {}) {
   return async (sql, params) => {
-    if (sql === preflightSql) {
+    if (sql.startsWith(preflightSql)) {
       assert.equal(calls.length, 1, 'Booking existence/status is the first SQL operation.');
-      assert.deepEqual(params, [25]);
+      assert.deepEqual(params, [25, 3, params[2], 3, ...(params[2] === 'Receptionist' ? [3] : [])]);
+      assert.ok(['Admin', 'Manager', 'Receptionist'].includes(params[2]));
+      assert.match(sql, /scope_staff\.StaffID = \?/);
       if (options.preflightError) throw options.preflightError;
       return [options.missing ? [] : [{ BookingStatus: options.status || 'Checked-In' }]];
     }
@@ -49,9 +53,10 @@ function storedState(options = {}) {
       if (options.procedureError) throw options.procedureError;
       return [[]];
     }
-    assert.equal(sql, billSql, 'No extra writes, transaction statements or retries are allowed.');
+    assert.equal(sqlKind(sql), billSql, 'No extra writes, transaction statements or retries are allowed.');
+    assert.match(sql, /scope_staff\.StaffID = \?/);
     assert.equal(calls.length, 3, 'The bill is read once after the procedure has committed.');
-    assert.deepEqual(params, [25]);
+    assert.deepEqual(params, calls[0].params, 'Post-commit bill lookup preserves the same actor and branch scope.');
     if (options.billError) throw options.billError;
     return [options.missingBill ? [] : [bill]];
   };
@@ -89,7 +94,7 @@ function storedState(options = {}) {
     assert.deepEqual(await invoke({ user: { ...staff, role },
       body: { staffId: 999, StaffID: 999, bookingId: 999, status: 'Cancelled', outstandingBalance: 0 } }),
     { status: 200, data: { bookingId: 25, status: 'Checked-Out', bill } });
-    assert.deepEqual(calls.map(call => call.sql), [preflightSql, procedureSql, billSql]);
+    assert.deepEqual(calls.map(call => sqlKind(call.sql)), [preflightSql, procedureSql, billSql]);
     assert.ok(calls.every(call => !/START TRANSACTION|BEGIN|COMMIT|ROLLBACK/.test(call.sql)),
       'The procedure owns its transaction; the controller must never wrap it.');
   }
@@ -108,7 +113,7 @@ function storedState(options = {}) {
     if (['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT'].includes(error.code)) {
       assert.equal(result.data.error, 'Another booking action is in progress. Please refresh and try again.');
     }
-    assert.deepEqual(calls.map(call => call.sql), [preflightSql, procedureSql],
+    assert.deepEqual(calls.map(call => sqlKind(call.sql)), [preflightSql, procedureSql],
       'Blocked checkout reads no bill, retries nothing and performs no controller writes.');
   }
 
@@ -126,14 +131,23 @@ function storedState(options = {}) {
     reset(storedState({ billError: error }));
     assert.deepEqual(await invoke(), { status: 200,
       data: { bookingId: 25, status: 'Checked-Out', bill: null, refreshRequired: true } });
-    assert.deepEqual(calls.map(call => call.sql), [preflightSql, procedureSql, billSql],
+    assert.deepEqual(calls.map(call => sqlKind(call.sql)), [preflightSql, procedureSql, billSql],
       'Post-commit response failure must never trigger checkout again.');
   }
   reset(storedState({ missingBill: true }));
   assert.deepEqual(await invoke(), { status: 200,
     data: { bookingId: 25, status: 'Checked-Out', bill: null, refreshRequired: true } });
-  assert.deepEqual(calls.map(call => call.sql), [preflightSql, procedureSql, billSql],
+  assert.deepEqual(calls.map(call => sqlKind(call.sql)), [preflightSql, procedureSql, billSql],
     'A missing post-commit bill also preserves known success without rerunning checkout.');
 
+  // Procedure authorization is rechecked under locks. Never expose its SQL message.
+  for (const [sqlState, status, message] of [
+    ['45003', 404, 'Booking not found.'],
+    ['45004', 403, 'You do not have permission to perform this action.'],
+  ]) {
+    reset(storedState({ procedureError: { sqlState, sqlMessage: 'private cross-branch details' } }));
+    assert.deepEqual(await invoke(), { status, data: { error: message } });
+    assert.equal(calls.length, 2, 'Scope denial ends after one CALL and never retries or reads the bill.');
+  }
   console.log('PASS: checkout role/ID validation, missing/status preflight, authenticated StaffID, procedure-owned payment/state conflicts and transaction, success contract, no retries, and known-commit bill-read fallback (mock database).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

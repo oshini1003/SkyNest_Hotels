@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { bookingStatuses, canCheckIn, formatStayDate, isCurrentStaff, loadStaffBookings, loadStaffBranches } from "../services/staffBookingApi";
+import { bookingStatuses, canCheckIn, formatStayDate, isCurrentStaff, isBranchRestricted, loadStaffBookingSearch } from "../services/staffBookingApi";
 
 const emptyFilters = { bookingId: "", guestName: "", idNumber: "", branchId: "", status: "" };
 
@@ -9,21 +9,24 @@ export default function StaffBookingList({ session }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [request, setRequest] = useState({ filters: emptyFilters, revision: 0 });
   const [branches, setBranches] = useState([]);
+  const [scope, setScope] = useState(null);
   const [result, setResult] = useState({ loading: true, error: "", bookings: [], edited: false });
   const currentRequest = useRef(null);
 
   useEffect(() => {
+    setScope(null);
+    setBranches([]);
     const controller = new AbortController();
     currentRequest.current = controller;
     let active = true;
     const current = () => active && !controller.signal.aborted && isCurrentStaff(token);
     async function load() {
       try {
-        const options = await loadStaffBranches(token, controller.signal);
+        const data = await loadStaffBookingSearch(request.filters, token, controller.signal);
         if (!current()) return;
-        setBranches(options);
-        const bookings = await loadStaffBookings(request.filters, token, controller.signal);
-        if (current()) setResult({ loading: false, error: "", bookings, edited: false });
+        setScope(data.scope);
+        setBranches(data.branches);
+        setResult({ loading: false, error: "", bookings: data.bookings, edited: false });
       } catch (error) {
         if (current() && error.name !== "AbortError") setResult({ loading: false, error: error.message, bookings: [], edited: false });
       }
@@ -52,6 +55,8 @@ export default function StaffBookingList({ session }) {
       <p><Link to="/staff">Staff account</Link></p>
       {!canCheckIn(session.staff.role) && <p className="booking-notice">Your ServiceStaff account can view reservations. Check-in is handled by reception, managers or administrators.</p>}
 
+      {scope && isBranchRestricted(scope.role) && <p className="booking-notice">Your booking access is limited to {scope.branchName}. Clearing filters keeps this branch selected.</p>}
+
       <form className="staff-booking-filters" onSubmit={(event) => { event.preventDefault(); search(); }} aria-label="Booking search">
         <div className="form-field">
           <label htmlFor="staff-booking-reference">Booking reference</label>
@@ -67,10 +72,14 @@ export default function StaffBookingList({ session }) {
         </div>
         <div className="form-field">
           <label htmlFor="staff-booking-branch">Branch</label>
-          <select id="staff-booking-branch" value={filters.branchId} onChange={(event) => changeFilter("branchId", event.target.value)}>
-            <option value="">All branches</option>
-            {branches.map((branch) => <option key={branch.BranchID} value={branch.BranchID}>{branch.Name}</option>)}
-          </select>
+          {!scope ? <input id="staff-booking-branch" value={result.loading ? "Checking branch access…" : "Branch access unavailable"} readOnly disabled />
+            : isBranchRestricted(scope.role)
+              ? <input id="staff-booking-branch" value={scope.branchName} readOnly aria-describedby="staff-branch-scope" />
+              : <select id="staff-booking-branch" value={filters.branchId} onChange={(event) => changeFilter("branchId", event.target.value)}>
+                <option value="">All branches</option>
+                {branches.map((branch) => <option key={branch.BranchID} value={branch.BranchID}>{branch.Name}</option>)}
+              </select>}
+          {scope && isBranchRestricted(scope.role) && <small id="staff-branch-scope">Assigned branch</small>}
         </div>
         <div className="form-field">
           <label htmlFor="staff-booking-status">Status</label>

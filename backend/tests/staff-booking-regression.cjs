@@ -4,12 +4,32 @@ const { validateBookingFilters } = require('../utils/bookingValidation');
 // These controller checks use a fake pool. No real booking or bill is changed.
 const calls = [];
 let db;
+let readTransaction = false;
+const readLifecycle = [];
+const readConnection = {
+  execute: (...args) => {
+    assert.equal(readTransaction, true, 'Staff preflight/detail reads use one snapshot.');
+    return execute(...args);
+  },
+  async query(sql, params) {
+    if (sql.startsWith('SELECT ')) { assert.equal(readTransaction, true); return execute(sql, params); }
+    readLifecycle.push(sql);
+    assert.ok(['SET TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+      'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY'].includes(sql));
+    if (sql.startsWith('START ')) readTransaction = true;
+    return [[]];
+  },
+  async commit() { readLifecycle.push('COMMIT'); readTransaction = false; },
+  async rollback() { readLifecycle.push('ROLLBACK'); readTransaction = false; },
+  release() { readLifecycle.push('RELEASE'); },
+};
 const execute = async (sql, params = []) => {
+  if (sql.startsWith('CALL ')) assert.equal(readTransaction, false, 'The read snapshot must close before the procedure owns its write transaction.');
   calls.push({ sql, params });
   if (!db) throw new Error('Unexpected database access');
   return db(sql, params);
 };
-require.cache[require.resolve('../config/db')] = { exports: { execute, query: execute } };
+require.cache[require.resolve('../config/db')] = { exports: { execute, query: execute, async getConnection() { readLifecycle.push('CONNECT'); return readConnection; } } };
 const ctrl = require('../controllers/bookingController');
 const staff = { type: 'staff', id: 3, role: 'Receptionist' };
 const guest = { type: 'guest', id: 4 };
@@ -20,10 +40,11 @@ const room = { BookingID: 25, RoomID: 7, RoomNumber: '201', BranchID: 3, BranchN
   RoomStatus: 'Available', RoomTypeName: 'Suite', Capacity: 4, DailyRate: 25000,
   CheckInDate: today, CheckOutDate: '2096-03-02', GuestCount: 2 };
 
-function reset(handler) { calls.length = 0; db = handler; }
+function reset(handler) { calls.length = 0; readLifecycle.length = 0; assert.equal(readTransaction, false); db = handler; }
 function invoke(action, values = {}) {
   return new Promise((resolve, reject) => {
     const req = { user: staff, params: { id: '25' }, query: {}, body: {}, ...values };
+    if (req.user?.type === 'staff') req.staffScope = { staffId: req.user.id, role: req.user.role, branchId: 3, branchName: 'SkyNest Galle' };
     const res = { statusCode: 200,
       status(code) { this.statusCode = code; return this; },
       json(data) { resolve({ status: this.statusCode, data }); return this; },
@@ -39,11 +60,14 @@ function storedState(header = booking, rooms = [room], procedureError) {
       if (procedureError) throw procedureError;
       return [[]];
     }
-    assert.deepEqual(params, [25]);
     if (sql.includes('FROM BOOKING')) {
+      assert.deepEqual(params, [25, 3, params[2], 3, ...(params[2] === 'Receptionist' ? [3] : [])]);
+      assert.ok(['Admin', 'Manager', 'Receptionist'].includes(params[2]));
+      assert.match(sql, /scope_staff\.StaffID = \?/);
       assert.match(sql, /DATE_FORMAT\(CURDATE\(\), '%Y-%m-%d'\) AS ServerToday/);
       return [header ? [header] : []];
     }
+    assert.deepEqual(params, [25]);
     assert.match(sql, /r\.RoomStatus/);
     assert.match(sql, /DATE_FORMAT\(br\.CheckInDateTime, '%Y-%m-%d'\) AS CheckInDate/);
     assert.match(sql, /DATE_FORMAT\(br\.CheckOutDateTime, '%Y-%m-%d'\) AS CheckOutDate/);
@@ -102,6 +126,8 @@ function storedState(header = booking, rooms = [room], procedureError) {
       assert.deepEqual(await invoke('checkIn', { user: { ...staff, role } }),
         { status: 200, data: { bookingId: 25, status: 'Checked-In' } });
       assert.equal(calls.filter(call => call.sql.startsWith('CALL ')).length, 1);
+      assert.deepEqual(readLifecycle, ['CONNECT', 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+        'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY', 'COMMIT', 'RELEASE']);
       assert.ok(calls.every(call => !/START TRANSACTION|BEGIN|COMMIT|ROLLBACK/.test(call.sql)),
         'The procedure owns its transaction; the controller must not wrap it.');
     }
@@ -133,7 +159,7 @@ function storedState(header = booking, rooms = [room], procedureError) {
       assert.match(sql, /r\.BranchID = \?/);
       assert.ok(!sql.includes('br.BranchID'));
       assert.ok(!sql.includes("Ann' OR 1=1 --"));
-      assert.deepEqual(params, [25, 'Booked', 3, "%Ann' OR 1=1 --%", 'TEST-ID']);
+      assert.deepEqual(params, [25, 'Booked', 3, "%Ann' OR 1=1 --%", 'TEST-ID', 3, 'Receptionist', 3, 3]);
       return [[booking]];
     }
     assert.deepEqual(params, [25]);

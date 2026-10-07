@@ -172,6 +172,19 @@ only their own reservations. Foreign or missing booking lookups return 404.
 Staff creation, editing and cancellation are limited to Receptionist, Manager
 and Admin.
 
+Receptionist and ServiceStaff now require current database-backed staff scope.
+Their booking, bill and service access requires a nonempty reservation whose
+rooms all belong to their assigned branch. Manager/Admin retain all-branch
+operational access; guests retain ownership checks. Room-status changes also
+enforce staff branch access. `GET /api/staff/scope` returns the current staff ID,
+role, branch ID and branch name. Dashboard/report routes reject stale staff claims.
+
+**Existing database upgrade:** stop the backend and install migration 003 before
+running this code. The booking-edit procedure now has seven arguments. Follow
+[STAFF_BRANCH_ACCESS.md](Database/STAFF_BRANCH_ACCESS.md) for exact maintenance,
+runtime-grant verification and live read-only hotel checks. Do not reset the
+database or rerun an older installer to upgrade this workflow.
+
 | Endpoint | Description |
 |---|---|
 | `GET /api/bookings` | List/search bookings (`?bookingId=&guestName=&idNumber=&status=&branchId=`). Guests only ever see their own. |
@@ -251,7 +264,8 @@ import, database reset or seed rerun is required for this update.
 
 Sign in through `/staff/login`, then open `/staff/bookings` from the staff home.
 The list searches the live API by exact booking reference, guest name, identity
-number, branch and status. Open `/staff/bookings/:id` for the guest and room
+number and status. Receptionist/ServiceStaff have a fixed assigned branch;
+Manager/Admin can select a branch. Open `/staff/bookings/:id` for the guest and room
 details. Staff return destinations after login are restricted to these local
 routes. Sample staff pages remain separate under `/preview/staff/...`.
 

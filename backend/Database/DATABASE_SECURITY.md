@@ -75,8 +75,11 @@ files local/private, just like `.env`. Do not attach them to review ZIPs or chat
 
 The new account starts locked. Only after granting and verifying the exact
 policy is it unlocked for a temporary connection. That connection performs:
-17 empty table reads, routine metadata checks, five empty locking reads matching
-login/refresh/booking query shapes, and seven expected permission denials. The
+17 empty table reads, routine metadata checks, nine empty locking reads matching
+login/refresh/booking and branch-access query shapes, and seven expected permission
+denials. The four branch-access probes cover the booking-status lock, current
+staff/account identity, room branch/status lock, and ordered booked-room membership
+with `LEFT JOIN ROOM ... FOR SHARE OF br`. The
 negative UPDATE/DELETE probes use `WHERE 1 = 0`; even unexpectedly broad
 permissions cannot change a hotel row. No business procedure or DDL is called
 by the verifier.

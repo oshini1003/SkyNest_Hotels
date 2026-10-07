@@ -15,7 +15,7 @@ const { checkRuntimeAccess } = require('./Database/runtimeUserAccess');
   const connection = await require('mysql2/promise').createConnection(config);
   try {
     const result = await checkRuntimeAccess(connection, config);
-    console.log(`PASS: ${result.currentUser} on ${result.database}; exact grants, 17 empty table reads, 5 empty locking reads, 7 permission denials.`);
+    console.log(`PASS: ${result.currentUser} on ${result.database}; exact grants, 17 empty table reads, ${result.lockingReads} empty locking reads, 7 permission denials.`);
     console.log('No hotel rows were changed. Business routine execution and browser workflows require their separate smoke checks.');
   } finally { await connection.end(); }
 })().catch(error => {

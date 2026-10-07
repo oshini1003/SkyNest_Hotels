@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateRoomSearch } = require('../utils/roomSearchValidation');
+const { positiveInteger } = require('../utils/bookingValidation');
+const { canAct, restrictedRoles } = require('../utils/staffScope');
 
 // ---------- BRANCH ----------
 
@@ -152,28 +154,47 @@ const createRoom = asyncHandler(async (req, res) => {
 });
 
 const updateRoomStatus = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { roomStatus } = req.body;
+  if (!canAct(req, ['Admin', 'Manager', 'Receptionist'])) {
+    return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+  }
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Room ID must be a positive whole number.' });
+  const roomStatus = req.body?.roomStatus;
   const valid = ['Available', 'Occupied', 'Maintenance'];
   if (!valid.includes(roomStatus)) {
     return res.status(400).json({ error: `roomStatus must be one of ${valid.join(', ')}` });
   }
-
-  // Guard: don't let a room be pulled into Maintenance while it has an active booking
-  const [[{ activeCount }]] = (
-    await pool.execute(
-      `SELECT COUNT(*) AS activeCount FROM BOOKED_ROOMS br
-       JOIN BOOKING b ON b.BookingID = br.BookingID
-       WHERE br.RoomID = ? AND b.BookingStatus IN ('Booked','Checked-In')`,
-      [id]
-    )
-  );
-  if (roomStatus === 'Maintenance' && activeCount > 0) {
-    return res.status(409).json({ error: 'Cannot modify a room that has an active booking.' });
-  }
-
-  const [result] = await pool.execute(`UPDATE ROOM SET RoomStatus = ? WHERE RoomID = ?`, [roomStatus, id]);
-  if (result.affectedRows === 0) return res.status(404).json({ error: 'Room not found.' });
+  const fail = (status, message) => Object.assign(new Error(message), { status });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[current]] = await conn.execute(
+      `SELECT s.StaffID, s.Role, s.BranchID FROM STAFF s
+       JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID WHERE s.StaffID = ? FOR SHARE`, [req.staffScope.staffId]);
+    if (!current || current.StaffID !== req.staffScope.staffId || current.Role !== req.staffScope.role
+        || current.BranchID !== req.staffScope.branchId) throw fail(403, 'Your staff access has changed. Please sign in again.');
+    const [[room]] = await conn.execute('SELECT RoomID, BranchID FROM ROOM WHERE RoomID = ? FOR UPDATE', [id]);
+    if (!room || (restrictedRoles.has(current.Role) && room.BranchID !== current.BranchID)) throw fail(404, 'Room not found.');
+    if (roomStatus === 'Maintenance') {
+      // The ROOM lock serializes concurrent creates/edits; a current locking
+      // read preserves the existing active-booking maintenance guard.
+      const [[active]] = await conn.execute(
+        `SELECT br.BookedRoomID FROM BOOKED_ROOMS br
+         JOIN BOOKING b ON b.BookingID = br.BookingID
+         WHERE br.RoomID = ? AND b.BookingStatus IN ('Booked','Checked-In')
+         LIMIT 1 FOR SHARE`, [id]);
+      if (active) throw fail(409, 'Cannot modify a room that has an active booking.');
+    }
+    await conn.execute('UPDATE ROOM SET RoomStatus = ? WHERE RoomID = ?', [roomStatus, id]);
+    await conn.commit();
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* Preserve the original error. */ }
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    if (['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT'].includes(err.code)) {
+      return res.status(409).json({ error: 'Another room or booking action is in progress. Refresh and try again.' });
+    }
+    throw err;
+  } finally { conn.release(); }
   res.json({ roomId: id, roomStatus });
 });
 

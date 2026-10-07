@@ -5,11 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const dotenv = require('dotenv');
-const allowed = new Set(['setupIntegrationDb.js', 'addBookingUpdate.js', 'addAuditLog.js', 'updateBillingRoutine.js']);
+const allowed = new Set(['setupIntegrationDb.js', 'addBookingUpdate.js', 'addAuditLog.js', 'updateBillingRoutine.js', 'installStaffBranchAccess.js']);
 function command(args, contents, environment = process.env) {
   const [script, ...rest] = args;
   if (!allowed.has(script) || rest.some(arg => arg !== '--backend-stopped') || rest.length > 1) {
-    throw new Error('Choose a reviewed setupIntegrationDb.js, addBookingUpdate.js, addAuditLog.js or updateBillingRoutine.js entry point.');
+    throw new Error('Choose a reviewed setupIntegrationDb.js, addBookingUpdate.js, addAuditLog.js, updateBillingRoutine.js or installStaffBranchAccess.js entry point.');
   }
   const values = dotenv.parse(contents);
   const { configuration } = require('./setupRuntimeUser');

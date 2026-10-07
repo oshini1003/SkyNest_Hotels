@@ -161,6 +161,17 @@ const release = fixture => fixture.events.at(-1)?.sql?.startsWith('SELECT RELEAS
   }
   const migration = projectStatements(fs.readFileSync(path.join(__dirname, '../Database/migrations/002_add_audit_log.sql'), 'utf8'));
   assert.deepEqual(migration.map(sql => canonicalSql(sql)), [reviewed.table, ...objects.map(object => object.sql)].map(sql => canonicalSql(sql)));
+  // Historical installer must refuse a later branch-access definition rather
+  // than adopting new schema.sql bodies without their grant-aware migration.
+  const later = projectStatements(fs.readFileSync(path.join(__dirname, '../Database/migrations/003_staff_branch_access.sql'), 'utf8'));
+  const laterCheckIn = later.find(sql => /^CREATE PROCEDURE sp_check_in\b/.test(sql));
+  assert.notEqual(canonicalSql(laterCheckIn), canonicalSql(reviewed.procedures.find(o => o.name === 'sp_check_in').sql));
+  const newer = fixture({ current: true, editState: state => {
+    state.set('sp_check_in', { ...context, 'Create Procedure': laterCheckIn.replace(/^CREATE /, 'CREATE DEFINER=`root`@`localhost` ') });
+  } });
+  await assert.rejects(newer.migrate(), /differs from the reviewed definitions/);
+  assert.equal(ddl(newer).length, 0);
+
   assert.equal(migration.length, 7);
   assert.doesNotMatch(migration.join('\n'), /^DROP|^UPDATE|^DELETE|^INSERT/m);
   assert.notEqual(canonicalSql("SELECT 'A  B'"), canonicalSql("SELECT 'A B'"));

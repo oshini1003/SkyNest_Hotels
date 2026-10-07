@@ -31,6 +31,15 @@ const denialSql = [
   'UPDATE STAFF SET Role = Role WHERE 1 = 0',
 ];
 const deniedCodes = ['ER_TABLEACCESS_DENIED_ERROR', 'ER_COLUMNACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR'];
+// Independent fixtures: exact new runtime lock syntax and selected columns.
+const branchLockSql = [
+  'SELECT BookingStatus FROM BOOKING WHERE BookingID = 0 FOR UPDATE',
+  'SELECT s.StaffID, s.Role, s.BranchID FROM STAFF s JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID WHERE s.StaffID = 0 FOR SHARE',
+  'SELECT RoomID, BranchID FROM ROOM WHERE RoomID = 0 FOR UPDATE',
+  'SELECT br.BookedRoomID, r.BranchID FROM BOOKED_ROOMS br LEFT JOIN ROOM r ON r.RoomID = br.RoomID WHERE br.BookingID = 0 ORDER BY br.BookedRoomID FOR SHARE OF br',
+];
+const compactSql = sql => sql.replace(/\s+/g, ' ').trim();
+
 const sqlError = code => Object.assign(new Error('private driver detail must not be printed'), { code });
 
 function mock(options = {}) {
@@ -93,7 +102,7 @@ function mock(options = {}) {
       if (sql === 'SHOW GRANTS') return [options.runtimeGrants || goodGrants];
       if (/^SELECT \* FROM `\w+` LIMIT 0$/.test(sql)) return [[]];
       if (/ FOR (UPDATE|SHARE)(?: OF \w+)?$/.test(sql)) {
-        if (options.lockFailure) throw sqlError('ER_TABLEACCESS_DENIED_ERROR');
+        if (options.lockFailure || options.branchLockFailure === compactSql(sql)) throw sqlError('ER_TABLEACCESS_DENIED_ERROR');
         return [[]];
       }
       if (denialSql.includes(sql)) {
@@ -229,8 +238,10 @@ function setupCli(options = {}) {
   assert.deepEqual(actualProbes, denialSql);
   assert.ok(actualProbes.filter(sql => /^(UPDATE|DELETE)/.test(sql)).every(sql => / WHERE 1 = 0$/.test(sql)));
   const locks = success.events.filter(e => e.who === 'runtime' && / FOR (UPDATE|SHARE)/.test(e.sql)).map(e => e.sql);
-  assert.equal(locks.length, 5);
-  assert.ok(locks.every(sql => /(?:GuestID|StaffID|TokenID|RoomID) = 0/.test(sql)));
+  assert.equal(locks.length, 9);
+  assert.equal(result.lockingReads, 9);
+  assert.deepEqual(locks.slice(5).map(compactSql), branchLockSql);
+  assert.ok(locks.every(sql => /(?:GuestID|StaffID|TokenID|RoomID|BookingID) = 0/.test(sql)));
   assert.match(locks[0], /FOR UPDATE OF ga$/);
   assert.match(locks[1], /FOR UPDATE OF sa$/);
   assert.match(locks[2], /FOR UPDATE$/);
@@ -284,6 +295,14 @@ function setupCli(options = {}) {
     const fixture = mock(options);
     await assert.rejects(checkRuntimeAccess(fixture.runtime, { ...config, user: 'skynest_app' }));
     assert.equal(fixture.events.some(e => e.sql === 'BEGIN'), false);
+  }
+  for (const sql of branchLockSql) {
+    const fixture = mock({ branchLockFailure: sql });
+    await assert.rejects(checkRuntimeAccess(fixture.runtime, { ...config, user: 'skynest_app' }), { code: 'ER_TABLEACCESS_DENIED_ERROR' });
+    assert.equal(fixture.events.filter(e => e.sql === 'BEGIN').length, 1);
+    assert.equal(fixture.events.filter(e => e.sql === 'ROLLBACK').length, 1);
+    assert.equal(fixture.events.some(e => denialSql.includes(e.sql)), false);
+    assert.equal(fixture.events.some(e => /^(CALL|CREATE|ALTER|DROP|TRUNCATE|INSERT|UPDATE|DELETE)\b/.test(e.sql)), false);
   }
   const cleanupFailure = mock({ endFailure: true });
   await assert.rejects(provision(cleanupFailure.parameters));

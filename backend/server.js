@@ -24,6 +24,7 @@ app.use(express.json());
 app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'HRGSMS backend' }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/staff', require('./routes/staffRoutes'));
 app.use('/api/guests', guestRoutes);
 app.use('/api', roomRoutes);
 app.use('/api/bookings', bookingRoutes);

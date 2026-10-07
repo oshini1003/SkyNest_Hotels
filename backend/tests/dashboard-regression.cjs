@@ -43,8 +43,8 @@ function cash(branch) {
   });
   return { todayRevenue: money(selected.reduce((total, payment) => total + payment.cents, 0n)), todayPaymentsCount: selected.length };
 }
-let events, queries, options;
-function reset(next = {}) { events = []; queries = []; options = next; }
+let events, queries, scopeQueries, options;
+function reset(next = {}) { events = []; queries = []; scopeQueries = []; options = next; }
 const connection = {
   async query(sql, params = []) {
     queries.push({ sql, params });
@@ -94,12 +94,22 @@ const connection = {
   async rollback() { events.push('ROLLBACK'); if (options.failRollback) throw new Error('simulated rollback failure'); },
   release() { events.push('RELEASE'); },
 };
-const pool = { async getConnection() {
+const pool = { async execute(sql, params) {
+  scopeQueries.push({ sql, params });
+  assert.match(sql, /FROM STAFF s JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID/);
+  assert.match(sql, /LEFT JOIN BRANCH b ON b.BranchID = s.BranchID WHERE s.StaffID = \?/);
+  if (options.failScope) throw new Error('Private staff database failure');
+  const currentStaff = [
+    { StaffID: 1, Role: 'Admin', BranchID: null, BranchName: null },
+    { StaffID: 2, Role: 'Manager', BranchID: 1, BranchName: 'Colombo' },
+  ].find(staff => staff.StaffID === params[0]);
+  return [options.missingStaff || !currentStaff ? [] : [{ ...currentStaff, ...options.staffOverride }]];
+}, async getConnection() {
   events.push('CONNECT'); if (options.failConnect) throw new Error('simulated acquisition failure'); return connection;
 } };
 require.cache[require.resolve('../config/db')] = { exports: pool };
 const { getAdminDashboardSummary } = require('../controllers/dashboardController');
-const manager = { type: 'staff', id: 2, role: 'Manager' };
+const manager = { type: 'staff', id: 2, role: 'Manager', branchId: 1 };
 function invoke(query = {}, user = manager) {
   return new Promise((resolve, reject) => {
     const res = { code: 200, headers: {}, set(key, value) { this.headers[key] = value; return this; },
@@ -109,7 +119,7 @@ function invoke(query = {}, user = manager) {
   });
 }
 async function routeChecks() {
-  const tokens = { manager, admin: { type: 'staff', id: 1, role: 'Admin' },
+  const tokens = { manager, admin: { type: 'staff', id: 1, role: 'Admin', branchId: null },
     guest: { type: 'guest', id: 1 }, receptionist: { type: 'staff', id: 3, role: 'Receptionist' },
     service: { type: 'staff', id: 4, role: 'ServiceStaff' }, malformed: { ...manager, id: '2' } };
   require.cache[require.resolve('../config/auth')] = { exports: { verifyAccessToken(token) {
@@ -127,10 +137,21 @@ async function routeChecks() {
     app.handle(req, res);
   });
   for (const prefix of ['/api/dashboard/admin', '/dashboard/admin']) {
-    for (const [token, expected] of [[null, 401], ['invalid', 401], ['guest', 403], ['receptionist', 403], ['service', 403], ['malformed', 403]]) {
-      reset(); assert.equal((await request(prefix, token)).code, expected); assert.equal(events.length, 0);
+    for (const [token, expected] of [[null, 401], ['invalid', 401], ['guest', 403], ['receptionist', 403], ['service', 403], ['malformed', 401]]) {
+      reset(); assert.equal((await request(prefix, token)).code, expected); assert.equal(events.length, 0); assert.equal(scopeQueries.length, 0);
     }
     for (const token of ['manager', 'admin']) { reset(); assert.equal((await request(prefix, token)).code, 200); }
+    for (const changed of [{ staffOverride: { Role: 'Receptionist' } }, { staffOverride: { Role: 'Admin' } },
+      { staffOverride: { BranchID: 2 } }, { missingStaff: true }]) {
+      reset(changed);
+      const response = await request(prefix, 'manager');
+      assert.equal(response.code, 401, 'Stale manager identity cannot read the dashboard.');
+      assert.deepEqual(response.data, { error: 'Your staff access has changed. Please sign in again.' });
+      assert.equal(scopeQueries.length, 1); assert.equal(queries.length, 0); assert.equal(events.length, 0);
+    }
+    reset({ failScope: true });
+    assert.deepEqual(await request(prefix, 'manager'), { code: 500, data: { error: 'Dashboard unavailable.' } });
+    assert.equal(queries.length, 0); assert.equal(events.length, 0);
     for (const suffix of ['?branchId=1x', '?branchId=1&branchId=2', '?branchId[x]=1', '?other=1']) {
       reset(); assert.equal((await request(prefix + suffix, 'manager')).code, 400); assert.equal(events.length, 0);
     }
@@ -174,5 +195,5 @@ async function routeChecks() {
     if (!options.failConnect) assert.deepEqual(events.slice(-2), ['ROLLBACK','RELEASE']);
   }
   await routeChecks();
-  console.log('PASS: real dashboard route authorization, strict filters before SQL, one read-only snapshot and DB date, indexable payment day bounds, exact cash totals/one-booking branch attribution, scheduled-status counts, empty branches and connection/error handling (mock database; no live MySQL).');
+  console.log('PASS: real dashboard route authorization and current staff identity checks, strict filters before dashboard SQL, one read-only snapshot and DB date, indexable payment day bounds, exact cash totals/one-booking branch attribution, scheduled-status counts, empty branches and connection/error handling (mock database; no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

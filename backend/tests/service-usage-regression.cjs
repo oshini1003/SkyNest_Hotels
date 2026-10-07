@@ -25,9 +25,15 @@ const pool = {
     calls.push({ sql, params });
     if (/FROM BOOKING/.test(sql)) {
       if (lookupError) throw lookupError;
-      assert.match(sql, /WHERE BookingID = \?(?: AND GuestID = \?)?$/);
+      assert.match(sql, /WHERE BookingID = \?/);
+      if (params.length === 2) assert.match(sql, /AND BOOKING\.GuestID = \?$/);
+      else {
+        assert.deepEqual(params, [params[0], 9, params[2], 3, ...(['Receptionist', 'ServiceStaff'].includes(params[2]) ? [3] : [])]);
+        assert.match(sql, /scope_staff\.StaffID = \?/);
+        if (params.length === 5) assert.match(sql, /NOT EXISTS[\s\S]*scope_room\.BranchID <> \?/);
+      }
       const booking = bookings.get(params[0]);
-      return [booking && (params.length === 1 || booking.GuestID === params[1]) ? [booking] : []];
+      return [booking && (params.length !== 2 || booking.GuestID === params[1]) ? [booking] : []];
     }
     if (/^CALL sp_log_service_usage/.test(sql)) {
       assert.equal(sql, 'CALL sp_log_service_usage(?, ?, ?, ?, ?)');
@@ -65,6 +71,7 @@ function invoke(handler, req) {
       status(code) { this.statusCode = code; return this; },
       json(data) { resolve({ status: this.statusCode, data }); return this; },
     };
+    if (req.user?.type === 'staff') req.staffScope = { staffId: req.user.id, role: req.user.role, branchId: 3, branchName: 'SkyNest Galle' };
     handler(req, res, reject);
   });
 }
@@ -91,7 +98,7 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
     assert.equal(positiveInteger(raw), Number(raw));
   }
 
-  for (const user of [null, {}, { type: 'other', id: 1 },
+  for (const user of [null, {}, { type: 'guest', id: '1' }, { type: 'other', id: 1 },
     { type: 'staff', id: 1 }, { type: 'staff', id: 1, role: 'Housekeeping' },
     { type: 'staff', id: 1, role: 'admin' }, { type: 'staff', id: 1, role: ['Admin'] }]) {
     assert.equal((await post(validBody, user)).status, 403);
@@ -104,11 +111,11 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
   }
   assert.equal(calls.length, 0, 'Invalid identities or roles must not reach SQL.');
 
-  assert.deepEqual(await post({ bookingId: '11', serviceId: '5', quantity: '2' }, { type: 'guest', id: '1' }), {
+  assert.deepEqual(await post({ bookingId: '11', serviceId: '5', quantity: '2' }, { type: 'guest', id: 1 }), {
     status: 201, data: validBody,
   });
   assert.equal(calls.length, 2);
-  assert.match(calls[0].sql, /WHERE BookingID = \? AND GuestID = \?/);
+  assert.match(calls[0].sql, /WHERE BookingID = \? AND BOOKING\.GuestID = \?/);
   assert.deepEqual(calls[0].params, [11, 1]);
   assert.deepEqual(calls[1].params, [11, 5, 2, null, 1]);
 
@@ -118,7 +125,7 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
       status: 201, data: { ...validBody, bookingId: 22 },
     });
     assert.equal(calls.length, 2);
-    assert.deepEqual(calls[0].params, [22]);
+    assert.deepEqual(calls[0].params, [22, 9, role, 3, ...(['Receptionist', 'ServiceStaff'].includes(role) ? [3] : [])]);
     assert.doesNotMatch(calls[0].sql, /GuestID/);
     assert.deepEqual(calls[1].params, [22, 5, 2, 9, null]);
   }
@@ -223,5 +230,14 @@ const reset = () => { calls.length = 0; procedureError = undefined; lookupError 
   assert.equal(catalogue.status, 200);
   assert.equal(catalogue.data[0].UnitPrice, '30.00');
   pool.execute = execute;
+  // Procedure authorization is rechecked under locks. Never expose its SQL message.
+  for (const [sqlState, status, message] of [
+    ['45003', 404, 'Booking not found.'],
+    ['45004', 403, 'You do not have permission to perform this action.'],
+  ]) {
+    reset(); procedureError = { sqlState, sqlMessage: 'private cross-branch details' };
+    assert.deepEqual(await post(), { status, data: { error: message } });
+    assert.equal(calls.length, 2, 'Scope denial ends after one CALL and never retries or reads the bill.');
+  }
   console.log('PASS: strict service input and identity, staff roles, guest ownership, booking state, procedure conflicts, safe error mapping, parameterization, transaction ownership and history contract.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

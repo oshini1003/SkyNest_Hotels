@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/reportController');
 const { authenticate, requireRole } = require('../middleware/auth');
+const resolveStaffScope = require('../middleware/staffScope');
 
-router.use(authenticate, requireRole('Manager', 'Admin'));
+router.use(authenticate, requireRole('Manager', 'Admin'), resolveStaffScope);
 
 router.get('/occupancy', ctrl.occupancyReport);
 router.get('/billing-summary', ctrl.billingSummary);

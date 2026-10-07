@@ -7,6 +7,7 @@ const calls = [];
 let handler;
 let getConnectionError;
 let releaseCount = 0;
+const transactionEvents = [];
 const execute = async (sql, params = []) => {
   calls.push({ sql, params });
   if (!handler) throw new Error('Unexpected database call');
@@ -16,7 +17,14 @@ const pool = {
   execute, query: execute,
   getConnection: async () => {
     if (getConnectionError) throw getConnectionError;
-    return { execute, query: execute, release() { releaseCount++; } };
+    transactionEvents.push('CONNECT');
+    return {
+      execute, query: execute,
+      async beginTransaction() { transactionEvents.push('BEGIN'); },
+      async commit() { transactionEvents.push('COMMIT'); },
+      async rollback() { transactionEvents.push('ROLLBACK'); },
+      release() { releaseCount++; transactionEvents.push('RELEASE'); },
+    };
   },
 };
 require.cache[require.resolve('../config/db')] = { exports: pool };
@@ -27,6 +35,7 @@ const stay = { roomId: 7, checkin: '2096-02-29', checkout: '2096-03-02', guestCo
 function invoke(action, values = {}) {
   return new Promise((resolve, reject) => {
     const req = { user: guest, query: {}, params: { id: '25' }, body: stay, ...values };
+    if (req.user?.type === 'staff') req.staffScope = { staffId: req.user.id, role: req.user.role, branchId: 3, branchName: 'SkyNest Galle' };
     const res = {
       statusCode: 200,
       status(code) { this.statusCode = code; return this; },
@@ -35,7 +44,7 @@ function invoke(action, values = {}) {
     ctrl[action](req, res, reject);
   });
 }
-function reset(nextHandler) { calls.length = 0; handler = nextHandler; }
+function reset(nextHandler) { calls.length = 0; transactionEvents.length = 0; handler = nextHandler; }
 
 (async () => {
   assert.equal(positiveInteger(7), 7);
@@ -69,7 +78,15 @@ function reset(nextHandler) { calls.length = 0; handler = nextHandler; }
   }
   assert.equal(calls.length, 0, 'Invalid or forbidden requests must not execute SQL.');
 
-  reset(async (sql) => sql === 'SELECT @p_booking_id' ? [[{ '@p_booking_id': 25 }]] : [{}]);
+  reset(async (sql, params) => {
+    if (sql === 'SELECT @p_booking_id') return [[{ '@p_booking_id': 25 }]];
+    if (sql.startsWith('SELECT r.RoomID')) {
+      assert.deepEqual(params, [7, 3, params[2], 3, ...(params[2] === 'Receptionist' ? [3] : [])]);
+      assert.match(sql, /scope_staff\.StaffID = \?/);
+      return [[{ RoomID: 7 }]];
+    }
+    return [{}];
+  });
   const created = await invoke('makeBooking', { body: { ...stay, guestId: 999, roomId: '7', guestCount: '2' } });
   assert.deepEqual(created, { status: 201, data: { bookingId: 25, status: 'Booked' } });
   assert.equal(releaseCount, 1);
@@ -150,16 +167,19 @@ function reset(nextHandler) { calls.length = 0; handler = nextHandler; }
   reset(async (sql, params) => {
     assert.deepEqual(params, [25, 4]);
     if (sql.startsWith('UPDATE')) {
-      assert.match(sql, /WHERE BookingID = \? AND GuestID = \? AND BookingStatus = 'Booked'/);
+      assert.match(sql, /WHERE BookingID = \? AND (?:BOOKING\.)?GuestID = \? AND BookingStatus = 'Booked'/);
       const affectedRows = bookingStatus === 'Booked' ? 1 : 0;
       if (affectedRows) bookingStatus = 'Cancelled';
       return [{ affectedRows }];
     }
-    assert.match(sql, /WHERE BookingID = \? AND GuestID = \?/);
+    assert.match(sql, /WHERE BookingID = \? AND (?:BOOKING\.)?GuestID = \? FOR UPDATE$/);
     return [[{ BookingStatus: bookingStatus }]];
   });
   const race = await Promise.all([invoke('cancelBooking'), invoke('cancelBooking')]);
   assert.deepEqual(race.map(response => response.status).sort(), [200, 409]);
+  assert.equal(transactionEvents.filter(event => event === 'COMMIT').length, 1);
+  assert.equal(transactionEvents.filter(event => event === 'ROLLBACK').length, 1);
+  assert.equal(transactionEvents.filter(event => event === 'RELEASE').length, 2);
   for (const status of ['Checked-In', 'Checked-Out', 'Cancelled']) {
     bookingStatus = status;
     assert.equal((await invoke('cancelBooking')).status, 409);
@@ -168,12 +188,60 @@ function reset(nextHandler) { calls.length = 0; handler = nextHandler; }
   reset(async sql => sql.startsWith('UPDATE') ? [{ affectedRows: 0 }] : [[]]);
   assert.equal((await invoke('cancelBooking')).status, 404);
   assert.ok(calls.every(call => call.sql.includes('GuestID = ?')), 'Both cancellation and follow-up lookup must scope ownership.');
-  reset(async (sql, params) => {
-    assert.deepEqual(params, [25]);
-    assert.ok(!sql.includes('GuestID = ?'));
-    return [{ affectedRows: 1 }];
-  });
-  assert.equal((await invoke('cancelBooking', { user: receptionist })).status, 200);
+  assert.deepEqual(transactionEvents, ['CONNECT', 'BEGIN', 'ROLLBACK', 'RELEASE']);
+
+  function cancellationState(options = {}) {
+    return async (sql, params) => {
+      if (sql.startsWith('SELECT BookingStatus FROM BOOKING')) {
+        assert.equal(calls.length, 1, 'Acquire the booking lock before resolving staff/membership.');
+        assert.match(sql, /WHERE BookingID = \? FOR UPDATE$/);
+        assert.deepEqual(params, [25]);
+        return [options.missing ? [] : [{ BookingStatus: options.status || 'Booked' }]];
+      }
+      if (sql.includes('FROM STAFF s')) {
+        assert.equal(calls.length, 2);
+        assert.match(sql, /JOIN STAFF_ACCOUNT[\s\S]*FOR SHARE$/);
+        assert.deepEqual(params, [3]);
+        return [options.staff === null ? [] : [options.staff || { StaffID: 3, Role: options.role || 'Receptionist', BranchID: 3 }]];
+      }
+      if (sql.includes('FROM BOOKED_ROOMS')) {
+        assert.equal(calls.length, 3);
+        assert.match(sql, /LEFT JOIN ROOM[\s\S]*FOR SHARE OF br$/);
+        assert.deepEqual(params, [25]);
+        return [options.rooms || [{ BookedRoomID: 4, BranchID: 3 }, { BookedRoomID: 5, BranchID: 3 }]];
+      }
+      assert.equal(sql, "UPDATE BOOKING SET BookingStatus = 'Cancelled' WHERE BookingID = ? AND BookingStatus = 'Booked'",
+        'Only the authorized conditional write may run; no correlated UPDATE subquery.');
+      assert.equal(calls.length, options.role && options.role !== 'Receptionist' ? 3 : 4);
+      assert.deepEqual(params, [25]);
+      if (options.writeError) throw options.writeError;
+      return [{ affectedRows: 1 }];
+    };
+  }
+  for (const role of ['Receptionist', 'Manager', 'Admin']) {
+    reset(cancellationState({ role }));
+    assert.equal((await invoke('cancelBooking', { user: { ...receptionist, role } })).status, 200);
+    assert.deepEqual(transactionEvents, ['CONNECT', 'BEGIN', 'COMMIT', 'RELEASE']);
+  }
+  for (const [options, expected] of [
+    [{ missing: true }, 404],
+    [{ staff: null }, 403],
+    [{ staff: { StaffID: 3, Role: 'Receptionist', BranchID: 2 } }, 403],
+    [{ staff: { StaffID: 3, Role: 'ServiceStaff', BranchID: 3 } }, 403],
+    [{ rooms: [] }, 404],
+    [{ rooms: [{ BookedRoomID: 4, BranchID: 3 }, { BookedRoomID: 5, BranchID: 2 }] }, 404],
+    [{ rooms: [{ BookedRoomID: 4, BranchID: null }] }, 404],
+    [{ status: 'Checked-In' }, 409],
+  ]) {
+    reset(cancellationState(options));
+    assert.equal((await invoke('cancelBooking', { user: receptionist })).status, expected);
+    assert.ok(calls.every(call => !call.sql.startsWith('UPDATE')), 'Denial must leave the booking unchanged.');
+    assert.deepEqual(transactionEvents, ['CONNECT', 'BEGIN', 'ROLLBACK', 'RELEASE']);
+  }
+  const writeFailure = new Error('Cancellation write failed');
+  reset(cancellationState({ writeError: writeFailure }));
+  await assert.rejects(invoke('cancelBooking', { user: receptionist }), error => error === writeFailure);
+  assert.deepEqual(transactionEvents, ['CONNECT', 'BEGIN', 'ROLLBACK', 'RELEASE']);
   reset(async () => { throw new Error('read failed'); });
   for (const action of ['getBooking', 'listBookings', 'cancelBooking']) await assert.rejects(invoke(action), /read failed/);
 

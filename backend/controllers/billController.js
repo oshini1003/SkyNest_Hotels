@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
-const { canProcessPayment, validatePayment } = require('../utils/paymentValidation');
+const { canRead, canAct, bookingAccess, scopeConflict } = require('../utils/staffScope');
+const { validatePayment } = require('../utils/paymentValidation');
 
 const paymentConflictMessages = new Set([
   'Payments require a Checked-In booking.',
@@ -10,6 +11,7 @@ const paymentConflictMessages = new Set([
 ]);
 
 function paymentConflict(err, res) {
+  if (scopeConflict(err, res)) return true;
   if (err.sqlState === '45000') {
     const error = paymentConflictMessages.has(err.sqlMessage)
       ? err.sqlMessage : 'The payment cannot be recorded in the current booking state.';
@@ -42,6 +44,8 @@ const getBill = asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'Invalid authentication token.' });
   }
 
+  if (!canRead(req)) return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+
   // DECIMAL values may be numbers or strings; add/subtract whole cents so a
   // fully paid bill does not acquire a floating-point remainder.
   const toCents = (value) => {
@@ -60,11 +64,10 @@ const getBill = asyncHandler(async (req, res) => {
     await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
     await connection.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
 
+    const access = bookingAccess(req);
     const [[booking]] = await connection.execute(
-      req.user.type === 'guest'
-        ? 'SELECT BookingID, BookingStatus FROM BOOKING WHERE BookingID = ? AND GuestID = ?'
-        : 'SELECT BookingID, BookingStatus FROM BOOKING WHERE BookingID = ?',
-      req.user.type === 'guest' ? [bookingId, req.user.id] : [bookingId]
+      `SELECT BookingID, BookingStatus FROM BOOKING WHERE BookingID = ?${access.sql}`,
+      [bookingId, ...access.params]
     );
     if (!booking) {
       await connection.commit();
@@ -122,14 +125,15 @@ const getBill = asyncHandler(async (req, res) => {
 
 // POST /api/payments   { bookingId, amount, paymentMethod }  (Front Desk / Manager / Admin)
 const processPayment = asyncHandler(async (req, res) => {
-  if (!canProcessPayment(req.user)) {
+  if (!canAct(req, ['Admin', 'Manager', 'Receptionist'])) {
     return res.status(403).json({ error: 'You do not have permission to perform this action.' });
   }
   const parsed = validatePayment(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
   const { bookingId, amount, paymentMethod } = parsed.value;
   try {
-    const [[booking]] = await pool.execute('SELECT BookingStatus FROM BOOKING WHERE BookingID = ?', [bookingId]);
+    const access = bookingAccess(req);
+    const [[booking]] = await pool.execute(`SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${access.sql}`, [bookingId, ...access.params]);
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     if (booking.BookingStatus !== 'Checked-In') {
       return res.status(409).json({ error: 'Payments require a Checked-In booking.' });
@@ -149,7 +153,8 @@ const processPayment = asyncHandler(async (req, res) => {
   // the client to reconcile the bill; a false failure could invite duplicates.
   const result = { bookingId, amount: Number(amount), outstandingBalance: null };
   try {
-    const [[balance]] = await pool.query(`SELECT fn_calculate_outstanding_balance(?) AS OutstandingBalance`, [bookingId]);
+    const access = bookingAccess(req);
+    const [[balance]] = await pool.query(`SELECT fn_calculate_outstanding_balance(?) AS OutstandingBalance FROM BOOKING WHERE BookingID = ?${access.sql}`, [bookingId, bookingId, ...access.params]);
     const rawBalance = balance?.OutstandingBalance;
     if (!['string', 'number'].includes(typeof rawBalance)
         || !/^-?\d+(?:\.\d{1,2})?$/.test(String(rawBalance))

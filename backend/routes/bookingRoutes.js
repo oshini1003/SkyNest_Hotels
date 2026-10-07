@@ -3,7 +3,7 @@ const router = express.Router();
 const ctrl = require('../controllers/bookingController');
 const { authenticate, requireRole } = require('../middleware/auth');
 
-router.use(authenticate); // every booking action requires a logged-in guest or staff member
+router.use(authenticate, require('../middleware/staffScope')); // every booking action requires a logged-in guest or staff member
 
 router.get('/', ctrl.listBookings);
 router.get('/:id', ctrl.getBooking);

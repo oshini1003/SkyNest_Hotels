@@ -3,13 +3,14 @@ const asyncHandler = require('../utils/asyncHandler');
 const { positiveInteger, validateBooking, validateBookingFilters, checkInEligibility } = require('../utils/bookingValidation');
 const { validateRoomSearch } = require('../utils/roomSearchValidation');
 
-const bookingRoles = new Set(['Admin', 'Manager', 'Receptionist']);
+const { canRead, canAct, bookingAccess, roomAccess, bookingRead, scopeConflict, restrictedRoles } = require('../utils/staffScope');
+const bookingRoles = ['Admin', 'Manager', 'Receptionist'];
 const forbidden = res => res.status(403).json({ error: 'You do not have permission to perform this action.' });
 const notFound = res => res.status(404).json({ error: 'Booking not found.' });
-const validUser = user => user && ['guest', 'staff'].includes(user.type) && positiveInteger(user.id) !== null;
-const canManage = user => validUser(user) && (user.type === 'guest' || bookingRoles.has(user.role));
+const canManage = req => canAct(req, bookingRoles, true);
 
 function conflictResponse(err, res) {
+  if (scopeConflict(err, res)) return true;
   if (err.sqlState === '45000') {
     res.status(409).json({ error: err.sqlMessage || 'The booking cannot be changed in its current state.' });
     return true;
@@ -64,14 +65,28 @@ async function makeMultiRoomBooking(req, res) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+    if (staffId !== null) {
+      const [[current]] = await conn.execute(
+        `SELECT s.StaffID, s.Role, s.BranchID FROM STAFF s
+         JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID WHERE s.StaffID = ? FOR SHARE`, [staffId]);
+      if (!current || current.StaffID !== staffId || current.Role !== req.staffScope.role
+          || current.BranchID !== req.staffScope.branchId) throw httpError(403, 'Your staff access has changed. Please sign in again.');
+    }
+    // Lock and authorize all destination rooms before the first booking insert.
+    const lockedRooms = new Map();
+    for (const stay of stays) {
+      const [[room]] = await conn.execute(
+        `SELECT r.BranchID, r.RoomStatus, rt.Capacity FROM ROOM r JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID
+         WHERE r.RoomID = ? FOR UPDATE OF r`, [stay.roomId]);
+      if (!room || (staffId !== null && restrictedRoles.has(req.staffScope.role)
+          && room.BranchID !== req.staffScope.branchId)) throw httpError(404, 'Room not found.');
+      lockedRooms.set(stay.roomId, room);
+    }
     const [header] = await conn.execute(
       'INSERT INTO BOOKING (GuestID, StaffID, PreferredPaymentMethod) VALUES (?, ?, ?)',
       [guestId, staffId, paymentMethod]);
     for (const stay of stays) {
-      const [[room]] = await conn.execute(
-        `SELECT r.RoomStatus, rt.Capacity FROM ROOM r JOIN ROOM_TYPE rt ON rt.RoomTypeID = r.RoomTypeID
-         WHERE r.RoomID = ? FOR UPDATE OF r`, [stay.roomId]);
-      if (!room) throw httpError(404, `Room ${stay.roomId} was not found.`);
+      const room = lockedRooms.get(stay.roomId);
       if (room.RoomStatus === 'Maintenance') throw httpError(409, `Room ${stay.roomId} is under maintenance.`);
       if (stay.guestCount > room.Capacity) throw httpError(400, `Room ${stay.roomId} sleeps at most ${room.Capacity}.`);
       // The exclusive ROOM lock serializes competing creates/edits for this room.
@@ -92,7 +107,7 @@ async function makeMultiRoomBooking(req, res) {
     await conn.commit();
     res.status(201).json({ bookingId: header.insertId, status: 'Booked', rooms: stays.length });
   } catch (err) {
-    await conn.rollback();
+    try { await conn.rollback(); } catch (_) { /* Preserve the original failure. */ }
     if (err.status) return res.status(err.status).json({ error: err.message });
     if (conflictResponse(err, res)) return;
     throw err;
@@ -104,7 +119,7 @@ async function makeMultiRoomBooking(req, res) {
 // POST /api/bookings. The stored procedure owns the booking transaction and
 // room locks. A preferred payment method does not create a payment or bill.
 const makeBooking = asyncHandler(async (req, res) => {
-  if (!canManage(req.user)) return forbidden(res);
+  if (!canManage(req)) return forbidden(res);
   if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'rooms')) {
     if (!Array.isArray(req.body.rooms)) {
       return res.status(400).json({ error: 'rooms must be an array of roomId and guestCount entries.' });
@@ -117,6 +132,11 @@ const makeBooking = asyncHandler(async (req, res) => {
   const staffId = req.user.type === 'staff' ? positiveInteger(req.user.id) : null;
   const conn = await pool.getConnection();
   try {
+    if (staffId !== null) {
+      const access = roomAccess(req);
+      const [[room]] = await conn.execute(`SELECT r.RoomID FROM ROOM r WHERE r.RoomID = ?${access.sql}`, [roomId, ...access.params]);
+      if (!room) return res.status(404).json({ error: 'Room not found.' });
+    }
     await conn.query('SET @p_booking_id = NULL');
     await conn.execute('CALL sp_make_booking(?, ?, ?, ?, ?, ?, ?, @p_booking_id)',
       [guestId, staffId, roomId, checkin, checkout, guestCount, paymentMethod]);
@@ -130,38 +150,66 @@ const makeBooking = asyncHandler(async (req, res) => {
   }
 });
 
-// Ownership and status are checked in the same conditional UPDATE. A concurrent
-// check-in or second cancellation cannot pass an earlier, stale status check.
+// Lock the booking before checking branch membership, just like room-edit and
+// check-in procedures. Do not put ROOM in this UPDATE: the booking status trigger
+// itself updates ROOM, which MySQL prohibits when the invoking UPDATE reads it.
 const cancelBooking = asyncHandler(async (req, res) => {
-  if (!canManage(req.user)) return forbidden(res);
+  if (!canManage(req)) return forbidden(res);
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
-  const ownerCondition = req.user.type === 'guest' ? ' AND GuestID = ?' : '';
-  const params = req.user.type === 'guest' ? [id, positiveInteger(req.user.id)] : [id];
+  const own = req.user.type === 'guest';
+  const ownerCondition = own ? ' AND BOOKING.GuestID = ?' : '';
+  const params = own ? [id, req.user.id] : [id];
+  const connection = await pool.getConnection();
   try {
-    const [result] = await pool.execute(
+    await connection.beginTransaction();
+    const [[booking]] = await connection.execute(
+      `SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${ownerCondition} FOR UPDATE`, params);
+    if (!booking) throw httpError(404, 'Booking not found.');
+    if (!own) {
+      const [[current]] = await connection.execute(
+        `SELECT s.StaffID, s.Role, s.BranchID FROM STAFF s
+         JOIN STAFF_ACCOUNT a ON a.StaffID = s.StaffID WHERE s.StaffID = ? FOR SHARE`, [req.staffScope.staffId]);
+      if (!current || current.StaffID !== req.staffScope.staffId || current.Role !== req.staffScope.role
+          || current.BranchID !== req.staffScope.branchId) throw httpError(403, 'Your staff access has changed. Please sign in again.');
+      if (restrictedRoles.has(current.Role)) {
+        const [rooms] = await connection.execute(
+          `SELECT br.BookedRoomID, r.BranchID FROM BOOKED_ROOMS br
+           LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+           WHERE br.BookingID = ? ORDER BY br.BookedRoomID FOR SHARE OF br`, [id]);
+        if (!rooms.length || rooms.some(room => room.BranchID !== current.BranchID)) throw httpError(404, 'Booking not found.');
+      }
+    }
+    if (booking.BookingStatus !== 'Booked') throw httpError(409, 'Only a Booked reservation can be cancelled.');
+    const [result] = await connection.execute(
       `UPDATE BOOKING SET BookingStatus = 'Cancelled' WHERE BookingID = ?${ownerCondition} AND BookingStatus = 'Booked'`, params);
-    if (result.affectedRows === 1) return res.json({ bookingId: id, status: 'Cancelled' });
-    const [[booking]] = await pool.execute(
-      `SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${ownerCondition}`, params);
-    if (!booking) return notFound(res);
-    return res.status(409).json({ error: 'Only a Booked reservation can be cancelled.' });
+    if (result.affectedRows !== 1) throw httpError(409, 'Only a Booked reservation can be cancelled.');
+    await connection.commit();
   } catch (err) {
+    try { await connection.rollback(); } catch (_) { /* Preserve original failure. */ }
+    if (err.status) return res.status(err.status).json({ error: err.message });
     if (conflictResponse(err, res)) return;
     throw err;
-  }
+  } finally { connection.release(); }
+  res.json({ bookingId: id, status: 'Cancelled' });
 });
 
 // Front desk actions are also protected by requireRole in bookingRoutes.
 const checkIn = asyncHandler(async (req, res) => {
-  if (!validUser(req.user) || req.user.type !== 'staff' || !bookingRoles.has(req.user.role)) return forbidden(res);
+  if (!canAct(req, bookingRoles)) return forbidden(res);
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   try {
-    const [[booking]] = await pool.execute(
-      "SELECT BookingStatus, DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday FROM BOOKING WHERE BookingID = ?", [id]);
-    if (!booking) return notFound(res);
-    const [rooms] = await pool.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
+    const access = bookingAccess(req);
+    const found = await bookingRead(req, async conn => {
+      const [[booking]] = await conn.execute(
+        `SELECT BookingStatus, DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday FROM BOOKING WHERE BookingID = ?${access.sql}`, [id, ...access.params]);
+      if (!booking) return null;
+      const [rooms] = await conn.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
+      return { booking, rooms };
+    });
+    if (!found) return notFound(res);
+    const { booking, rooms } = found;
     const eligibility = checkInEligibility(booking, rooms, booking.ServerToday);
     if (!eligibility.allowed) return res.status(409).json({ error: eligibility.reason });
     // The procedure owns its transaction. Its booking lock and room-status
@@ -176,11 +224,12 @@ const checkIn = asyncHandler(async (req, res) => {
 });
 
 const checkOut = asyncHandler(async (req, res) => {
-  if (!validUser(req.user) || req.user.type !== 'staff' || !bookingRoles.has(req.user.role)) return forbidden(res);
+  if (!canAct(req, bookingRoles)) return forbidden(res);
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   try {
-    const [[booking]] = await pool.execute('SELECT BookingStatus FROM BOOKING WHERE BookingID = ?', [id]);
+    const access = bookingAccess(req);
+    const [[booking]] = await pool.execute(`SELECT BookingStatus FROM BOOKING WHERE BookingID = ?${access.sql}`, [id, ...access.params]);
     if (!booking) return notFound(res);
     if (booking.BookingStatus !== 'Checked-In') {
       return res.status(409).json({ error: 'Only a Checked-In reservation can be checked out.' });
@@ -196,7 +245,8 @@ const checkOut = asyncHandler(async (req, res) => {
   // success and ask the client to refresh; never rerun the procedure.
   let bill;
   try {
-    [[bill]] = await pool.execute('SELECT * FROM BILL WHERE BookingID = ?', [id]);
+    const access = bookingAccess(req, 'b');
+    [[bill]] = await pool.execute(`SELECT bill.* FROM BILL bill JOIN BOOKING b ON b.BookingID = bill.BookingID WHERE b.BookingID = ?${access.sql}`, [id, ...access.params]);
   } catch {
     // The completed checkout remains successful even without its bill response.
   }
@@ -209,20 +259,25 @@ const checkOut = asyncHandler(async (req, res) => {
 // Guest ownership is part of the lookup: foreign and nonexistent bookings
 // produce the same 404 response, before reading any booked-room information.
 const getBooking = asyncHandler(async (req, res) => {
-  if (!validUser(req.user)) return forbidden(res);
+  if (!canRead(req)) return forbidden(res);
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   const own = req.user.type === 'guest';
-  const [[booking]] = await pool.execute(
-    `SELECT b.*, g.Name AS GuestName, g.ContactNumber AS GuestContact,
-            g.IDNumber AS GuestIDNumber, g.Email AS GuestEmail, s.Name AS StaffName,
-            DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday
-     FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
-     LEFT JOIN STAFF s ON s.StaffID = b.StaffID
-     WHERE b.BookingID = ?${own ? ' AND b.GuestID = ?' : ''}`,
-    own ? [id, positiveInteger(req.user.id)] : [id]);
-  if (!booking) return notFound(res);
-  const [rooms] = await pool.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
+  const access = bookingAccess(req, 'b');
+  const found = await bookingRead(req, async conn => {
+    const [[booking]] = await conn.execute(
+      `SELECT b.*, g.Name AS GuestName, g.ContactNumber AS GuestContact,
+              g.IDNumber AS GuestIDNumber, g.Email AS GuestEmail, s.Name AS StaffName,
+              DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS ServerToday
+       FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
+       LEFT JOIN STAFF s ON s.StaffID = b.StaffID
+       WHERE b.BookingID = ?${access.sql}`, [id, ...access.params]);
+    if (!booking) return null;
+    const [rooms] = await conn.execute(`${roomSelect} WHERE br.BookingID = ? ORDER BY br.BookedRoomID`, [id]);
+    return { booking, rooms };
+  });
+  if (!found) return notFound(res);
+  const { booking, rooms } = found;
   const { ServerToday, ...details } = booking;
   res.json({ ...details, rooms,
     ...(own ? {} : { checkInEligibility: checkInEligibility(booking, rooms, ServerToday) }) });
@@ -231,7 +286,7 @@ const getBooking = asyncHandler(async (req, res) => {
 // Two queries fetch the headers and all their rooms; adding bookings does not
 // cause a separate database round trip for each one.
 const listBookings = asyncHandler(async (req, res) => {
-  if (!validUser(req.user)) return forbidden(res);
+  if (!canRead(req)) return forbidden(res);
   const parsed = validateBookingFilters(req.query, req.user);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
   const { bookingId, guestId, status, branchId, guestName, idNumber } = parsed.value;
@@ -246,21 +301,29 @@ const listBookings = asyncHandler(async (req, res) => {
   if (branchId !== undefined) { conditions.push('r.BranchID = ?'); params.push(branchId); }
   if (guestName !== undefined) { conditions.push('g.Name LIKE ?'); params.push(`%${guestName}%`); }
   if (idNumber !== undefined) { conditions.push('g.IDNumber = ?'); params.push(idNumber); }
+  if (req.user.type === 'staff') {
+    const access = bookingAccess(req, 'b');
+    conditions.push(access.sql.slice(5));
+    params.push(...access.params);
+  }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const [rows] = await pool.query(
-    `SELECT DISTINCT b.BookingID, b.BookingStatus, b.BookingDate, b.CreatedDate, b.PreferredPaymentMethod,
-            g.GuestID, g.Name AS GuestName, g.IDNumber
-     FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
-     LEFT JOIN BOOKED_ROOMS br ON br.BookingID = b.BookingID
-     LEFT JOIN ROOM r ON r.RoomID = br.RoomID
-     ${where} ORDER BY b.CreatedDate DESC, b.BookingID DESC LIMIT 200`, params);
-  if (!rows.length) return res.json([]);
-  const ids = rows.map(row => row.BookingID);
-  const [rooms] = await pool.execute(
-    `${roomSelect} WHERE br.BookingID IN (${ids.map(() => '?').join(', ')}) ORDER BY br.BookingID, br.BookedRoomID`, ids);
-  const roomsByBooking = new Map(ids.map(id => [id, []]));
-  for (const room of rooms) roomsByBooking.get(room.BookingID)?.push(room);
-  res.json(rows.map(row => ({ ...row, rooms: roomsByBooking.get(row.BookingID) })));
+  const result = await bookingRead(req, async conn => {
+    const [rows] = await conn.query(
+      `SELECT DISTINCT b.BookingID, b.BookingStatus, b.BookingDate, b.CreatedDate, b.PreferredPaymentMethod,
+              g.GuestID, g.Name AS GuestName, g.IDNumber
+       FROM BOOKING b JOIN GUEST g ON g.GuestID = b.GuestID
+       LEFT JOIN BOOKED_ROOMS br ON br.BookingID = b.BookingID
+       LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+       ${where} ORDER BY b.CreatedDate DESC, b.BookingID DESC LIMIT 200`, params);
+    if (!rows.length) return [];
+    const ids = rows.map(row => row.BookingID);
+    const [rooms] = await conn.execute(
+      `${roomSelect} WHERE br.BookingID IN (${ids.map(() => '?').join(', ')}) ORDER BY br.BookingID, br.BookedRoomID`, ids);
+    const roomsByBooking = new Map(ids.map(id => [id, []]));
+    for (const room of rooms) roomsByBooking.get(room.BookingID)?.push(room);
+    return rows.map(row => ({ ...row, rooms: roomsByBooking.get(row.BookingID) }));
+  });
+  res.json(result);
 });
 
 const updateFields = ['bookedRoomId', 'roomId', 'checkin', 'checkout', 'guestCount'];
@@ -269,7 +332,7 @@ const updateFields = ['bookedRoomId', 'roomId', 'checkin', 'checkout', 'guestCou
 // on a Booked reservation. sp_update_booked_room and the update trigger enforce
 // status, capacity, maintenance and overlap under locks.
 const updateBooking = asyncHandler(async (req, res) => {
-  if (!canManage(req.user)) return forbidden(res);
+  if (!canManage(req)) return forbidden(res);
   const id = positiveInteger(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Booking ID must be a positive whole number.' });
   const body = req.body;
@@ -294,17 +357,24 @@ const updateBooking = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Provide at least one of roomId, checkin, checkout or guestCount.' });
   }
 
-  const own = req.user.type === 'guest';
   try {
-    const [[booking]] = await pool.execute(
-      `SELECT BookingID FROM BOOKING WHERE BookingID = ?${own ? ' AND GuestID = ?' : ''}`,
-      own ? [id, positiveInteger(req.user.id)] : [id]);
-    if (!booking) return notFound(res);
-
-    const [lines] = await pool.execute(
-      `SELECT BookedRoomID, DATE_FORMAT(CheckInDateTime, '%Y-%m-%d') AS CheckInDate,
-              DATE_FORMAT(CheckOutDateTime, '%Y-%m-%d') AS CheckOutDate
-       FROM BOOKED_ROOMS WHERE BookingID = ? ORDER BY BookedRoomID`, [id]);
+    const access = bookingAccess(req);
+    const lines = await bookingRead(req, async conn => {
+      const [[booking]] = await conn.execute(
+        `SELECT BookingID FROM BOOKING WHERE BookingID = ?${access.sql}`, [id, ...access.params]);
+      if (!booking) return null;
+      const [rows] = await conn.execute(
+        `SELECT BookedRoomID, DATE_FORMAT(CheckInDateTime, '%Y-%m-%d') AS CheckInDate,
+                DATE_FORMAT(CheckOutDateTime, '%Y-%m-%d') AS CheckOutDate
+         FROM BOOKED_ROOMS WHERE BookingID = ? ORDER BY BookedRoomID`, [id]);
+      return rows;
+    });
+    if (!lines) return notFound(res);
+    if (req.user.type === 'staff' && change.roomId !== null) {
+      const roomScope = roomAccess(req);
+      const [[room]] = await pool.execute(`SELECT r.RoomID FROM ROOM r WHERE r.RoomID = ?${roomScope.sql}`, [change.roomId, ...roomScope.params]);
+      if (!room) return notFound(res);
+    }
     if (change.bookedRoomId === null && lines.length !== 1) {
       return res.status(400).json({ error: 'bookedRoomId is required for a booking with several rooms.' });
     }
@@ -323,8 +393,8 @@ const updateBooking = asyncHandler(async (req, res) => {
       checkin = body.checkin === undefined ? null : stay.value.checkin;
       checkout = body.checkout === undefined ? null : stay.value.checkout;
     }
-    await pool.execute('CALL sp_update_booked_room(?, ?, ?, ?, ?, ?)',
-      [id, line.BookedRoomID, change.roomId, checkin, checkout, change.guestCount]);
+    await pool.execute('CALL sp_update_booked_room(?, ?, ?, ?, ?, ?, ?)',
+      [id, line.BookedRoomID, change.roomId, checkin, checkout, change.guestCount, req.user.type === 'staff' ? req.staffScope.staffId : null]);
     res.json({ bookingId: id, bookedRoomId: line.BookedRoomID, status: 'Booked', updated: true });
   } catch (err) {
     if (conflictResponse(err, res)) return;

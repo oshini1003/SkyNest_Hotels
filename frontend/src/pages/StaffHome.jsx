@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { changeStaffPassword } from "../services/passwordApi";
-import { canCheckIn } from "../services/staffBookingApi";
+import { canCheckIn, isBranchRestricted } from "../services/staffBookingApi";
 import { canViewReports } from "../services/reportApi";
 import ChangePasswordForm from "./ChangePasswordForm";
 import "./StaffHome.css";
@@ -34,6 +34,8 @@ export default function StaffHome({ staff, onLogout }) {
               ? "Manage arrivals, record guest services and received payments, and complete departures from the booking workspace."
               : "Find a guest's stay, record services and view their bill. Reception, managers and administrators handle arrivals, payments and departures."}
           </p>
+
+          {isBranchRestricted(staff.role) && <p className="staff-dashboard-description">Your booking workspace is limited to your assigned branch.</p>}
 
           <div className="staff-dashboard-actions">
             {canViewReports(staff.role) && (

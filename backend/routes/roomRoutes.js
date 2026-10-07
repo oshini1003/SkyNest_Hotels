@@ -18,6 +18,6 @@ router.post('/amenities', authenticate, requireRole('Admin', 'Manager'), ctrl.cr
 // Rooms (GET is public so guests can search availability without logging in)
 router.get('/rooms', ctrl.searchRooms);
 router.post('/rooms', authenticate, requireRole('Admin', 'Manager'), ctrl.createRoom);
-router.patch('/rooms/:id/status', authenticate, requireRole('Admin', 'Manager', 'Receptionist'), ctrl.updateRoomStatus);
+router.patch('/rooms/:id/status', authenticate, require('../middleware/staffScope'), requireRole('Admin', 'Manager', 'Receptionist'), ctrl.updateRoomStatus);
 
 module.exports = router;

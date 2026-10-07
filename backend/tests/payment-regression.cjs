@@ -19,8 +19,11 @@ let balanceValue = '75.00';
 const pool = {
   async execute(sql, params) {
     calls.push({ sql, params });
-    if (sql === 'SELECT BookingStatus FROM BOOKING WHERE BookingID = ?') {
-      assert.equal(params.length, 1);
+    if (sql.startsWith('SELECT BookingStatus FROM BOOKING WHERE BookingID = ?')) {
+      assert.deepEqual(params, [params[0], params[1], params[2], 3, ...(params[2] === 'Receptionist' ? [3] : [])]);
+      assert.ok(['Admin', 'Manager', 'Receptionist'].includes(params[2]));
+      assert.match(sql, /scope_staff\.StaffID = \?/);
+      if (params[2] === 'Receptionist') assert.match(sql, /NOT EXISTS[\s\S]*scope_room\.BranchID <> \?/);
       if (lookupError) throw lookupError;
       return [bookings.has(params[0]) ? [bookings.get(params[0])] : []];
     }
@@ -38,8 +41,9 @@ const pool = {
   },
   async query(sql, params) {
     calls.push({ sql, params });
-    assert.equal(sql, 'SELECT fn_calculate_outstanding_balance(?) AS OutstandingBalance');
-    assert.equal(params.length, 1);
+    assert.match(sql, /^SELECT fn_calculate_outstanding_balance\(\?\) AS OutstandingBalance FROM BOOKING WHERE BookingID = \?/);
+    assert.deepEqual(params, [params[0], ...calls[0].params]);
+    assert.match(sql, /scope_staff\.StaffID = \?/);
     if (balanceError) throw balanceError;
     return [[{ OutstandingBalance: balanceValue }]];
   },
@@ -60,7 +64,8 @@ function post(body = validBody, user) {
       status(code) { this.statusCode = code; return this; },
       json(data) { resolve({ status: this.statusCode, data }); return this; },
     };
-    processPayment({ body, user }, res, reject);
+    const staffScope = user?.type === 'staff' ? { staffId: user.id, role: user.role, branchId: 3, branchName: 'SkyNest Galle' } : undefined;
+    processPayment({ body, user, staffScope }, res, reject);
   });
 }
 function reset() {
@@ -120,9 +125,9 @@ function reset() {
       status: 201, data: { bookingId: 11, amount: Number(normalized), outstandingBalance: 75 },
     });
     assert.equal(calls.length, 3);
-    assert.deepEqual(calls[0].params, [11]);
+    assert.deepEqual(calls[0].params, [11, 4, 'Receptionist', 3, 3]);
     assert.deepEqual(calls[1].params, [11, normalized, 'Cash', 4]);
-    assert.deepEqual(calls[2].params, [11]);
+    assert.deepEqual(calls[2].params, [11, 11, 4, 'Receptionist', 3, 3]);
   }
   for (const role of ['Admin', 'Manager', 'Receptionist']) {
     for (const paymentMethod of ['Cash', 'Card', 'Bank Transfer']) {
@@ -217,5 +222,14 @@ function reset() {
   reset();
   balanceValue = '0.00';
   assert.deepEqual(await post(), { status: 201, data: { bookingId: 11, amount: 25, outstandingBalance: 0 } });
+  // Procedure authorization is rechecked under locks. Never expose its SQL message.
+  for (const [sqlState, status, message] of [
+    ['45003', 404, 'Booking not found.'],
+    ['45004', 403, 'You do not have permission to perform this action.'],
+  ]) {
+    reset(); procedureError = { sqlState, sqlMessage: 'private cross-branch details' };
+    assert.deepEqual(await post(), { status, data: { error: message } });
+    assert.equal(calls.length, 2, 'Scope denial ends after one CALL and never retries or reads the bill.');
+  }
   console.log('PASS: strict payment amounts/IDs and token roles; exact decimal SQL; missing/state checks; procedure conflicts; safe errors; server-owned fields; no outer transaction/retry; committed-payment acknowledgement and uncertain-CALL forwarding.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
