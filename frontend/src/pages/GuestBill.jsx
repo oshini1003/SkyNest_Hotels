@@ -140,6 +140,12 @@ function BillContent({ data }) {
           </aside>
         </div>
       )}
+      {saved && data.bookingStatus === "Checked-In" && (
+        <aside className="gb-service-invitation" aria-label="Services during your stay">
+          <div><h2>A little extra for your stay</h2><p>Browse services, review the estimated charge and add a request to your bill.</p></div>
+          <Link className="gb-button" to={`/guest/bookings/${data.bookingId}/services`}>Request a service <span aria-hidden="true">↗</span></Link>
+        </aside>
+      )}
       <section className="gb-history-section" aria-labelledby="gb-services-heading">
         <header className="gb-section-heading"><div><p className="gb-eyebrow">DURING YOUR STAY</p><h2 id="gb-services-heading">Service history</h2></div><span className="gb-entry-count">{data.serviceUsage.length} {data.serviceUsage.length === 1 ? "entry" : "entries"}</span></header>
         <p className="gb-section-copy">Each charge uses the unit price recorded when the service was added to your stay.</p>

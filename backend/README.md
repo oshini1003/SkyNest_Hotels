@@ -787,3 +787,25 @@ node .\backend\tests\guest-bill-smoke-regression.cjs
 
 This regression checks the smoke verifier with mocked API fixtures, not live
 MySQL. Existing bill and service ownership controller tests remain applicable.
+
+## Guest service-page verification (7 October 2026)
+
+The guest interface at `/guest/bookings/:id/services` calls the existing service
+usage endpoint. It records a charge immediately, rather than creating a pending
+fulfilment request. The procedure captures the current catalogue price and guest
+identity and writes service/bill audit events in its existing transaction.
+No routine replacement or permission changes are needed for this UI stage.
+
+After one successful guest submission on a Checked-In audited stay, use the new
+read-only `guest-service` verifier stage. It allows payments already recorded
+before that service, reconciles the full history, and requires the latest operation
+to be a service recorded by the booking's owning guest. Existing verifier stages
+retain their earlier stage-specific restrictions. Run:
+
+```powershell
+node .\backend\tests\audit-regression.cjs
+```
+
+See `docs/GUEST_SERVICE_VERIFICATION.md` for live commands and test limits. The new
+stage does not issue service/payment requests or prove concurrent-write/failure
+rollback behaviour. Never automatically retry an uncertain service POST.

@@ -422,3 +422,5 @@
     padding: 22px;
   }
 }
+
+.service-catalogue-page .service-catalogue-request-link { display: inline-block; margin-top: 9px; color: #173d35; font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }

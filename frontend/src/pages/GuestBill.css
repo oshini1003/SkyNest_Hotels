@@ -116,3 +116,12 @@
   .guest-bill-page .gb-charge-lines dd { font-size: 12px; }
   .guest-bill-page .gb-total-line dd { font-size: 16px; }
 }
+
+.guest-bill-page .gb-service-invitation { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 28px; padding: 25px 28px; border: 1px solid #d4decd; background: #eef2e8; }
+.guest-bill-page .gb-service-invitation h2 { font-size: 25px; }
+.guest-bill-page .gb-service-invitation p { margin: 8px 0 0; color: #56685c; font-size: 12px; line-height: 1.8; }
+.guest-bill-page .gb-service-invitation .gb-button { background: #173d35; border-color: #173d35; color: #fffdf3; }
+.guest-bill-page .gb-service-invitation .gb-button:hover { background: #285046; }
+@media (max-width: 680px) {
+  .guest-bill-page .gb-service-invitation { flex-direction: column; align-items: flex-start; padding: 22px; gap: 18px; }
+}

@@ -298,3 +298,41 @@ The client suite loads actual modules through Vite with mocked HTTP. The smoke
 checker regression uses independent fixtures; neither connects to live MySQL.
 See [guest bill verification](../docs/GUEST_BILL_VERIFICATION.md) for the browser
 and live ownership checks. No database migration or new privileges are required.
+
+## Guest service requests (7 October 2026)
+
+`/guest/bookings/:id/services` lets an authenticated booking owner choose an active
+service and a whole-number quantity during a Checked-In stay. My bookings and the
+saved bill link to this page. A direct service URL returns after sign-in/register.
+The design uses the restored cream, deep green and gold hotel palette, matching
+bill/history pages, with responsive service cards, a charge review and saved history.
+
+The displayed charge is a catalogue estimate. Confirming **Request & add to bill**
+records usage and adds its charge immediately using the server's current saved
+price. This is not a scheduled-service or staff-approval queue. It does not process
+payments. For timing or special arrangements, guests should contact reception.
+
+The page uses the existing bill/catalogue reads and `POST /api/service-usage`.
+Only `bookingId`, `serviceId` and `quantity` are posted; authenticated identity,
+price, booking ownership/state, transactions and audit records remain server-owned.
+Amounts are calculated in exact cents for review. Invalid quantities, unavailable
+catalogue, non-Checked-In stays and unverified bills block submission.
+
+An account/booking-scoped session-storage marker is written before the one POST.
+Double clicks and an unresolved request in this browser tab block another request.
+Timeouts, interrupted navigation, unreadable success responses and server failures
+are not retried. A confirmed save is followed by a fresh bill; an uncertain result
+stays blocked until the guest reviews history and confirms checking with reception.
+This is a browser precaution, not server idempotency or cross-tab duplicate control.
+
+Local verification:
+
+```powershell
+node .\frontend\tests\guest-service-api-regression.mjs
+node .\frontend\tests\guest-billing-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The regression modules use mocked HTTP, not the live database. Use
+`docs/GUEST_SERVICE_VERIFICATION.md` for one controlled browser submission and
+read-only audit verification. No migration, new grants or database reset is needed.

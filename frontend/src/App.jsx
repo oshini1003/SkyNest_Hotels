@@ -13,6 +13,7 @@ import RoomSearch from "./pages/RoomSearch";
 import MakeBooking from "./pages/MakeBooking";
 import MyBookings from "./pages/MyBookings";
 import GuestBill from "./pages/GuestBill";
+import GuestServices from "./pages/GuestServices";
 import { guestReturnDestination, guestSignInState } from "./services/bookingIntent";
 import ServiceCatalogue from "./pages/ServiceCatalogue";
 import GuestBookings from "./pages/GuestBookings";
@@ -227,6 +228,10 @@ function handleStaffLogout() {
             <Route
               path="/guest/bookings/:id/bill"
               element={<GuestOnly session={session}><GuestBill key={session?.token} session={session} /></GuestOnly>}
+            />
+            <Route
+              path="/guest/bookings/:id/services"
+              element={<GuestOnly session={session}><GuestServices key={session?.token} session={session} /></GuestOnly>}
             />
             <Route
               path="/staff/login"
