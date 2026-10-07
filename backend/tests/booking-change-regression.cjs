@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // Dependency-free controller tests (fake pool, no MySQL), same approach as booking-regression.cjs.
 const calls = [];
@@ -88,6 +90,16 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   assert.deepEqual(events, ['CONNECT', 'BEGIN', 'COMMIT', 'RELEASE']);
   assert.deepEqual(calls.find(c => c.sql.startsWith('INSERT INTO BOOKING ')).params, [4, null, 'Card']);
   assert.deepEqual(calls.filter(c => c.sql.includes('FOR UPDATE OF r')).map(c => c.params[0]), [4, 7]);
+  for (const roomId of [4, 7]) {
+    const roomLockAt = calls.findIndex(c => c.sql.includes('FROM ROOM r') && c.params[0] === roomId);
+    const overlapAt = calls.findIndex(c => c.sql.includes('FROM BOOKED_ROOMS br') && c.params[0] === roomId);
+    const insertAt = calls.findIndex(c => c.sql.includes('INSERT INTO BOOKED_ROOMS') && c.params[1] === roomId);
+    assert.ok(roomLockAt < overlapAt && overlapAt < insertAt,
+      'Hold the exclusive room lock before the current overlap read and insertion.');
+    assert.match(calls[overlapAt].sql, /LIMIT 1 FOR SHARE$/,
+      'Availability needs a current locking read, without BOOKED_ROOMS UPDATE privileges.');
+    assert.deepEqual(calls[overlapAt].params, [roomId, multi.checkin, multi.checkout]);
+  }
   assert.deepEqual(calls.filter(c => c.sql.includes('INSERT INTO BOOKED_ROOMS')).map(c => c.params),
     [[55, 4, '2096-03-01', '2096-03-03', 2], [55, 7, '2096-03-01', '2096-03-03', 1]]);
   reset(roomDb());
@@ -180,5 +192,21 @@ const patch = (body, user = guest) => invoke('updateBooking', { user, body });
   reset(async (sql, params) => { if (sql.startsWith('CALL')) throw overlap; return updateDb()(sql, params); });
   assert.equal((await patch({ roomId: 2 })).status, 409);
 
-  console.log('PASS: strict single/multi-room dispatch, locking order, rollback and release; booking update validation, ownership, concurrent partial-date preservation and conflicts (mock database).');
+  // Multi-room FOR SHARE relies on the same exclusive target-room lock in the
+  // single-room and edit procedures. Guard that cross-path schema contract;
+  // these static checks do not simulate InnoDB scheduling or privilege checks.
+  const schema = fs.readFileSync(path.join(__dirname, '../Database/schema.sql'), 'utf8');
+  for (const name of ['sp_make_booking', 'sp_update_booked_room']) {
+    const start = schema.indexOf(`CREATE PROCEDURE ${name}(`);
+    assert.ok(start >= 0);
+    const routine = schema.slice(start, schema.indexOf('END //', start));
+    const targetRoomLock = routine.match(/FROM ROOM r[\s\S]*?WHERE r\.RoomID = (?:p_room_id|v_room)\s+FOR UPDATE(?: OF r)?;/);
+    assert.ok(targetRoomLock, `${name} must exclusively lock the destination room.`);
+    const overlapAt = routine.indexOf('SELECT br.BookedRoomID INTO v_conflict');
+    const writeAt = routine.search(/(?:INSERT INTO|UPDATE) BOOKED_ROOMS\b/);
+    assert.ok(targetRoomLock.index < overlapAt && overlapAt < writeAt);
+    assert.ok(routine.indexOf('COMMIT;') > writeAt, 'The room lock must be held through the write.');
+  }
+
+  console.log('PASS: strict single/multi-room dispatch, exclusive room/shared overlap lock ordering, rollback and release; cross-path room-lock SQL contracts; booking update validation, ownership, concurrent partial-date preservation and conflicts (mock database/static SQL; no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

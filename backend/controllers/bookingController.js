@@ -74,13 +74,15 @@ async function makeMultiRoomBooking(req, res) {
       if (!room) throw httpError(404, `Room ${stay.roomId} was not found.`);
       if (room.RoomStatus === 'Maintenance') throw httpError(409, `Room ${stay.roomId} is under maintenance.`);
       if (stay.guestCount > room.Capacity) throw httpError(400, `Room ${stay.roomId} sleeps at most ${room.Capacity}.`);
-      // Locking read, as in sp_make_booking: sees stays committed while this request waited for the room lock.
+      // The exclusive ROOM lock serializes competing creates/edits for this room.
+      // A shared locking read still sees stays committed while we waited, without
+      // requiring UPDATE privileges on BOOKED_ROOMS merely to check availability.
       const [[clash]] = await conn.execute(
         `SELECT br.BookedRoomID FROM BOOKED_ROOMS br
          JOIN BOOKING b ON b.BookingID = br.BookingID
          WHERE br.RoomID = ? AND b.BookingStatus IN ('Booked','Checked-In')
            AND ? < br.CheckOutDateTime AND ? > br.CheckInDateTime
-         LIMIT 1 FOR UPDATE`, [stay.roomId, stay.checkin, stay.checkout]);
+         LIMIT 1 FOR SHARE`, [stay.roomId, stay.checkin, stay.checkout]);
       if (clash) throw httpError(409, 'Room is already booked for an overlapping period.');
       await conn.execute(
         `INSERT INTO BOOKED_ROOMS (BookingID, RoomID, CheckInDateTime, CheckOutDateTime, GuestCount)

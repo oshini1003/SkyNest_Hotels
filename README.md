@@ -29,16 +29,11 @@ mysql -u root -p < schema.sql   # creates the hrgsms database, tables, triggers,
 mysql -u root -p hrgsms < seed.sql   # optional sample data (branches, rooms, demo accounts)
 ```
 
-Create a dedicated application user (recommended over using root):
-
-```sql
-CREATE USER 'hrgsms_app'@'localhost' IDENTIFIED BY 'choose_a_password';
-GRANT ALL PRIVILEGES ON hrgsms.* TO 'hrgsms_app'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-See `database/README.md` for the full schema notes, including the business
-logic implemented as triggers/procedures/functions.
+Use the restricted MySQL application-account setup in
+[`backend/Database/DATABASE_SECURITY.md`](backend/Database/DATABASE_SECURITY.md).
+It grants only the reviewed table/column/routine permissions for the local
+integration database and keeps maintenance credentials separate. Do not use
+`GRANT ALL` for the running web application.
 
 ## 2. Backend setup
 

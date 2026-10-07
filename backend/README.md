@@ -5,11 +5,14 @@ Node.js + Express REST API for SkyNest Hotels, backed by MySQL.
 ## Setup
 
 Run these commands from the `backend` folder. Install dependencies with `npm ci`.
-Copy `.env.example` to `.env` and set your local database credentials. Generate
+Copy `.env.example` to `.env` and set your local database credentials explicitly.
+The application pool no longer defaults to root when `DB_USER` is missing. Generate
 two different random values for `JWT_SECRET` and `JWT_REFRESH_SECRET`, each at
 least 32 characters. Keep the real `.env` private; it is ignored by Git.
 
-For a **new, separate local integration database**, keep a name such as
+For a **new, separate local integration database**, use your maintenance/root
+credentials temporarily for installation (the example names the eventual runtime
+account), keep a name such as
 `SkyNest_Integration_20261002`, then run:
 
 ```bash
@@ -31,6 +34,27 @@ are for local coursework tests only; their credentials are documented in `seed.s
 access and should return three seeded branches. The default CORS allowlist covers
 frontend development on ports 5173/5174 and build preview on port 4173. Add your
 exact frontend origin to `CORS_ORIGIN` if you use another port.
+
+## Restricted application database account
+
+The one-time local setup and evidence commands are documented in
+[`Database/DATABASE_SECURITY.md`](Database/DATABASE_SECURITY.md).
+`setupRuntimeUser.js --backend-stopped` creates `skynest_app@localhost` with exact
+per-table, column and routine privileges, prepares ignored `.env.runtime` and
+`.env.maintenance` files, and verifies the candidate without replacing `.env`.
+Existing root credentials, stored definitions and hotel rows are preserved.
+
+After activation, use the separate maintenance wrapper for future reviewed
+installations; do not change the running application's `.env` back to root.
+Existing routine installers deliberately refuse unsafe replacement when grants
+would be lost. New migrations must explicitly preserve the runtime EXECUTE grants.
+Do not rerun database setup, seed data or earlier migrations merely to switch users.
+
+Local checks: `node tests/runtime-policy-regression.cjs` and
+`node tests/runtime-setup-regression.cjs`. They use mocks; run
+`node check-runtime-user.js --candidate` for actual MySQL privilege verification
+before activating the candidate. Guest/staff login, token rotation and business
+workflow smoke checks remain separate from grant verification.
 
 ## Authentication
 

@@ -42,6 +42,14 @@ function connection(answer) {
   activeConnection = conn;
   return conn;
 }
+function assertCredentialLock(conn, alias, key) {
+  const statement = conn.events.find(event => event.sql?.startsWith(`SELECT ${alias}.`));
+  assert.ok(statement, 'Every credential transaction must lock its account row.');
+  assert.match(statement.sql, new RegExp(`WHERE ${alias}\\.${key} = \\? FOR UPDATE OF ${alias}$`),
+    'Lock the account row exclusively without requiring write access to joined profile rows.');
+  assert.equal(conn.events[0], 'begin');
+  return conn.events.indexOf(statement);
+}
 
 (async () => {
   const payload = { type: 'guest', id: 1, username: 'guest' };
@@ -102,10 +110,11 @@ function connection(answer) {
   assert.ok(!conn.events.some(x => x.sql?.startsWith('INSERT INTO REFRESH_TOKEN')));
   conn = connection(async (sql) => sql.startsWith('SELECT ga.') ? [[account]] : [{ affectedRows: 1 }]);
   assert.equal((await invoke(auth.loginGuest, { username: 'anushka', password: 'secret123' })).status, 200);
+  assertCredentialLock(conn, 'ga', 'Username');
 
   let recordActive = true;
   conn = connection(async (sql) => {
-    if (sql.startsWith('SELECT ga.')) { assert.match(sql, /FOR UPDATE/); return [[account]]; }
+    if (sql.startsWith('SELECT ga.')) { assert.match(sql, /FOR UPDATE OF ga$/); return [[account]]; }
     if (sql.startsWith('SELECT TokenID')) { assert.match(sql, /FOR UPDATE/); return [recordActive ? [{ TokenID: 1, UserType: 'guest', UserID: 7 }] : []]; }
     if (sql.startsWith('UPDATE REFRESH_TOKEN')) recordActive = false;
     return [{ affectedRows: 1 }];
@@ -113,6 +122,7 @@ function connection(answer) {
   const rotated = await invoke(auth.refreshToken, { refreshToken: registered.data.refreshToken });
   assert.equal(rotated.status, 200);
   assert.notEqual(rotated.data.refreshToken, registered.data.refreshToken);
+  assertCredentialLock(conn, 'ga', 'GuestID');
   assert.equal((await invoke(auth.refreshToken, { refreshToken: registered.data.refreshToken })).status, 401);
   assert.ok(conn.events.findIndex(x => x.sql?.startsWith('SELECT ga.')) < conn.events.findIndex(x => x.sql?.startsWith('SELECT TokenID')));
 
@@ -135,9 +145,46 @@ function connection(answer) {
   });
   await assert.rejects(invoke(auth.changeGuestPassword, { currentPassword: 'secret123', newPassword: 'newsecret' }, { user: { id: 7 } }), /revoke failed/);
   assert.deepEqual(conn.events.filter(x => typeof x === 'string'), ['begin', 'rollback', 'release']);
+  assertCredentialLock(conn, 'ga', 'GuestID');
+
+  // Staff need no UPDATE grant on STAFF. The credential row remains the common
+  // serialization point for login, refresh and password change before token work.
+  const staffAccount = { StaffID: 3, Username: 'amali', Name: 'Amali', Role: 'Receptionist', BranchID: 1,
+    PasswordHash: account.PasswordHash };
+  conn = connection(async sql => sql.startsWith('SELECT sa.') ? [[staffAccount]] : [{ affectedRows: 1 }]);
+  const staffLogin = await invoke(auth.loginStaff, { username: 'amali', password: 'secret123' });
+  assert.equal(staffLogin.status, 200);
+  assert.equal(staffLogin.data.staff.role, 'Receptionist');
+  let lockedAt = assertCredentialLock(conn, 'sa', 'Username');
+  assert.ok(lockedAt < conn.events.findIndex(event => event.sql?.startsWith('INSERT INTO REFRESH_TOKEN')));
+  assert.deepEqual(conn.events.filter(event => typeof event === 'string'), ['begin', 'commit', 'release']);
+
+  conn = connection(async sql => {
+    if (sql.startsWith('SELECT sa.')) return [[staffAccount]];
+    if (sql.startsWith('SELECT TokenID')) return [[{ TokenID: 2, UserType: 'staff', UserID: 3 }]];
+    return [{ affectedRows: 1 }];
+  });
+  const staffRefresh = await invoke(auth.refreshToken, { refreshToken: staffLogin.data.refreshToken });
+  assert.equal(staffRefresh.status, 200);
+  lockedAt = assertCredentialLock(conn, 'sa', 'StaffID');
+  const tokenLockAt = conn.events.findIndex(event => event.sql?.startsWith('SELECT TokenID'));
+  assert.ok(lockedAt < tokenLockAt, 'Refresh must lock credentials before locking/revoking its token.');
+  assert.match(conn.events[tokenLockAt].sql, /FOR UPDATE$/);
+  assert.ok(tokenLockAt < conn.events.findIndex(event => event.sql?.startsWith('UPDATE REFRESH_TOKEN')));
+
+  conn = connection(async sql => sql.startsWith('SELECT sa.') ? [[staffAccount]] : [{ affectedRows: 1 }]);
+  assert.equal((await invoke(auth.changeStaffPassword,
+    { currentPassword: 'secret123', newPassword: 'newsecret' }, { user: { id: 3 } })).status, 200);
+  lockedAt = assertCredentialLock(conn, 'sa', 'StaffID');
+  const passwordUpdateAt = conn.events.findIndex(event => event.sql?.startsWith('UPDATE STAFF_ACCOUNT'));
+  const revokeAt = conn.events.findIndex(event => event.sql?.startsWith('UPDATE REFRESH_TOKEN'));
+  assert.ok(lockedAt < passwordUpdateAt && passwordUpdateAt < revokeAt);
+  assert.equal(await bcrypt.compare('newsecret', conn.events[passwordUpdateAt].values[0]), true);
+  assert.deepEqual(conn.events[revokeAt].values, ['staff', 3]);
+  assert.deepEqual(conn.events.filter(event => typeof event === 'string'), ['begin', 'commit', 'release']);
 
   const beforeInvalid = outsideQueries.length;
   assert.equal((await invoke(guestController.updateProfile, { contactNumber: 'abcd' }, { user: { id: 7 } })).status, 400);
   assert.equal(outsideQueries.length, beforeInvalid);
-  console.log('PASS: real JWT purpose/algorithm/secret checks; guest validation; registration rollback/digest; login contracts; refresh lock/replay/rollback; password rollback; invalid profile rejected before SQL.');
+  console.log('PASS: real JWT purpose/algorithm/secret checks; guest validation; registration rollback/digest; guest/staff account-only locks and token ordering; refresh replay/rollback; password rollback; invalid profile rejected before SQL (mock database).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

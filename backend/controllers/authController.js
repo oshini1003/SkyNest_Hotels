@@ -36,14 +36,15 @@ async function createTokens(conn, payload) {
 }
 
 // Account rows are locked before refresh-token rows in all authentication transactions.
+// Scope the write lock to credentials: joined profile rows only need read access.
 async function findAccount(conn, type, column, value) {
   const sql = type === 'guest'
     ? `SELECT ga.GuestID, ga.Username, ga.PasswordHash, g.Name
        FROM GUEST_ACCOUNT ga JOIN GUEST g ON g.GuestID = ga.GuestID
-       WHERE ga.${column === 'id' ? 'GuestID' : 'Username'} = ? FOR UPDATE`
+       WHERE ga.${column === 'id' ? 'GuestID' : 'Username'} = ? FOR UPDATE OF ga`
     : `SELECT sa.StaffID, sa.Username, sa.PasswordHash, s.Name, s.Role, s.BranchID
        FROM STAFF_ACCOUNT sa JOIN STAFF s ON s.StaffID = sa.StaffID
-       WHERE sa.${column === 'id' ? 'StaffID' : 'Username'} = ? FOR UPDATE`;
+       WHERE sa.${column === 'id' ? 'StaffID' : 'Username'} = ? FOR UPDATE OF sa`;
   const [rows] = await conn.execute(sql, [value]);
   return rows[0];
 }

@@ -4,6 +4,8 @@ node_modules/
 # Environment files (never commit real secrets)
 .env
 .env.local
+.env.maintenance
+.env.runtime
 
 # Logs
 *.log
