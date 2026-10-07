@@ -35,11 +35,19 @@ Bill recalculation remains an internal helper with the same signature. Its calle
 
 ## History protection and limits
 
-`trg_audit_log_no_update` and `trg_audit_log_no_delete` reject ordinary UPDATE and DELETE of audit rows. The original six booking/billing triggers remain. These guards are not tamper-proof protection against a database administrator: privileged users can alter/drop objects or bypass row triggers using DDL such as TRUNCATE. Use a reviewed least-privilege application account in the later security stage.
+`trg_audit_log_no_update` and `trg_audit_log_no_delete` reject ordinary UPDATE and DELETE of audit rows. The original six booking/billing triggers remain. These guards are not tamper-proof protection against a database administrator: privileged users can alter/drop objects or bypass row triggers using DDL such as TRUNCATE. The current [restricted runtime account policy](DATABASE_SECURITY.md) denies direct application writes to audit rows and denies DDL, including the DROP privilege needed for TRUNCATE. Audited procedure calls retain their maintenance definer. The user reported runtime-account activation and successful local checks at commit `96c39cc`; this documentation review did not independently repeat those live checks.
 
 This stage does not automatically audit arbitrary direct SQL changes, booking creation/cancellation/date edits, catalogue edits, authentication events, or transactions that happened before installation. It does not add a public audit endpoint. Do not invent staff names, event times or historical snapshots for old transactions. Old completed booking #4 is retained as existing history, not rewritten as a new audited stay. No passwords, tokens, identity-document numbers, contact details or card numbers belong in audit snapshots.
 
-## Installation on the existing local database
+## Original installation on the existing local database (historical)
+
+This section records the audit migration's original installation and recovery
+steps. It is not an instruction to rerun that migration on the current database.
+For future reviewed migrations, stop the backend and use the maintenance wrapper
+documented in [DATABASE_SECURITY.md](DATABASE_SECURITY.md#failure-and-maintenance).
+Routine replacements must preserve/reapply and verify the exact runtime EXECUTE
+grants. The wrapper does not bypass the installers' grant-loss checks; keep the
+runtime `.env` separate from maintenance credentials.
 
 1. Apply the complete patch to the reviewed main source. The controllers and procedure signatures change together.
 2. Stop all backend processes using this database (Ctrl+C in the backend terminal). Keep them stopped until the installer reports success.

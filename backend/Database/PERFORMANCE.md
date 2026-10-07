@@ -45,9 +45,13 @@ not elapsed time or an exact count of examined rows. Four payment rows are too
 few to claim a representative speedup. Do not present this as "twice as fast".
 
 The preliminary probe bound `nextDay` directly. The production query computes it
-with `DATE_ADD` on the captured date. Use the checker below to record the exact
-production query's plan; do not label this preliminary result as a test of the
-newly shipped helper. Index choice is cost-based and may differ by branch,
+with `DATE_ADD` on the captured date. The figures above therefore describe the
+preliminary probe, not the exact production helper. The user subsequently
+reported a successful live production-query checker run, before the runtime
+account security stage. Retain that run's output and its tested source version
+as the production-query evidence. This documentation review did
+not independently rerun it or establish new plan figures or elapsed timings.
+Index choice is cost-based and may differ by branch,
 date, statistics or data size. No `FORCE INDEX` is used.
 
 ## Reproduce without changing hotel data
@@ -91,13 +95,22 @@ showed a unique `REFRESH_TOKEN(Token)` index and nonunique `idx_refresh_token`
 on the same column. Their cleanup is separate work; this patch does not remove
 indexes or change authentication storage.
 
-## Security follow-up
+## Restricted runtime account implemented after the preliminary inspection
 
-The same inspection identified `root@localhost` as the backend database account
-with broad privileges. A dedicated restricted runtime account and separate
-maintenance credentials remain to be implemented and tested. Do not claim
-least-privilege database access is already complete. Database-level security is
-separate from the existing application role and ownership checks.
+The preliminary inspection identified `root@localhost` as the backend database
+account. The later security stage implemented a restricted `skynest_app@localhost`
+runtime account, separate maintenance credentials and grant/read/denial/locking
+checks. The user reported live activation and successful checks at commit
+`96c39cc`; those local results were not independently rerun in this documentation
+review. Keep the local output with the tested commit.
+
+The current [database security policy](DATABASE_SECURITY.md) documents the exact
+grants, verification commands and maintenance process. Do not rerun provisioning
+on an already activated installation or change the runtime configuration back
+to root. Database grants remain separate from application role, guest ownership
+and branch authorization; this stage does not establish branch-scoped staff
+access. See [grading readiness](../../docs/GRADING_READINESS.md) for the evidence
+status and remaining gaps.
 
 ## References
 

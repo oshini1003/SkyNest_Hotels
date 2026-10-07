@@ -2,64 +2,71 @@
 
 CS3043 Database Systems — Group 36
 
-A hotel reservation and guest services system for **SkyNest Hotels**, a
-three-branch chain in Colombo, Kandy, and Galle. Built as three independent
-projects, matching the team's approved ER Diagram (`docs/ERD.png`):
+A hotel reservation and guest services system for **SkyNest Hotels**, a fictional
+three-branch chain in Colombo, Kandy, and Galle.
 
-```
-HRGSMS/
-├── database/    MySQL/MariaDB schema, triggers, procedures, functions, seed data
-├── backend/     Node.js + Express REST API
-├── frontend/    Node.js + Express web client (HTML/CSS/vanilla JS)
-└── docs/        SRS and the ER diagram
-```
+| Directory | Contents |
+| --- | --- |
+| `backend/` | Node.js and Express REST API |
+| `backend/Database/` | MySQL schema, triggers, procedures, functions, seed data and maintenance tools |
+| `frontend/` | React application built with Vite |
+| `docs/` | Grading readiness and evidence notes |
 
-Each folder is self-contained with its own `package.json` / SQL scripts, so
-they can be run, deployed, or graded independently.
+Start with [Grading readiness](docs/GRADING_READINESS.md) for the implemented
+workflows, remaining gaps and demonstration evidence.
 
----
+## Run the existing local project on Windows
 
-## 1. Database setup
+Keep MySQL running and preserve the existing integration database and local
+`backend/.env`. **Do not run setup, import `schema.sql`, seed or reset an existing
+database.** The backend uses its configured restricted runtime account; keep
+maintenance credentials separate.
 
-Requires MySQL 8.0+ or MariaDB 10.6+.
+Open two PowerShell terminals at the repository root.
 
-```bash
-cd database
-mysql -u root -p < schema.sql   # creates the hrgsms database, tables, triggers, procedures, functions
-mysql -u root -p hrgsms < seed.sql   # optional sample data (branches, rooms, demo accounts)
-```
+Backend terminal:
 
-Use the restricted MySQL application-account setup in
-[`backend/Database/DATABASE_SECURITY.md`](backend/Database/DATABASE_SECURITY.md).
-It grants only the reviewed table/column/routine permissions for the local
-integration database and keeps maintenance credentials separate. Do not use
-`GRANT ALL` for the running web application.
-
-## 2. Backend setup
-
-```bash
-cd backend
-npm install
-cp .env.example .env     # then fill in DB_USER / DB_PASSWORD / JWT_SECRET
-npm start                 # http://localhost:5000
+```powershell
+cd .\backend
+npm ci
+npm run dev
 ```
 
-See `backend/README.md` for the full API reference.
+Frontend terminal:
 
-## 3. Frontend setup
-
-```bash
-cd frontend
-npm install
-cp .env.example .env
-# Edit public/js/config.js if your backend isn't at http://localhost:5000/api
-npm start                 # http://localhost:3000
+```powershell
+cd .\frontend
+npm ci
+npm run dev
 ```
 
-## Demo accounts (from seed.sql)
+The API normally runs at `http://localhost:5000/api`. Open the **Local** URL
+printed by Vite, normally `http://localhost:5173`. The frontend defaults to this
+API address. For a different address, set `VITE_API_URL` in a local frontend
+environment file and restart Vite; the backend must allow the frontend origin.
+Database credentials and JWT signing secrets belong only in the backend.
+
+To check the production frontend, run `npm run build` then `npm run preview`
+from `frontend`. Build output is written to `frontend/dist`; preview serves the
+last build and does not start the API. Fictional development preview pages are
+excluded from production routes.
+
+For a **new, separate database**, follow the [backend setup guide](backend/README.md#setup)
+and [restricted database account policy](backend/Database/DATABASE_SECURITY.md).
+The project targets MySQL; the reported local environment is MySQL Community
+9.7.1 on Windows. MariaDB compatibility is not established. Do not substitute a
+fresh-database installation for an update to the existing integration database.
+
+See the [backend API documentation](backend/README.md) and
+[frontend documentation](frontend/README.md) for configuration and checks.
+
+## Demo accounts from `backend/Database/seed.sql`
+
+These fictional seed accounts are for local coursework demonstrations. Existing
+database passwords may have been changed; do not reseed to restore them.
 
 | Role | Username | Password |
-|---|---|---|
+| --- | --- | --- |
 | Guest | `oshini` | `guest123` |
 | Guest | `kasun` | `guest123` |
 | Admin | `admin` | `staff123` |
@@ -67,30 +74,23 @@ npm start                 # http://localhost:3000
 | Receptionist (Colombo) | `amali` | `staff123` |
 | Service Staff (Colombo) | `sunil` | `staff123` |
 
-**Change these before deploying anywhere public.**
-
----
+Change demo credentials before public deployment.
 
 ## Architecture
 
-- **Database** — MySQL/MariaDB. Business rules (overlap prevention, room
-  status sync, billing, outstanding-balance checks) are enforced at the
-  database level via triggers, stored procedures and functions — not just in
-  application code — so the data stays consistent even if the API is
-  bypassed.
-- **Backend** — Express REST API. Stateless JWT authentication (no
-  server-side session store), so multiple front-desk terminals and guest
-  devices can be signed in concurrently without conflicts. Role-based access
-  control for Admin / Manager / Receptionist / ServiceStaff / Guest.
-- **Frontend** — Plain HTML/CSS/JS served by a small Express static server.
-  No build step required. Talks to the backend purely over its REST API.
+- **Database** — MySQL triggers, stored procedures and functions enforce booking
+  overlap checks, room status changes, billing, payment limits and audited hotel
+  workflows. The runtime account has reviewed table, column and routine grants;
+  maintenance uses separate credentials.
+- **Backend** — Express REST API with access JWTs, rotating refresh-token digests
+  stored in MySQL, guest ownership checks and role-based access for Admin,
+  Manager, Receptionist and ServiceStaff. Branch filters are not branch access
+  restrictions; see the readiness notes for current limits.
+- **Frontend** — React, JavaScript and CSS with Vite development and production
+  builds. It communicates with the backend through the REST API.
 
-## A note on the ER diagram vs. this implementation
-
-One deliberate deviation from the diagram: `GUEST_ACCOUNT.Password` and
-`STAFF_ACCOUNT.Password` are implemented as `PasswordHash`, storing a bcrypt
-hash rather than plaintext. Storing real passwords in plaintext is never
-acceptable, even though the diagram itself labels the column "Password".
+`GUEST_ACCOUNT.PasswordHash` and `STAFF_ACCOUNT.PasswordHash` store bcrypt hashes.
+The implementation does not store guest or staff passwords as plaintext.
 
 ## License
 

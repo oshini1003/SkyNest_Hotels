@@ -56,6 +56,32 @@ Local checks: `node tests/runtime-policy-regression.cjs` and
 before activating the candidate. Guest/staff login, token rotation and business
 workflow smoke checks remain separate from grant verification.
 
+## Grading data and demonstration evidence
+
+See [the project grading checklist](../docs/GRADING_READINESS.md) for the
+rubric mapping, verified evidence, database design notes and remaining SRS gaps.
+From the repository root, run:
+
+```powershell
+node .\backend\tests\grading-data-regression.cjs
+node .\backend\check-grading-data.js
+```
+
+The first command uses mock responses. The second requires local MySQL and the
+activated runtime configuration in `backend/.env`; it reads aggregate counts in
+one read-only snapshot. Exit 0 means the checked data thresholds are met, exit 2
+means the inspection succeeded but data coverage needs attention, and exit 1
+means the inspection failed. It does not install objects or create sample data.
+Keep the existing database; do not rerun its setup/seed scripts to fill gaps.
+
+For the confirmed catalogue shortfall, see
+[demonstration data completion](../docs/DEMO_DATA_COMPLETION.md).
+`node backend/add-grading-catalogue.js` from the repository root shows a read-only
+plan; `--apply` inserts only missing matching demo rooms/services in a transaction.
+It uses the restricted runtime account, skips existing matches and stops on
+conflicts. Guest registration, bookings, service usage and payments remain UI
+steps so their actual validation and audit workflows are exercised.
+
 ## Authentication
 
 Access JWTs authorize requests; rotating refresh tokens are recorded as SHA-256
