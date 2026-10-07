@@ -1,0 +1,118 @@
+.guest-bill-page { color: #173d35; }
+.guest-bill-page .gb-back-link { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 27px; color: #53685d; font-size: 12px; text-decoration: none; }
+.guest-bill-page .gb-back-link:hover { color: #173d35; text-decoration: underline; text-underline-offset: 4px; }
+.guest-bill-page .gb-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin-bottom: 34px; }
+.guest-bill-page .gb-page-heading > div { min-width: 0; }
+.guest-bill-page .gb-eyebrow { margin: 0 0 12px; color: #86632e; font-size: 10px; font-weight: 700; line-height: 1.5; letter-spacing: 1.8px; }
+.guest-bill-page h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 4.4vw, 52px); font-weight: 400; line-height: 1.15; letter-spacing: -1.1px; }
+.guest-bill-page h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 29px; font-weight: 400; line-height: 1.2; letter-spacing: -.45px; }
+.guest-bill-page .gb-introduction { max-width: 580px; margin: 17px 0 0; color: #5a6b5f; font-size: 14px; line-height: 1.8; }
+.guest-bill-page .gb-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex-shrink: 0; min-height: 45px; padding: 12px 20px; border: 1px solid #c9d0c3; border-radius: 3px; color: #173d35; background: #fffefa; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.guest-bill-page .gb-button:hover { border-color: #91a293; background: #eef0e7; }
+.guest-bill-page .gb-button:disabled { opacity: .55; cursor: not-allowed; }
+.guest-bill-page :is(a, button, [tabindex]):focus-visible { outline: 2px solid #a7782e; outline-offset: 4px; }
+.guest-bill-page .gb-reference-bar { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 28px; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; }
+.guest-bill-page .gb-references { display: flex; flex-wrap: wrap; gap: 18px 45px; margin: 0; }
+.guest-bill-page .gb-references dt { margin: 0 0 7px; color: #61736a; font-size: 10px; font-weight: 500; }
+.guest-bill-page .gb-references dd { margin: 0; font-size: 15px; font-weight: 600; }
+.guest-bill-page .gb-status { display: inline-block; flex-shrink: 0; padding: 7px 12px; border: 1px solid #d4ddcf; border-radius: 3px; color: #3b5c49; background: #eef3e9; font-size: 11px; font-weight: 600; line-height: 1.5; }
+.guest-bill-page .gb-status[data-status="Booked"] { border-color: #e2d6bc; color: #735923; background: #f8f1e4; }
+.guest-bill-page .gb-status[data-status="Cancelled"] { border-color: #e7d5d1; color: #853f34; background: #faf0ed; }
+.guest-bill-page .gb-status[data-status="Checked-Out"] { color: #5f6b62; background: #f0f2ed; }
+.guest-bill-page .gb-summary-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 24px; margin-top: 24px; }
+.guest-bill-page .gb-charge-summary { padding: 30px 32px; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; }
+.guest-bill-page .gb-section-copy { margin: 13px 0 22px; color: #617166; font-size: 12px; line-height: 1.8; }
+.guest-bill-page .gb-charge-lines { margin: 26px 0 0; }
+.guest-bill-page .gb-charge-lines > div { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; margin-top: 17px; }
+.guest-bill-page .gb-charge-lines dt { color: #56685c; font-size: 13px; line-height: 1.6; }
+.guest-bill-page .gb-charge-lines dd { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.6; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.guest-bill-page .gb-charge-lines .gb-total-line { margin-top: 24px; padding-top: 21px; border-top: 1px solid #dce0d5; }
+.guest-bill-page .gb-total-line dt { color: #173d35; font-size: 14px; font-weight: 600; }
+.guest-bill-page .gb-total-line dd { font-size: 20px; }
+.guest-bill-page .gb-balance-panel { padding: 30px; border: 1px solid #173d35; border-radius: 3px; color: #fffdf3; background: #173d35; }
+.guest-bill-page .gb-balance-panel .gb-eyebrow { color: #e1c596; }
+.guest-bill-page .gb-balance-panel h2 { font-family: inherit; font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.6; }
+.guest-bill-page .gb-balance-amount { margin: 10px 0 14px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(27px, 2.8vw, 35px); line-height: 1.2; letter-spacing: -.5px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.guest-bill-page .gb-payment-status { display: inline-block; padding: 5px 9px; border: 1px solid #7c8f69; border-radius: 2px; color: #f2deb5; font-size: 10px; font-weight: 600; line-height: 1.5; }
+.guest-bill-page .gb-payment-status[data-status="Paid"] { color: #def0db; }
+.guest-bill-page .gb-paid-total { margin: 24px 0 0; padding-top: 18px; border-top: 1px solid #3d5f50; }
+.guest-bill-page .gb-paid-total > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.guest-bill-page .gb-paid-total dt { color: #d2ddd0; font-size: 11px; line-height: 1.6; }
+.guest-bill-page .gb-paid-total dd { margin: 0; font-size: 12px; font-weight: 600; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.guest-bill-page .gb-balance-note { margin: 18px 0 0; color: #cfdbc9; font-size: 11px; line-height: 1.8; }
+.guest-bill-page .gb-balance-estimate { background: #eef1e7; color: #173d35; border-color: #d7dfcf; }
+.guest-bill-page .gb-balance-estimate .gb-eyebrow { color: #86632e; }
+.guest-bill-page .gb-balance-estimate h2 { margin-top: 24px; font-family: Georgia, "Times New Roman", serif; font-size: 28px; line-height: 1.2; }
+.guest-bill-page .gb-estimate-copy { margin: 18px 0 0; color: #56685c; font-size: 13px; line-height: 1.8; }
+.guest-bill-page .gb-cancelled-note { display: flex; align-items: flex-start; gap: 20px; margin-top: 24px; padding: 28px 30px; border: 1px solid #dedfd3; border-radius: 3px; background: #f1f0e9; }
+.guest-bill-page .gb-cancelled-note h2 { font-size: 25px; }
+.guest-bill-page .gb-cancelled-note p { margin: 12px 0 0; color: #617166; font-size: 13px; line-height: 1.8; }
+.guest-bill-page .gb-bill-icon { flex-shrink: 0; color: #9b7941; }
+.guest-bill-page .gb-history-section { margin-top: 40px; }
+.guest-bill-page .gb-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+.guest-bill-page .gb-section-heading .gb-eyebrow { margin-bottom: 10px; }
+.guest-bill-page .gb-entry-count { flex-shrink: 0; padding-bottom: 3px; color: #617166; font-size: 11px; line-height: 1.6; }
+.guest-bill-page .gb-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; }
+.guest-bill-page .gb-history-table { width: 100%; border-collapse: collapse; color: #405a4d; font-size: 12px; line-height: 1.6; }
+.guest-bill-page .gb-services-table { min-width: 710px; }
+.guest-bill-page .gb-payments-table { min-width: 680px; }
+.guest-bill-page .gb-history-table caption { padding: 12px 22px; border-bottom: 1px solid #e2e5dc; color: #617166; background: #f7f7f0; text-align: left; font-size: 10px; line-height: 1.7; }
+.guest-bill-page .gb-history-table th, .guest-bill-page .gb-history-table td { padding: 17px 20px; border: 0; border-bottom: 1px solid #e5e8df; text-align: left; vertical-align: top; }
+.guest-bill-page .gb-history-table thead th { padding-top: 13px; padding-bottom: 13px; color: #687467; background: #fffefa; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.guest-bill-page .gb-history-table tbody th { max-width: 320px; color: #173d35; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.guest-bill-page .gb-history-table .gb-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.guest-bill-page .gb-history-table .gb-amount { color: #173d35; font-weight: 600; }
+.guest-bill-page .gb-history-table time { white-space: nowrap; }
+.guest-bill-page .gb-row-detail, .guest-bill-page .gb-date-clock { display: block; margin-top: 4px; color: #748073; font-size: 10px; font-weight: 400; }
+.guest-bill-page .gb-history-table tfoot th, .guest-bill-page .gb-history-table tfoot td { padding-top: 15px; padding-bottom: 15px; border: 0; color: #173d35; background: #eef2e8; font-weight: 600; }
+.guest-bill-page .gb-history-table tfoot th { text-align: right; }
+.guest-bill-page .gb-empty-history { margin: 0; padding: 25px 28px; border: 1px dashed #cdd6c5; border-radius: 3px; color: #657363; background: #f5f6ee; font-size: 13px; line-height: 1.7; }
+.guest-bill-page .gb-page-note { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin-top: 32px; padding-top: 22px; border-top: 1px solid #dce0d5; color: #617166; font-size: 11px; line-height: 1.8; }
+.guest-bill-page .gb-page-note p { max-width: 600px; margin: 0; }
+.guest-bill-page .gb-page-note a { flex-shrink: 0; color: #315441; font-weight: 600; text-underline-offset: 4px; }
+.guest-bill-page .gb-page-note a:hover { text-decoration: underline; }
+.guest-bill-page .gb-page-note a span { margin-left: 9px; }
+.guest-bill-page .gb-state-panel { padding: 58px 28px; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; text-align: center; }
+.guest-bill-page .gb-state-panel .gb-bill-icon { margin-bottom: 22px; }
+.guest-bill-page .gb-state-panel h1 { font-size: clamp(28px, 4vw, 40px); }
+.guest-bill-page .gb-state-panel p { max-width: 560px; margin: 17px auto 0; color: #617166; font-size: 13px; line-height: 1.8; }
+.guest-bill-page .gb-state-panel .gb-error { color: #93472f; }
+.guest-bill-page .gb-state-panel .gb-button { margin-top: 22px; }
+.guest-bill-page .gb-notice { margin: 24px 0; padding: 22px; border: 1px solid #dce0d5; background: #fffefa; }
+
+@media (max-width: 850px) {
+  .guest-bill-page .gb-summary-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+  .guest-bill-page .gb-charge-summary, .guest-bill-page .gb-balance-panel { padding: 25px 22px; }
+  .guest-bill-page .gb-balance-amount { font-size: 28px; }
+  .guest-bill-page .gb-charge-lines .gb-total-line { align-items: flex-start; }
+  .guest-bill-page .gb-total-line dd { font-size: 18px; }
+}
+
+@media (max-width: 680px) {
+  .guest-bill-page .gb-back-link { margin-bottom: 22px; }
+  .guest-bill-page .gb-page-heading { align-items: flex-start; flex-direction: column; gap: 19px; margin-bottom: 24px; }
+  .guest-bill-page h1 { font-size: 35px; }
+  .guest-bill-page .gb-introduction { margin-top: 14px; font-size: 13px; }
+  .guest-bill-page .gb-reference-bar { align-items: flex-start; padding: 20px; gap: 15px; }
+  .guest-bill-page .gb-references { gap: 17px 28px; }
+  .guest-bill-page .gb-references dd { font-size: 13px; }
+  .guest-bill-page .gb-status { padding: 5px 8px; font-size: 10px; }
+  .guest-bill-page .gb-summary-grid { grid-template-columns: minmax(0, 1fr); }
+  .guest-bill-page .gb-balance-amount { font-size: 33px; }
+  .guest-bill-page .gb-balance-estimate h2 { margin-top: 16px; }
+  .guest-bill-page .gb-history-section { margin-top: 32px; }
+  .guest-bill-page h2 { font-size: 27px; }
+  .guest-bill-page .gb-section-copy { margin-bottom: 18px; }
+  .guest-bill-page .gb-cancelled-note { gap: 13px; padding: 23px 20px; }
+  .guest-bill-page .gb-cancelled-note .gb-bill-icon { width: 29px; height: 34px; }
+  .guest-bill-page .gb-cancelled-note h2 { font-size: 23px; }
+  .guest-bill-page .gb-empty-history { padding: 22px; }
+  .guest-bill-page .gb-page-note { flex-direction: column; gap: 15px; }
+}
+
+@media (max-width: 380px) {
+  .guest-bill-page .gb-reference-bar { flex-wrap: wrap; }
+  .guest-bill-page .gb-charge-lines > div { gap: 12px; }
+  .guest-bill-page .gb-charge-lines dd { font-size: 12px; }
+  .guest-bill-page .gb-total-line dd { font-size: 16px; }
+}

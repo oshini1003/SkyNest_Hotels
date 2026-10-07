@@ -767,3 +767,23 @@ node .\backend\test-audit-log.js checkin
 ```
 
 Run `service`, `payment` and `checkout` in place of `checkin` after completing those actions. The optional `TEST_AUDIT_EXPECTED_ACTOR_TYPE` (`staff` or `guest`) and `TEST_AUDIT_EXPECTED_ACTOR_ID` check the actor of the latest operation for that stage. No API test password is required; the verifier reads the existing backend MySQL configuration and prints no credentials.
+
+## Guest bill verification
+
+The guest bill page uses the existing guest-owned
+`GET /api/bookings/:bookingId/bill` snapshot. No schema, procedure, grant or
+production API changes are needed for this page.
+
+`node backend/test-guest-bill.js` (from the repository root) checks an existing
+saved bill with two distinct guest accounts: owner access, anonymous/non-owner
+denial, saved service-price and payment reconciliation, and stable repeated
+reads. It uses GET requests for hotel data and creates/closes only its own login
+sessions. It never adds a payment or changes a reservation. See
+[the setup and browser checklist](../docs/GUEST_BILL_VERIFICATION.md).
+
+```powershell
+node .\backend\tests\guest-bill-smoke-regression.cjs
+```
+
+This regression checks the smoke verifier with mocked API fixtures, not live
+MySQL. Existing bill and service ownership controller tests remain applicable.

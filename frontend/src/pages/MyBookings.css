@@ -2,6 +2,13 @@
   color: #173d35;
 }
 
+.my-bookings-page .mb-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
 .my-bookings-page .mb-page-heading {
   display: flex;
   justify-content: space-between;

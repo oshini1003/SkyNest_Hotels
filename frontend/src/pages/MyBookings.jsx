@@ -46,7 +46,7 @@ export default function MyBookings({ session }) {
         <div>
           <p className="mb-eyebrow">YOUR SKYNEST STAYS</p>
           <h1 id="my-bookings-heading">My bookings</h1>
-          <p className="mb-introduction">Your reservations, all in one place. Review your stay details and manage your upcoming bookings.</p>
+          <p className="mb-introduction">Your reservations, all in one place. Review your stay, view charges and payments, and manage upcoming bookings.</p>
         </div>
         <nav className="mb-heading-actions" aria-label="Guest booking actions">
           <Link className="mb-button mb-button-primary" to="/rooms">Find a room <span aria-hidden="true">↗</span></Link>
@@ -163,9 +163,12 @@ function BookingCard({ booking, token, onRefresh }) {
       </div>
       <footer className="mb-card-footer">
         <p className="mb-payment-preference"><span>Preferred payment method</span><strong>{booking.PreferredPaymentMethod}</strong></p>
-        {booking.BookingStatus === "Booked" && !uncertain && !confirming && (
-          <button className="mb-cancel-link" type="button" onClick={() => { setConfirming(true); setError(""); }}>Cancel booking</button>
-        )}
+        <div className="mb-card-actions">
+          <Link className="mb-button mb-button-secondary" to={`/guest/bookings/${booking.BookingID}/bill`} aria-label={`View bill and services for booking ${booking.BookingID}`}>View bill &amp; services <span aria-hidden="true">→</span></Link>
+          {booking.BookingStatus === "Booked" && !uncertain && !confirming && (
+            <button className="mb-cancel-link" type="button" onClick={() => { setConfirming(true); setError(""); }}>Cancel booking</button>
+          )}
+        </div>
       </footer>
       {booking.BookingStatus === "Booked" && !uncertain && confirming && (
         <div className="mb-cancel-review">

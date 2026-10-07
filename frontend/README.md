@@ -264,3 +264,37 @@ The frontend client regression is
 `node frontend/tests/staff-branch-api-regression.mjs` from the repository root.
 It loads the actual module through Vite with mocked fetch; it is not a browser or
 live MySQL test.
+
+## Guest bill and service history
+
+Each card in **My bookings** links to `/guest/bookings/:id/bill`. Guests can
+review a saved bill's room-charge total, itemized services at their recorded
+prices, saved payments and remaining balance. Payment classifications describe
+individual saved entries; the bill status describes the current whole bill.
+Hotel date/time strings are displayed without conversion to the browser's zone.
+
+The page makes one authenticated GET to `/api/bookings/:id/bill` per load or
+refresh. That endpoint already reads a consistent database snapshot and checks
+guest ownership. The page does not create services, payments, bookings or
+checkout actions. It does not invent historical room-by-room prices from the
+current catalogue. A reservation without a saved bill is labelled **estimate**;
+a cancelled reservation without a bill does not show an estimated balance due.
+
+Loading or refreshing clears the preceding view. Switching booking references or
+guest sessions remounts the view, and stale responses cannot display another
+session's data or clear a newer sign-in. Direct bill links return to their own
+canonical local route after sign-in, including a switch between login and
+registration. Malformed/external return destinations are not accepted.
+
+Local checks from the repository root:
+
+```powershell
+node .\frontend\tests\guest-billing-api-regression.mjs
+node .\backend\tests\guest-bill-smoke-regression.cjs
+npm --prefix frontend run build
+```
+
+The client suite loads actual modules through Vite with mocked HTTP. The smoke
+checker regression uses independent fixtures; neither connects to live MySQL.
+See [guest bill verification](../docs/GUEST_BILL_VERIFICATION.md) for the browser
+and live ownership checks. No database migration or new privileges are required.
