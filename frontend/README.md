@@ -336,3 +336,37 @@ npm --prefix frontend run build
 The regression modules use mocked HTTP, not the live database. Use
 `docs/GUEST_SERVICE_VERIFICATION.md` for one controlled browser submission and
 read-only audit verification. No migration, new grants or database reset is needed.
+
+## Staff arrival workspace (8 October 2026)
+
+The live staff login, reservation search and reservation detail/check-in pages
+now use the cream, deep green and gold hotel design. Each page has its own scoped
+stylesheet; shared navigation and other guest/staff pages keep their existing styles.
+
+- `/staff/login`: photographic welcome panel, accessible password visibility
+  control, session notices and sign-in errors. Small screens prioritize the form.
+- `/staff/bookings`: labelled search fields, verified branch-access display,
+  readable reservation cards and explicit loading, changed-filter, empty and
+  error states. Mobile cards include every room and its dates without a wide table.
+- `/staff/bookings/:id`: guest details, room/stay cards, a check-in confirmation
+  panel and links to existing services and billing screens.
+
+This is a frontend presentation update. It uses the existing authentication,
+branch scope, booking reads and check-in endpoint. Server eligibility, role checks,
+explicit confirmation, duplicate-click protection and fresh-status requirements
+following a failed/uncertain check-in are preserved. It does not add booking
+editing or multiple-room selection; those are separate team work.
+
+Checks from the repository root:
+
+```powershell
+node .\frontend\tests\staff-branch-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The client regression uses mocked HTTP. For a local visual check, sign in with an
+existing staff account, search a reservation in its assigned branch, open its
+booking details and check the same pages at a narrow window width. Viewing a
+reservation does not check it in. Use an eligible test reservation only when
+intentionally verifying the check-in action. No backend changes, migrations or
+new database grants are included in this update.
