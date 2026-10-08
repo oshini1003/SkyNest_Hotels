@@ -406,3 +406,42 @@ existing reservation's services and billing pages, inspect its saved history and
 check both pages at desktop and narrow window widths. No new service, payment or
 checkout is needed for this visual review. No backend files, database objects,
 API contracts or dependencies are changed by this update.
+
+## Manager reports workspace (8 October 2026)
+
+`/staff/reports` uses the approved cream, deep green and gold staff theme, with a
+dedicated filter panel, report explanations and readable results. All five report
+types remain available to managers and administrators. Comparison tables keep
+their captions, column and row headings, bill links and every saved data field.
+Wide tables scroll inside a labelled, keyboard-focusable region on small screens.
+
+The report definitions are unchanged:
+
+- Current occupancy uses all rooms, including maintenance rooms, as its denominator.
+  A branch with no rooms shows a not-applicable rate.
+- Billing summary shows saved charges, paid amounts and outstanding balances.
+- Service charges use historical saved prices; usage entries and quantities are
+  shown separately.
+- Finalized bill totals use the month the bill was opened, not the payment or
+  checkout month. They are not a cash-receipts report.
+- Most used services retains the server ordering by saved usage entries.
+
+Existing branch-scope explanations remain visible. Editing any filter clears the
+previous results until Load report is selected. Loading, changed-filter, empty,
+error and restricted-access states have matching layouts. Permission checks,
+request cancellation, session protection, API validation and amount formatting
+remain unchanged. This is a frontend presentation update.
+
+Build from the repository root:
+
+```powershell
+npm --prefix frontend run build
+```
+
+Source comparison and independent review check preservation of existing report
+logic; they do not verify browser rendering or live database results. For a local
+visual check, sign in as a manager, open all five report types, select a branch,
+and inspect a billing summary with saved history. Check both a normal window and
+a phone-width window, including keyboard focus and horizontal table scrolling.
+These report reads do not change hotel records. No migration or new grant is
+required for this presentation update.
