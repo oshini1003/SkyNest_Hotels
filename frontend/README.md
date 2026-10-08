@@ -264,3 +264,236 @@ The frontend client regression is
 `node frontend/tests/staff-branch-api-regression.mjs` from the repository root.
 It loads the actual module through Vite with mocked fetch; it is not a browser or
 live MySQL test.
+
+## Guest bill and service history
+
+Each card in **My bookings** links to `/guest/bookings/:id/bill`. Guests can
+review a saved bill's room-charge total, itemized services at their recorded
+prices, saved payments and remaining balance. Payment classifications describe
+individual saved entries; the bill status describes the current whole bill.
+Hotel date/time strings are displayed without conversion to the browser's zone.
+
+The page makes one authenticated GET to `/api/bookings/:id/bill` per load or
+refresh. That endpoint already reads a consistent database snapshot and checks
+guest ownership. The page does not create services, payments, bookings or
+checkout actions. It does not invent historical room-by-room prices from the
+current catalogue. A reservation without a saved bill is labelled **estimate**;
+a cancelled reservation without a bill does not show an estimated balance due.
+
+Loading or refreshing clears the preceding view. Switching booking references or
+guest sessions remounts the view, and stale responses cannot display another
+session's data or clear a newer sign-in. Direct bill links return to their own
+canonical local route after sign-in, including a switch between login and
+registration. Malformed/external return destinations are not accepted.
+
+Local checks from the repository root:
+
+```powershell
+node .\frontend\tests\guest-billing-api-regression.mjs
+node .\backend\tests\guest-bill-smoke-regression.cjs
+npm --prefix frontend run build
+```
+
+The client suite loads actual modules through Vite with mocked HTTP. The smoke
+checker regression uses independent fixtures; neither connects to live MySQL.
+See [guest bill verification](../docs/GUEST_BILL_VERIFICATION.md) for the browser
+and live ownership checks. No database migration or new privileges are required.
+
+## Guest service requests (7 October 2026)
+
+`/guest/bookings/:id/services` lets an authenticated booking owner choose an active
+service and a whole-number quantity during a Checked-In stay. My bookings and the
+saved bill link to this page. A direct service URL returns after sign-in/register.
+The design uses the restored cream, deep green and gold hotel palette, matching
+bill/history pages, with responsive service cards, a charge review and saved history.
+
+The displayed charge is a catalogue estimate. Confirming **Request & add to bill**
+records usage and adds its charge immediately using the server's current saved
+price. This is not a scheduled-service or staff-approval queue. It does not process
+payments. For timing or special arrangements, guests should contact reception.
+
+The page uses the existing bill/catalogue reads and `POST /api/service-usage`.
+Only `bookingId`, `serviceId` and `quantity` are posted; authenticated identity,
+price, booking ownership/state, transactions and audit records remain server-owned.
+Amounts are calculated in exact cents for review. Invalid quantities, unavailable
+catalogue, non-Checked-In stays and unverified bills block submission.
+
+An account/booking-scoped session-storage marker is written before the one POST.
+Double clicks and an unresolved request in this browser tab block another request.
+Timeouts, interrupted navigation, unreadable success responses and server failures
+are not retried. A confirmed save is followed by a fresh bill; an uncertain result
+stays blocked until the guest reviews history and confirms checking with reception.
+This is a browser precaution, not server idempotency or cross-tab duplicate control.
+
+Local verification:
+
+```powershell
+node .\frontend\tests\guest-service-api-regression.mjs
+node .\frontend\tests\guest-billing-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The regression modules use mocked HTTP, not the live database. Use
+`docs/GUEST_SERVICE_VERIFICATION.md` for one controlled browser submission and
+read-only audit verification. No migration, new grants or database reset is needed.
+
+## Staff arrival workspace (8 October 2026)
+
+The live staff login, reservation search and reservation detail/check-in pages
+now use the cream, deep green and gold hotel design. Each page has its own scoped
+stylesheet; shared navigation and other guest/staff pages keep their existing styles.
+
+- `/staff/login`: photographic welcome panel, accessible password visibility
+  control, session notices and sign-in errors. Small screens prioritize the form.
+- `/staff/bookings`: labelled search fields, verified branch-access display,
+  readable reservation cards and explicit loading, changed-filter, empty and
+  error states. Mobile cards include every room and its dates without a wide table.
+- `/staff/bookings/:id`: guest details, room/stay cards, a check-in confirmation
+  panel and links to existing services and billing screens.
+
+This is a frontend presentation update. It uses the existing authentication,
+branch scope, booking reads and check-in endpoint. Server eligibility, role checks,
+explicit confirmation, duplicate-click protection and fresh-status requirements
+following a failed/uncertain check-in are preserved. It does not add booking
+editing or multiple-room selection; those are separate team work.
+
+Checks from the repository root:
+
+```powershell
+node .\frontend\tests\staff-branch-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The client regression uses mocked HTTP. For a local visual check, sign in with an
+existing staff account, search a reservation in its assigned branch, open its
+booking details and check the same pages at a narrow window width. Viewing a
+reservation does not check it in. Use an eligible test reservation only when
+intentionally verifying the check-in action. No backend changes, migrations or
+new database grants are included in this update.
+
+## Staff services and billing workspace (8 October 2026)
+
+The service-recording and bill/payment/checkout pages now match the staff arrival
+workspace with cream panels, deep green actions, gold accents and serif headings.
+Each page has scoped styles and layouts that adapt to narrow screens.
+
+- `/staff/bookings/:id/services`: guest and room context, a current bill summary,
+  service selection and charge review, followed by saved service history cards.
+- `/staff/bookings/:id/bill`: invoice totals, guest/stay context, payment review,
+  checkout confirmation, saved service charges and payment history cards.
+
+History retains the saved identifiers, dates, quantities, unit prices, line totals,
+payment methods and payment classifications. The displayed figures use the same
+existing API responses and calculations. This update changes presentation only.
+
+Service recording still reviews a charge before saving it. Payment recording
+still records money already received; it does not charge a card or start a bank
+transfer. Role checks, checked-in/open-bill requirements, exact-zero checkout,
+duplicate-click guards, fresh reads and uncertain-outcome warnings are preserved.
+The existing billing attempt marker and manual reconciliation remain in place.
+
+Checks from the repository root:
+
+```powershell
+node .\frontend\tests\staff-branch-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The client regression uses mocked HTTP. Source comparison verifies that the
+existing state, calculations, handlers and eligibility expressions are unchanged;
+it is not an executed browser interaction test. For visual verification, open an
+existing reservation's services and billing pages, inspect its saved history and
+check both pages at desktop and narrow window widths. No new service, payment or
+checkout is needed for this visual review. No backend files, database objects,
+API contracts or dependencies are changed by this update.
+
+## Manager reports workspace (8 October 2026)
+
+`/staff/reports` uses the approved cream, deep green and gold staff theme, with a
+dedicated filter panel, report explanations and readable results. All five report
+types remain available to managers and administrators. Comparison tables keep
+their captions, column and row headings, bill links and every saved data field.
+Wide tables scroll inside a labelled, keyboard-focusable region on small screens.
+
+The report definitions are unchanged:
+
+- Current occupancy uses all rooms, including maintenance rooms, as its denominator.
+  A branch with no rooms shows a not-applicable rate.
+- Billing summary shows saved charges, paid amounts and outstanding balances.
+- Service charges use historical saved prices; usage entries and quantities are
+  shown separately.
+- Finalized bill totals use the month the bill was opened, not the payment or
+  checkout month. They are not a cash-receipts report.
+- Most used services retains the server ordering by saved usage entries.
+
+Existing branch-scope explanations remain visible. Editing any filter clears the
+previous results until Load report is selected. Loading, changed-filter, empty,
+error and restricted-access states have matching layouts. Permission checks,
+request cancellation, session protection, API validation and amount formatting
+remain unchanged. This is a frontend presentation update.
+
+Build from the repository root:
+
+```powershell
+npm --prefix frontend run build
+```
+
+Source comparison and independent review check preservation of existing report
+logic; they do not verify browser rendering or live database results. For a local
+visual check, sign in as a manager, open all five report types, select a branch,
+and inspect a billing summary with saved history. Check both a normal window and
+a phone-width window, including keyboard focus and horizontal table scrolling.
+These report reads do not change hotel records. No migration or new grant is
+required for this presentation update.
+
+## Page bundles and loading states (8 October 2026)
+
+The home page and shared navigation load immediately. Eighteen other live pages
+load their JavaScript and styles when first opened. Each has a stable, module-level
+lazy component and its own Suspense loading screen in the approved cream, green
+and gold theme. Existing page-level API loading and error messages still apply
+after a page opens. Development preview pages and demo data are loaded through
+a development-only adapter and are excluded from production bundles.
+
+A page display error leaves the shared navigation available, with explicit
+Refresh page and Return home actions. There is no automatic reload or retry.
+The message asks users to check saved history before repeating a booking, payment
+or service action. An error does not prove whether an in-flight save succeeded.
+Refreshing can discard unsaved form fields.
+
+All live route paths, authentication guards, return destinations, props and
+existing session keys are retained. The outer error boundary clears a caught
+error after navigation or a relevant account change, without remounting healthy
+routes. In particular, the same-path history replacement used during booking
+confirmation does not remount its form. Page implementations, financial attempt
+markers, service APIs, backend code and database objects are unchanged.
+
+Checks from the repository root:
+
+```powershell
+node .\frontend\tests\page-loading-regression.mjs
+node .\frontend\tests\account-session-regression.mjs
+node .\frontend\tests\staff-branch-api-regression.mjs
+node .\frontend\tests\guest-billing-api-regression.mjs
+node .\frontend\tests\guest-service-api-regression.mjs
+node .\frontend\tests\dashboard-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The page-loading regression performs a real production build in a temporary
+directory. It checks the emitted manifest and module graph, a 350,000-byte initial
+JavaScript budget including static dependencies, deferred page code and styles,
+preview exclusion and actual component exports. It removes that temporary build
+and does not replace `frontend/dist`. The baseline initial JavaScript was about
+502 kB; the split build is about 306 kB including static dependencies. These are
+minified build sizes, not measured network transfer or page-load timings.
+
+Source comparison and the tests do not exercise browser navigation or client
+error-boundary recovery. Before merging, use the browser to open Rooms, Services,
+guest sign-in/account/bookings and existing bill/service histories, then the staff
+workspace and manager reports. Check a signed-out protected deep link still leads
+to sign-in and returns to its intended page. Inspect the loading state with network
+throttling and the failure screen by blocking an unopened public page module;
+restore the connection and use Refresh page. Do not block a request while saving.
+Check desktop and phone widths. Existing records can be viewed for these checks;
+no new booking, payment, service or database migration is needed.

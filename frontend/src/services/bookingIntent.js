@@ -28,6 +28,7 @@ export function selectedStay(value) {
 }
 
 export function guestReturnDestination(state) {
+  if (guestStayPath(state?.returnTo)) return { pathname: state.returnTo };
   if (state?.returnTo === "/guest/bookings") return { pathname: "/guest/bookings" };
   const stay = selectedStay(state?.stay);
   if (state?.returnTo === "/make-booking" && stay) {
@@ -37,6 +38,7 @@ export function guestReturnDestination(state) {
 }
 
 export function guestSignInState(pathname, state) {
+  if (guestStayPath(pathname)) return { returnTo: pathname };
   if (pathname === "/guest/bookings" || state?.bookingSubmitted === true) {
     return { returnTo: "/guest/bookings" };
   }
@@ -44,4 +46,11 @@ export function guestSignInState(pathname, state) {
   return pathname === "/make-booking" && stay
     ? { returnTo: "/make-booking", stay }
     : undefined;
+}
+
+// Keep only a canonical local bill or service route across sign-in and registration.
+function guestStayPath(value) {
+  if (typeof value !== "string") return false;
+  const match = /^\/guest\/bookings\/([1-9]\d*)\/(?:bill|services)$/.exec(value);
+  return Boolean(match && Number(match[1]) <= 2147483647);
 }

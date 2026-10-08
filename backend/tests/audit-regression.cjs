@@ -50,6 +50,88 @@ function fixtures() {
   return { checkin, service, payment, checkout: snapshot };
 }
 
+// Independently specified bill transitions cover a service added after an earlier
+// partial payment, and a new charge reopening a previously fully paid bill.
+function guestServiceAfterPaymentFixture(fullyPaid = false) {
+  const staffService = { UsageID: 51, BookingID: bookingId, ServiceID: 1,
+    Quantity: 1, PriceAtUsage: '1500.00' };
+  const guestService = { UsageID: 52, BookingID: bookingId, ServiceID: 4,
+    Quantity: 2, PriceAtUsage: '800.00' };
+  const payment = { PaymentID: 61, BookingID: bookingId, BillID: billId,
+    Amount: fullyPaid ? '13500.00' : '6750.00',
+    PaymentType: fullyPaid ? 'Full' : 'Partial', PaymentMethod: 'Cash' };
+  const withService = { ...baseBill, ServiceCharges: '1500.00', TotalAmount: '13500.00' };
+  const withPayment = { ...withService, BillStatus: fullyPaid ? 'Paid' : 'Partially Paid' };
+  const finalBill = { ...baseBill, ServiceCharges: '3100.00', TotalAmount: '15100.00',
+    BillStatus: 'Partially Paid' };
+  const snapshot = { booking: { ...header('Checked-In'), GuestID: guestId },
+    bill: copy(finalBill), services: [staffService, guestService], payments: [payment], audit: [] };
+  const operations = [
+    ['Check-In', 'BOOKING', bookingId, header('Booked'), header('Checked-In'), 'BillOpened', null, baseBill, 'staff', 3],
+    ['ServiceUsageRecorded', 'SERVICE_USAGE', 51, null, staffService, 'BillRecalculated', baseBill, withService, 'staff', 4],
+    ['PaymentProcessed', 'PAYMENT', 61, null, payment, 'BillPaymentApplied', withService, withPayment, 'staff', 3],
+    ['ServiceUsageRecorded', 'SERVICE_USAGE', 52, null, guestService, 'BillRecalculated', withPayment, finalBill, 'guest', guestId],
+  ];
+  for (const [index, operation] of operations.entries()) {
+    const [action, table, recordId, oldValue, value, billAction, before, after, actorType, actorId] = operation;
+    const common = { OperationID: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ActorType: actorType, StaffID: actorType === 'staff' ? actorId : null,
+      GuestID: actorType === 'guest' ? actorId : null, BookingID: bookingId,
+      CreatedAt: `2026-10-07 10:${String(20 + index).padStart(2, '0')}:00.000000` };
+    snapshot.audit.push({ ...common, AuditID: String(101 + index * 2), Action: action,
+      TableAffected: table, RecordID: recordId, OldValues: copy(oldValue), NewValues: copy(value) });
+    snapshot.audit.push({ ...common, AuditID: String(102 + index * 2), Action: billAction,
+      TableAffected: 'BILL', RecordID: billId, OldValues: copy(before), NewValues: copy(after) });
+  }
+  return snapshot;
+}
+
+function testGuestServicesAfterPayments() {
+  const guestConfig = config('guest-service');
+  for (const fullyPaid of [false, true]) {
+    const snapshot = guestServiceAfterPaymentFixture(fullyPaid);
+    assert.deepEqual(verifyScenario(guestConfig, snapshot), {
+      events: 8, operations: 4, services: 2, payments: 1,
+      paidCents: fullyPaid ? '1350000' : '675000',
+    });
+    assert.equal(snapshot.bill.BillStatus, 'Partially Paid');
+    verifyScenario({ ...guestConfig, actorType: 'guest', actorId: String(guestId) }, snapshot);
+    assert.throws(() => verifyScenario({ ...guestConfig, actorType: 'guest', actorId: '99' }, snapshot), /different account/);
+    assert.throws(() => verifyScenario({ ...guestConfig, actorType: 'staff', actorId: '3' }, snapshot), /different actor type/);
+    assert.throws(() => verifyScenario(config('service'), snapshot), /Select payment or checkout/,
+      'The existing service stage must continue rejecting histories with payments.');
+  }
+  verifyScenario(guestConfig, fixtures().service); // Earlier payment is allowed, not required.
+  assert.throws(() => verifyScenario(guestConfig, fixtures().checkin), /Record a service/);
+  assert.throws(() => verifyScenario(guestConfig, fixtures().payment), /latest operation/);
+  assert.throws(() => verifyScenario(guestConfig, fixtures().checkout), /Checked-In stay/);
+  const failures = [
+    ['Staff last service', data => {
+      for (const row of data.audit.slice(-2)) { row.ActorType = 'staff'; row.StaffID = 4; row.GuestID = null; }
+    }, /recorded by the owning guest/],
+    ['Foreign last guest', data => { for (const row of data.audit.slice(-2)) row.GuestID = 99; }, /own the booking/],
+    ['Missing last pair', data => { data.audit.pop(); }, /exactly/],
+    ['Missing prior payment pair', data => { data.audit.splice(4, 2); }, /gap/],
+    ['Changed service price', data => { data.services.at(-1).PriceAtUsage = '801.00'; }, /original saved price/],
+    ['Changed earlier payment', data => { data.payments[0].Amount = '6750.01'; }, /Amount differs/],
+    ['Broken before snapshot', data => { data.audit.at(-1).OldValues.BillStatus = 'Unpaid'; }, /gap/],
+    ['Wrong final paid status after added service', data => {
+      data.bill.BillStatus = 'Paid'; data.audit.at(-1).NewValues.BillStatus = 'Paid';
+    }, /status does not reconcile/],
+  ];
+  for (const [name, change, error] of failures) {
+    const data = guestServiceAfterPaymentFixture(); change(data);
+    assert.throws(() => verifyScenario(guestConfig, data), error, name);
+  }
+  assert.deepEqual(configuration(['guest-service'], { TEST_AUDIT_BOOKING_ID: '29' }), {
+    stage: 'guest-service', bookingId: '29', actorType: undefined, actorId: undefined,
+  });
+  assert.deepEqual(configuration(['guest-service'], { TEST_AUDIT_BOOKING_ID: '29',
+    TEST_AUDIT_EXPECTED_ACTOR_TYPE: 'guest', TEST_AUDIT_EXPECTED_ACTOR_ID: '17' }), {
+    stage: 'guest-service', bookingId: '29', actorType: 'guest', actorId: '17',
+  });
+}
+
 function testHistories() {
   const histories = fixtures();
   for (const stage of Object.keys(histories)) verifyScenario(config(stage), histories[stage]);
@@ -187,7 +269,8 @@ function testSqlContracts() {
 
 (async () => {
   testHistories();
+  testGuestServicesAfterPayments();
   await testReadOnlySnapshot();
   testSqlContracts();
-  console.log('PASS: independent audit history fixtures detect missing/duplicate events, actor and money mismatches; exact large IDs/amounts, saved history reconciliation and one read-only snapshot; SQL transaction/append-only/locking contracts (mock reads and static SQL, no live MySQL).');
+  console.log('PASS: independent audit histories including guest services after partial/full payments; missing/duplicate events, owning-guest/latest-action checks, exact saved prices/payments and bill continuity; one read-only snapshot and SQL transaction/append-only/locking contracts (mock reads and static SQL, no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

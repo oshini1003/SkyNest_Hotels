@@ -3,7 +3,8 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const stages = ['checkin', 'service', 'payment', 'checkout'];
+const sequentialStages = ['checkin', 'service', 'payment', 'checkout'];
+const stages = [...sequentialStages, 'guest-service'];
 const actions = {
   'Check-In': { table: 'BOOKING', companion: 'BillOpened' },
   ServiceUsageRecorded: { table: 'SERVICE_USAGE', companion: 'BillRecalculated' },
@@ -13,9 +14,11 @@ const actions = {
 const stageActions = ['Check-In', 'ServiceUsageRecorded', 'PaymentProcessed', 'Check-Out'];
 const billFields = ['BillID', 'BookingID', 'RoomCharges', 'ServiceCharges', 'TotalAmount', 'BillStatus', 'StaffID'];
 const moneyFields = ['RoomCharges', 'ServiceCharges', 'TotalAmount'];
-const usage = `Usage: node backend/test-audit-log.js checkin|service|payment|checkout
+const usage = `Usage: node backend/test-audit-log.js checkin|service|payment|checkout|guest-service
 Set TEST_AUDIT_BOOKING_ID to a NEW booking checked in after the audit migration.
 Perform each hotel action manually through the application before verifying its stage.
+guest-service requires the latest operation to be a service recorded by the owning guest
+while Checked-In; earlier payments are allowed. The owning guest is checked automatically.
 Optional: TEST_AUDIT_EXPECTED_ACTOR_TYPE=staff|guest and TEST_AUDIT_EXPECTED_ACTOR_ID.
 The optional identity checks the latest operation for the selected stage.
 Database settings come from backend/.env, independent of the current directory.
@@ -110,7 +113,9 @@ function verifyScenario(config, snapshot) {
   const seenServices = new Set(), seenPayments = new Set();
   const counts = Object.fromEntries(stageActions.map(action => [action, 0]));
   let lastBill = null, paid = 0n, checkedOut = false;
-  let selectedOperation;
+  let selectedOperation, latestOperation;
+  const selectedAction = config.stage === 'guest-service'
+    ? 'ServiceUsageRecorded' : stageActions[sequentialStages.indexOf(config.stage)];
   for (const [index, events] of operations.entries()) {
     assert.equal(events.length, 2, 'Each operation must contain exactly its action and bill audit events.');
     assert.equal(auditRows[index * 2], events[0], 'Operation events must remain together in booking history.');
@@ -184,7 +189,8 @@ function verifyScenario(config, snapshot) {
     }
     if (!checkedOut) assert.equal(after.StaffID, null, 'Bill finalizer must remain empty until checkout.');
     counts[primary.Action] += 1;
-    if (primary.Action === stageActions[stages.indexOf(config.stage)]) selectedOperation = primary;
+    if (primary.Action === selectedAction) selectedOperation = primary;
+    latestOperation = primary;
     lastBill = after;
   }
   assert.equal(counts['Check-In'], 1, 'Exactly one audited check-in is required.');
@@ -192,11 +198,20 @@ function verifyScenario(config, snapshot) {
   assert.equal(seenServices.size, services.length, 'Every saved service must have exactly one audit operation.');
   assert.equal(seenPayments.size, payments.length, 'Every saved payment must have exactly one audit operation.');
   assert.equal(booking.BookingStatus, checkedOut ? 'Checked-Out' : 'Checked-In', 'Saved booking status and audit history differ.');
-  const stageIndex = stages.indexOf(config.stage);
-  for (let index = 0; index <= stageIndex; index += 1) assert.ok(counts[stageActions[index]] > 0, `Complete the ${stages[index]} action through the application first.`);
-  if (stageIndex === 0) assert.equal(services.length + payments.length + counts['Check-Out'], 0, 'Select the later stage matching the actions already completed.');
-  if (stageIndex === 1) assert.equal(payments.length + counts['Check-Out'], 0, 'Select payment or checkout to verify the later stage.');
-  if (stageIndex === 2) assert.equal(counts['Check-Out'], 0, 'Use the checkout stage for a completed stay.');
+  if (config.stage === 'guest-service') {
+    assert.equal(booking.BookingStatus, 'Checked-In', 'Guest service verification requires a Checked-In stay.');
+    assert.equal(counts['Check-Out'], 0, 'Guest service verification cannot follow checkout.');
+    assert.ok(counts.ServiceUsageRecorded > 0, 'Record a service through the guest page first.');
+    assert.equal(latestOperation.Action, 'ServiceUsageRecorded', 'The latest operation must be a guest service, with no later payment or checkout.');
+    assert.equal(latestOperation.ActorType, 'guest', 'The latest service must have been recorded by the owning guest.');
+    sameId(latestOperation.GuestID, booking.GuestID, 'The latest guest service actor must own the booking.');
+  } else {
+    const stageIndex = sequentialStages.indexOf(config.stage);
+    for (let index = 0; index <= stageIndex; index += 1) assert.ok(counts[stageActions[index]] > 0, `Complete the ${sequentialStages[index]} action through the application first.`);
+    if (stageIndex === 0) assert.equal(services.length + payments.length + counts['Check-Out'], 0, 'Select the later stage matching the actions already completed.');
+    if (stageIndex === 1) assert.equal(payments.length + counts['Check-Out'], 0, 'Select payment or checkout to verify the later stage.');
+    if (stageIndex === 2) assert.equal(counts['Check-Out'], 0, 'Use the checkout stage for a completed stay.');
+  }
   if (config.actorType) {
     assert.equal(selectedOperation.ActorType, config.actorType, 'Latest stage action was performed by a different actor type.');
     sameId(selectedOperation[config.actorType === 'staff' ? 'StaffID' : 'GuestID'], config.actorId, 'Latest stage action was performed by a different account.');

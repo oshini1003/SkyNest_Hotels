@@ -767,3 +767,45 @@ node .\backend\test-audit-log.js checkin
 ```
 
 Run `service`, `payment` and `checkout` in place of `checkin` after completing those actions. The optional `TEST_AUDIT_EXPECTED_ACTOR_TYPE` (`staff` or `guest`) and `TEST_AUDIT_EXPECTED_ACTOR_ID` check the actor of the latest operation for that stage. No API test password is required; the verifier reads the existing backend MySQL configuration and prints no credentials.
+
+## Guest bill verification
+
+The guest bill page uses the existing guest-owned
+`GET /api/bookings/:bookingId/bill` snapshot. No schema, procedure, grant or
+production API changes are needed for this page.
+
+`node backend/test-guest-bill.js` (from the repository root) checks an existing
+saved bill with two distinct guest accounts: owner access, anonymous/non-owner
+denial, saved service-price and payment reconciliation, and stable repeated
+reads. It uses GET requests for hotel data and creates/closes only its own login
+sessions. It never adds a payment or changes a reservation. See
+[the setup and browser checklist](../docs/GUEST_BILL_VERIFICATION.md).
+
+```powershell
+node .\backend\tests\guest-bill-smoke-regression.cjs
+```
+
+This regression checks the smoke verifier with mocked API fixtures, not live
+MySQL. Existing bill and service ownership controller tests remain applicable.
+
+## Guest service-page verification (7 October 2026)
+
+The guest interface at `/guest/bookings/:id/services` calls the existing service
+usage endpoint. It records a charge immediately, rather than creating a pending
+fulfilment request. The procedure captures the current catalogue price and guest
+identity and writes service/bill audit events in its existing transaction.
+No routine replacement or permission changes are needed for this UI stage.
+
+After one successful guest submission on a Checked-In audited stay, use the new
+read-only `guest-service` verifier stage. It allows payments already recorded
+before that service, reconciles the full history, and requires the latest operation
+to be a service recorded by the booking's owning guest. Existing verifier stages
+retain their earlier stage-specific restrictions. Run:
+
+```powershell
+node .\backend\tests\audit-regression.cjs
+```
+
+See `docs/GUEST_SERVICE_VERIFICATION.md` for live commands and test limits. The new
+stage does not issue service/payment requests or prove concurrent-write/failure
+rollback behaviour. Never automatically retry an uncertain service POST.

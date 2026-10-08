@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { loadServiceCatalogue } from "../services/serviceCatalogueApi";
 import "./ServiceCatalogue.css";
 
@@ -110,7 +111,8 @@ export default function ServiceCatalogue() {
           <ServiceBell className="service-catalogue-bell" />
           <div>
             <p className="service-catalogue-small-label">AT YOUR SERVICE</p>
-            <p>Ask a member of staff to arrange a service during your stay.</p>
+            <p>Already checked in? Choose your stay to request a service, or speak with reception.</p>
+            <Link className="service-catalogue-request-link" to="/guest/bookings">Go to My bookings <span aria-hidden="true">→</span></Link>
           </div>
         </aside>
       </header>

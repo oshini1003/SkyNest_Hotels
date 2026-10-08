@@ -1,0 +1,287 @@
+.staff-login-page {
+  width: min(100%, 1020px);
+  margin: 12px auto 20px;
+  color: var(--sk-ink, #173d35);
+}
+
+.staff-login-page .staff-login-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1fr);
+  border: 1px solid var(--sk-line, #dfe5dd);
+  background: #fffefa;
+}
+
+.staff-login-page .staff-login-welcome {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: #fffefa;
+  background: var(--sk-ink, #173d35);
+}
+
+.staff-login-page .staff-login-photo {
+  display: block;
+  width: 100%;
+  height: 245px;
+  object-fit: cover;
+  object-position: center 61%;
+}
+
+.staff-login-page .staff-login-welcome-copy {
+  padding: 33px 38px 32px;
+}
+
+.staff-login-page .staff-login-kicker {
+  margin: 0 0 16px;
+  color: #86632e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+  line-height: 1.5;
+}
+
+.staff-login-page .staff-login-welcome .staff-login-kicker {
+  color: #e5c994;
+}
+
+.staff-login-page .staff-login-welcome h2 {
+  margin: 0;
+  color: #fffefa;
+  font-family: var(--sk-font-display, Georgia, serif);
+  font-size: clamp(28px, 3.2vw, 37px);
+  font-weight: 400;
+  letter-spacing: -0.6px;
+  line-height: 1.18;
+}
+
+.staff-login-page .staff-login-welcome-copy > p:not(.staff-login-kicker) {
+  max-width: 34ch;
+  margin: 19px 0 25px;
+  color: #d0dfd6;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.staff-login-page .staff-login-locations {
+  display: block;
+  padding-top: 19px;
+  border-top: 1px solid #ffffff2e;
+  color: #e4ceaa;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.staff-login-page .staff-login-locations span {
+  padding-inline: 7px;
+}
+
+.staff-login-page .staff-login-panel {
+  align-self: center;
+  min-width: 0;
+  padding: 45px clamp(26px, 4vw, 54px);
+}
+
+.staff-login-page .staff-login-heading {
+  margin-bottom: 29px;
+}
+
+.staff-login-page .staff-login-heading h1 {
+  margin: 0;
+  font-family: var(--sk-font-display, Georgia, serif);
+  font-size: clamp(35px, 4vw, 46px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  line-height: 1.15;
+}
+
+.staff-login-page .staff-login-heading > p:last-child {
+  margin: 15px 0 0;
+  color: var(--sk-muted, #61736a);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.staff-login-page .staff-login-form {
+  display: grid;
+  gap: 21px;
+}
+
+.staff-login-page .staff-login-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.staff-login-page .staff-login-field label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.staff-login-page .staff-login-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 13px;
+  border: 1px solid #bfcbbf;
+  border-radius: 2px;
+  color: var(--sk-ink, #173d35);
+  background: #fffefa;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.staff-login-page .staff-login-password {
+  position: relative;
+  min-width: 0;
+}
+
+.staff-login-page .staff-login-password input {
+  padding-right: 69px;
+}
+
+.staff-login-page .staff-login-password-toggle {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  bottom: 3px;
+  min-width: 54px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 2px;
+  color: var(--sk-ink, #173d35);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.staff-login-page .staff-login-password-toggle:hover:not(:disabled) {
+  background: #edf0e8;
+}
+
+.staff-login-page .staff-login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  margin-top: 4px;
+  padding: 12px 18px;
+  border: 1px solid var(--sk-ink, #173d35);
+  border-radius: 2px;
+  color: #fffefa;
+  background: var(--sk-ink, #173d35);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.staff-login-page .staff-login-submit > span:last-child {
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.staff-login-page .staff-login-submit:hover:not(:disabled) {
+  border-color: #285448;
+  background: #285448;
+}
+
+.staff-login-page .staff-login-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.staff-login-page .staff-login-field input:disabled,
+.staff-login-page .staff-login-password-toggle:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.staff-login-page .staff-login-notice,
+.staff-login-page .staff-login-error {
+  padding: 12px 14px;
+  border: 1px solid #d9dfcb;
+  color: #425e45;
+  background: #f0f3e8;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.staff-login-page .staff-login-notice {
+  margin: 0 0 23px;
+}
+
+.staff-login-page .staff-login-error {
+  margin: 0;
+  border-color: #e7c5c0;
+  color: #902d24;
+  background: #fff4f1;
+}
+
+.staff-login-page .staff-login-help {
+  margin: 21px 0 0;
+  color: var(--sk-muted, #61736a);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.staff-login-page .staff-login-guest {
+  margin: 26px 0 0;
+  padding-top: 22px;
+  border-top: 1px solid var(--sk-line, #dfe5dd);
+  color: var(--sk-muted, #61736a);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.staff-login-page .staff-login-guest a {
+  display: inline-block;
+  color: var(--sk-ink, #173d35);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--sk-gold, #b68a45);
+  text-underline-offset: 4px;
+}
+
+.staff-login-page .staff-login-guest a span {
+  margin-left: 3px;
+  text-decoration: none;
+}
+
+.staff-login-page a:focus-visible,
+.staff-login-page input:focus-visible,
+.staff-login-page button:focus-visible {
+  outline: 3px solid var(--sk-gold, #b68a45);
+  outline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  .staff-login-page {
+    max-width: 500px;
+    margin-block: 0 12px;
+  }
+
+  .staff-login-page .staff-login-frame {
+    grid-template-columns: minmax(0, 1fr);
+    border-top: 3px solid var(--sk-gold, #b68a45);
+  }
+
+  .staff-login-page .staff-login-welcome {
+    display: none;
+  }
+
+  .staff-login-page .staff-login-panel {
+    padding: 32px 28px;
+  }
+}
+
+@media (max-width: 380px) {
+  .staff-login-page .staff-login-panel {
+    padding: 28px 20px;
+  }
+}
