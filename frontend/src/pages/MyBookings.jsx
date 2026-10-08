@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
-import { cancelGuestBooking, isCurrentGuest, loadMyBookings } from "../services/bookingApi";
+import { cancelGuestBooking, isCurrentGuest, loadMyBookings, updateGuestBooking } from "../services/bookingApi";
+import { getLocalToday, searchRooms, validateStay } from "../services/roomApi";
 import "./MyBookings.css";
 
 const bookingStatuses = ["Booked", "Checked-In", "Checked-Out", "Cancelled"];
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+const money = new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR", currencyDisplay: "code" });
 function formatDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Unavailable";
   const date = new Date(`${value}T00:00:00Z`);
@@ -113,9 +115,11 @@ function BookingCard({ booking, token, onRefresh }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [uncertain, setUncertain] = useState(false);
+  const [editing, setEditing] = useState(null); // BookedRoomID of the room being changed
   const mutation = useRef(null);
   const busy = useRef(false);
   useEffect(() => () => mutation.current?.abort(), []);
+  const canEdit = booking.BookingStatus === "Booked" && !uncertain && !pending;
 
   async function cancel() {
     if (busy.current || uncertain || !confirming || !isCurrentGuest(token)) return;
@@ -148,7 +152,7 @@ function BookingCard({ booking, token, onRefresh }) {
       </header>
       <div className="mb-rooms">
         {booking.rooms.map((room) => (
-          <section className="mb-room" key={room.RoomID} aria-label={`${room.BranchName}, room ${room.RoomNumber}`}>
+          <section className="mb-room" key={room.BookedRoomID ?? room.RoomID} aria-label={`${room.BranchName}, room ${room.RoomNumber}`}>
             <div className="mb-room-heading">
               <h3>{room.BranchName}</h3>
               <p>Room {room.RoomNumber} <span aria-hidden="true">·</span> {room.RoomTypeName}</p>
@@ -158,6 +162,24 @@ function BookingCard({ booking, token, onRefresh }) {
               <div><dt>Check-out</dt><dd>{formatDate(room.CheckOutDate)}</dd></div>
               <div><dt>Guests</dt><dd>{room.GuestCount} {room.GuestCount === 1 ? "guest" : "guests"}</dd></div>
             </dl>
+            {canEdit && editing !== room.BookedRoomID && (
+              <button
+                className="mb-edit-link"
+                type="button"
+                onClick={() => { setEditing(room.BookedRoomID); setConfirming(false); setError(""); }}
+              >
+                Change dates, guests or room
+              </button>
+            )}
+            {canEdit && editing === room.BookedRoomID && (
+              <RoomEditor
+                booking={booking}
+                room={room}
+                token={token}
+                onClose={() => setEditing(null)}
+                onSaved={onRefresh}
+              />
+            )}
           </section>
         ))}
       </div>
@@ -186,6 +208,170 @@ function BookingCard({ booking, token, onRefresh }) {
       {error && <p className="mb-error mb-card-error" role="alert">{error}</p>}
       {uncertain && <div className="mb-status-check"><button className="mb-button mb-button-secondary" type="button" onClick={() => onRefresh()}>Check current status</button></div>}
     </article>
+  );
+}
+
+// Changes one room entry of a Booked reservation: dates, guest count or the room itself.
+function RoomEditor({ booking, room, token, onClose, onSaved }) {
+  const uid = useId();
+  const [form, setForm] = useState({
+    checkin: room.CheckInDate,
+    checkout: room.CheckOutDate,
+    guests: room.GuestCount,
+    roomId: room.RoomID,
+  });
+  const [alternatives, setAlternatives] = useState([]);
+  const [lookup, setLookup] = useState({ loading: false, error: "", done: false });
+  const [save, setSave] = useState({ pending: false, error: "", uncertain: false });
+  const lookupRequest = useRef(null);
+  const mutation = useRef(null);
+  const busy = useRef(false);
+  const today = getLocalToday();
+
+  useEffect(() => () => {
+    lookupRequest.current?.abort();
+    mutation.current?.abort();
+  }, []);
+
+  const currentOption = {
+    id: room.RoomID,
+    label: `Room ${room.RoomNumber} · ${room.RoomTypeName} (current)`,
+    capacity: Number(room.Capacity) || room.GuestCount,
+  };
+  const options = [
+    currentOption,
+    ...alternatives.map((item) => ({
+      id: item.id,
+      label: `Room ${item.number} · ${item.roomType} · ${money.format(item.pricePerNight)} per night`,
+      capacity: item.capacity,
+    })),
+  ];
+  const selected = options.find((option) => option.id === form.roomId) ?? currentOption;
+
+  function change(name, value) {
+    setSave((current) => ({ ...current, error: "" }));
+    if (name === "roomId") {
+      const next = options.find((option) => option.id === Number(value));
+      setForm((current) => ({ ...current, roomId: Number(value), guests: Math.min(current.guests, next?.capacity ?? current.guests) }));
+      return;
+    }
+    // New dates or guests make any earlier room search out of date.
+    setAlternatives([]);
+    setLookup({ loading: false, error: "", done: false });
+    setForm((current) => ({ ...current, roomId: room.RoomID, [name]: name === "guests" ? Number(value) : value }));
+  }
+
+  async function findRooms() {
+    let stay;
+    try {
+      stay = validateStay({ checkin: form.checkin, checkout: form.checkout, guests: form.guests });
+    } catch (failure) {
+      setLookup({ loading: false, error: failure.message, done: false });
+      return;
+    }
+    lookupRequest.current?.abort();
+    const controller = new AbortController();
+    lookupRequest.current = controller;
+    setLookup({ loading: true, error: "", done: false });
+    try {
+      const rooms = await searchRooms({ ...stay, branchId: room.BranchID }, controller.signal);
+      if (controller.signal.aborted) return;
+      setAlternatives(rooms.filter((item) => item.id !== room.RoomID));
+      setLookup({ loading: false, error: "", done: true });
+    } catch (failure) {
+      if (controller.signal.aborted || failure.name === "AbortError") return;
+      setLookup({ loading: false, error: failure.message, done: false });
+    }
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (busy.current || save.uncertain || !isCurrentGuest(token)) return;
+    const changes = { bookedRoomId: room.BookedRoomID };
+    if (form.checkin !== room.CheckInDate) changes.checkin = form.checkin;
+    if (form.checkout !== room.CheckOutDate) changes.checkout = form.checkout;
+    if (form.guests !== room.GuestCount) changes.guestCount = form.guests;
+    if (form.roomId !== room.RoomID) changes.roomId = form.roomId;
+    if (Object.keys(changes).length === 1) {
+      setSave({ pending: false, error: "Change at least one detail before saving.", uncertain: false });
+      return;
+    }
+    if (changes.checkin || changes.checkout) {
+      try {
+        validateStay({ checkin: form.checkin, checkout: form.checkout, guests: form.guests });
+      } catch (failure) {
+        setSave({ pending: false, error: failure.message, uncertain: false });
+        return;
+      }
+    }
+    busy.current = true;
+    const controller = new AbortController();
+    mutation.current = controller;
+    setSave({ pending: true, error: "", uncertain: false });
+    try {
+      await updateGuestBooking(booking.BookingID, changes, token, controller.signal);
+      if (!controller.signal.aborted && isCurrentGuest(token)) onSaved(`Booking #${booking.BookingID} was updated.`);
+    } catch (failure) {
+      if (controller.signal.aborted || !isCurrentGuest(token) || failure.name === "AbortError") return;
+      setSave({
+        pending: false,
+        uncertain: Boolean(failure.outcomeUnknown),
+        error: failure.outcomeUnknown
+          ? "We could not confirm the update result. Refresh your bookings to check the current details before trying again."
+          : failure.message,
+      });
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  return (
+    <form className="mb-room-editor" onSubmit={submit} noValidate aria-label={`Change room ${room.RoomNumber}`} aria-busy={save.pending}>
+      {booking.rooms.length > 1 && (
+        <p className="mb-editor-note">Only this room is changed. The other rooms in this booking keep their dates and guests.</p>
+      )}
+      <div className="mb-editor-grid">
+        <div className="mb-editor-field">
+          <label htmlFor={`${uid}-checkin`}>Check-in</label>
+          <input id={`${uid}-checkin`} type="date" min={today} value={form.checkin} onChange={(event) => change("checkin", event.target.value)} disabled={save.pending} />
+        </div>
+        <div className="mb-editor-field">
+          <label htmlFor={`${uid}-checkout`}>Check-out</label>
+          <input id={`${uid}-checkout`} type="date" min={form.checkin || today} value={form.checkout} onChange={(event) => change("checkout", event.target.value)} disabled={save.pending} />
+        </div>
+        <div className="mb-editor-field">
+          <label htmlFor={`${uid}-guests`}>Guests</label>
+          <select id={`${uid}-guests`} value={form.guests} onChange={(event) => change("guests", event.target.value)} disabled={save.pending}>
+            {Array.from({ length: Math.max(selected.capacity, form.guests) }, (_, index) => index + 1).map((count) => (
+              <option key={count} value={count}>{count}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="mb-editor-rooms">
+        <div className="mb-editor-field">
+          <label htmlFor={`${uid}-room`}>Room</label>
+          <select id={`${uid}-room`} value={form.roomId} onChange={(event) => change("roomId", event.target.value)} disabled={save.pending}>
+            {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+        </div>
+        <button className="mb-button mb-button-secondary" type="button" onClick={findRooms} disabled={lookup.loading || save.pending}>
+          {lookup.loading ? "Searching…" : "Find other rooms for these dates"}
+        </button>
+      </div>
+      {lookup.error && <p className="mb-error" role="alert">{lookup.error}</p>}
+      {lookup.done && !alternatives.length && (
+        <p className="mb-editor-note" role="status">No other rooms at {room.BranchName} are available for these dates and guests.</p>
+      )}
+      <p className="mb-editor-note">Availability is checked again when you save.</p>
+      {save.error && <p className="mb-error mb-card-error" role="alert">{save.error}</p>}
+      <div className="mb-editor-actions">
+        <button className="mb-button mb-button-secondary" type="button" onClick={onClose} disabled={save.pending}>Keep current details</button>
+        {save.uncertain
+          ? <button className="mb-button mb-button-primary" type="button" onClick={() => onSaved()}>Check current status</button>
+          : <button className="mb-button mb-button-primary" type="submit" disabled={save.pending}>{save.pending ? "Saving…" : "Save changes"}</button>}
+      </div>
+    </form>
   );
 }
 

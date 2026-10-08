@@ -73,6 +73,16 @@ export async function createGuestBooking(details, token, signal) {
   return data;
 }
 
+// Changes one room entry of a Booked reservation. `changes` holds bookedRoomId plus
+// any of roomId, checkin, checkout and guestCount.
+export async function updateGuestBooking(bookingId, changes, token, signal) {
+  const data = await request(`/bookings/${bookingId}`, { method: "PATCH", body: changes, token, signal });
+  if (data.bookingId !== bookingId || data.updated !== true) {
+    throw failure(uncertainMessage, 0, true);
+  }
+  return data;
+}
+
 export async function cancelGuestBooking(bookingId, token, signal) {
   const data = await request(`/bookings/${bookingId}/cancel`, { method: "PATCH", token, signal });
   if (data.bookingId !== bookingId || data.status !== "Cancelled") {
