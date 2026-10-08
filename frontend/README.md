@@ -445,3 +445,55 @@ and inspect a billing summary with saved history. Check both a normal window and
 a phone-width window, including keyboard focus and horizontal table scrolling.
 These report reads do not change hotel records. No migration or new grant is
 required for this presentation update.
+
+## Page bundles and loading states (8 October 2026)
+
+The home page and shared navigation load immediately. Eighteen other live pages
+load their JavaScript and styles when first opened. Each has a stable, module-level
+lazy component and its own Suspense loading screen in the approved cream, green
+and gold theme. Existing page-level API loading and error messages still apply
+after a page opens. Development preview pages and demo data are loaded through
+a development-only adapter and are excluded from production bundles.
+
+A page display error leaves the shared navigation available, with explicit
+Refresh page and Return home actions. There is no automatic reload or retry.
+The message asks users to check saved history before repeating a booking, payment
+or service action. An error does not prove whether an in-flight save succeeded.
+Refreshing can discard unsaved form fields.
+
+All live route paths, authentication guards, return destinations, props and
+existing session keys are retained. The outer error boundary clears a caught
+error after navigation or a relevant account change, without remounting healthy
+routes. In particular, the same-path history replacement used during booking
+confirmation does not remount its form. Page implementations, financial attempt
+markers, service APIs, backend code and database objects are unchanged.
+
+Checks from the repository root:
+
+```powershell
+node .\frontend\tests\page-loading-regression.mjs
+node .\frontend\tests\account-session-regression.mjs
+node .\frontend\tests\staff-branch-api-regression.mjs
+node .\frontend\tests\guest-billing-api-regression.mjs
+node .\frontend\tests\guest-service-api-regression.mjs
+node .\frontend\tests\dashboard-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The page-loading regression performs a real production build in a temporary
+directory. It checks the emitted manifest and module graph, a 350,000-byte initial
+JavaScript budget including static dependencies, deferred page code and styles,
+preview exclusion and actual component exports. It removes that temporary build
+and does not replace `frontend/dist`. The baseline initial JavaScript was about
+502 kB; the split build is about 306 kB including static dependencies. These are
+minified build sizes, not measured network transfer or page-load timings.
+
+Source comparison and the tests do not exercise browser navigation or client
+error-boundary recovery. Before merging, use the browser to open Rooms, Services,
+guest sign-in/account/bookings and existing bill/service histories, then the staff
+workspace and manager reports. Check a signed-out protected deep link still leads
+to sign-in and returns to its intended page. Inspect the loading state with network
+throttling and the failure screen by blocking an unopened public page module;
+restore the connection and use Refresh page. Do not block a request while saving.
+Check desktop and phone widths. Existing records can be viewed for these checks;
+no new booking, payment, service or database migration is needed.

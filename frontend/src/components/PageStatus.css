@@ -1,0 +1,85 @@
+.page-status {
+  width: min(680px, calc(100% - 32px));
+  min-width: 0;
+  margin: clamp(24px, 6vw, 72px) auto;
+  padding: clamp(28px, 5vw, 54px);
+  border: 1px solid #dbe1d7;
+  border-top: 3px solid #b68a45;
+  border-radius: 3px;
+  background: #fffefa;
+  color: #173d35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.page-status .page-status-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 23px;
+  border: 1px solid #c9af80;
+  color: #80602e;
+  font: 400 28px/1 Georgia, serif;
+}
+.page-status .page-status-eyebrow {
+  margin: 0 0 13px;
+  color: #80602e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+}
+.page-status h1 {
+  margin: 0 0 18px;
+  font: 400 clamp(28px, 4vw, 40px)/1.2 Georgia, serif;
+  letter-spacing: -.7px;
+}
+.page-status .page-status-copy {
+  margin: 0;
+  color: #61736a;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.page-status .page-status-line {
+  display: block;
+  width: 60px;
+  height: 2px;
+  margin: 28px auto 0;
+  background: #b68a45;
+}
+.page-status .page-status-note {
+  margin: 22px 0 0;
+  padding-top: 19px;
+  border-top: 1px solid #e2e6dc;
+  color: #61736a;
+  font-size: 12px;
+  line-height: 1.75;
+}
+.page-status .page-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 26px;
+}
+.page-status .page-status-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  max-width: 100%;
+  padding: 11px 20px;
+  border: 1px solid #173d35;
+  border-radius: 3px;
+  background: #173d35;
+  color: #fffefa;
+  font: 700 13px/1.6 Arial, Helvetica, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.page-status .page-status-button:hover { background: #285448; }
+.page-status .page-status-button--outline { color: #173d35; background: transparent; }
+.page-status .page-status-button--outline:hover { background: #edf1e9; }
+.page-status .page-status-button:focus-visible { outline: 3px solid #a7782e; outline-offset: 4px; }
+@media (max-width: 480px) {
+  .page-status .page-status-button { width: 100%; }
+}

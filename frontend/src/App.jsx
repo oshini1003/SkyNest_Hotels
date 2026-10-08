@@ -7,33 +7,8 @@ import {
   Routes,
   useLocation,
 } from "react-router";
-import GuestLogin from "./pages/GuestLogin";
-import GuestRegister from "./pages/GuestRegister";
-import RoomSearch from "./pages/RoomSearch";
-import MakeBooking from "./pages/MakeBooking";
-import MyBookings from "./pages/MyBookings";
-import GuestBill from "./pages/GuestBill";
-import GuestServices from "./pages/GuestServices";
 import { guestReturnDestination, guestSignInState } from "./services/bookingIntent";
-import ServiceCatalogue from "./pages/ServiceCatalogue";
-import GuestBookings from "./pages/GuestBookings";
-import GuestProfile from "./pages/GuestProfile";
-import { demoBookings } from "./data/demoBookings";
-import StaffLogin from "./pages/StaffLogin";
-import StaffHome from "./pages/StaffHome";
-import StaffBookingList from "./pages/StaffBookingList";
-import StaffBookingDetails from "./pages/StaffBookingDetails";
-import StaffServiceUsage from "./pages/StaffServiceUsage";
-import StaffBilling from "./pages/StaffBilling";
 import { staffReturnDestination, staffSignInState } from "./services/staffIntent";
-import StaffBookings from "./pages/StaffBookings";
-import StaffBillDetails from "./pages/StaffBillDetails";
-import StaffPayment from "./pages/StaffPayment";
-import ManagerReports from "./pages/ManagerReports";
-import ManagerDashboard from "./pages/ManagerDashboard";
-import ManagerReportsPreview from "./pages/ManagerReportsPreview";
-import { demoStaffBookings } from "./data/demoStaffBookings";
-import ServiceUsagePreview from "./pages/ServiceUsagePreview";
 
 import {
   readStaffSession,
@@ -52,9 +27,42 @@ import {
 import "./App.css";
 import SiteLayout from "./components/SiteLayout";
 import Home from "./pages/Home";
-import Branches from "./pages/Branches";
+
+import { lazyPage } from "./components/lazyPage";
+import PageBoundary from "./components/PageBoundary";
+
+const GuestLogin = lazyPage(() => import("./pages/GuestLogin"));
+const GuestRegister = lazyPage(() => import("./pages/GuestRegister"));
+const RoomSearch = lazyPage(() => import("./pages/RoomSearch"));
+const MakeBooking = lazyPage(() => import("./pages/MakeBooking"));
+const MyBookings = lazyPage(() => import("./pages/MyBookings"));
+const GuestBill = lazyPage(() => import("./pages/GuestBill"));
+const GuestServices = lazyPage(() => import("./pages/GuestServices"));
+const ServiceCatalogue = lazyPage(() => import("./pages/ServiceCatalogue"));
+const GuestProfile = lazyPage(() => import("./pages/GuestProfile"));
+const StaffLogin = lazyPage(() => import("./pages/StaffLogin"));
+const StaffHome = lazyPage(() => import("./pages/StaffHome"));
+const StaffBookingList = lazyPage(() => import("./pages/StaffBookingList"));
+const StaffBookingDetails = lazyPage(() => import("./pages/StaffBookingDetails"));
+const StaffServiceUsage = lazyPage(() => import("./pages/StaffServiceUsage"));
+const StaffBilling = lazyPage(() => import("./pages/StaffBilling"));
+const ManagerReports = lazyPage(() => import("./pages/ManagerReports"));
+const ManagerDashboard = lazyPage(() => import("./pages/ManagerDashboard"));
+const Branches = lazyPage(() => import("./pages/Branches"));
 
 const showPreviews = import.meta.env.DEV;
+// This import is reachable only in development; sample pages/data stay out of production.
+const previewPage = (name) => lazyPage(() => import("./pages/DevelopmentPreviews")
+  .then((pages) => ({ default: pages[name] })));
+const previews = showPreviews ? {
+  GuestBookings: previewPage("GuestBookingsPreview"),
+  StaffBookings: previewPage("StaffBookingsPreview"),
+  ServiceUsage: previewPage("ServiceUsagePreview"),
+  BillDetails: previewPage("StaffBillDetails"),
+  Payment: previewPage("StaffPayment"),
+  Reports: previewPage("ManagerReportsPreview"),
+} : null;
+
 function NotFound() {
   return (
     <section>
@@ -131,6 +139,7 @@ function handleStaffLogout() {
   return (
     <BrowserRouter>
       <SiteLayout session={session} staffSession={staffSession} showPreviews={showPreviews}>
+        <PageBoundary guestToken={session?.token} staffToken={staffSession?.token}>
           <Routes>
             <Route path="/" element={<Home />} />
 
@@ -142,30 +151,24 @@ function handleStaffLogout() {
                 <Route
                   path="/preview/bookings"
                   element={
-                    <GuestBookings
-                      bookings={demoBookings}
-                      isPreview={true}
-                    />
+                    <previews.GuestBookings />
                   }
                 />
 
                 <Route
                   path="/preview/staff/bookings"
                   element={
-                    <StaffBookings
-                      bookings={demoStaffBookings}
-                      isPreview={true}
-                    />
+                    <previews.StaffBookings />
                   }
                 />
                 
                 <Route
                   path="/preview/staff/bookings/:bookingReference/services"
-                  element={<ServiceUsagePreview />}
+                  element={<previews.ServiceUsage />}
                 />
-                <Route path="/preview/staff/bill-details" element={<StaffBillDetails />} />
-                <Route path="/preview/staff/record-payment" element={<StaffPayment />} />
-                <Route path="/preview/staff/manager-reports" element={<ManagerReportsPreview />} />
+                <Route path="/preview/staff/bill-details" element={<previews.BillDetails />} />
+                <Route path="/preview/staff/record-payment" element={<previews.Payment />} />
+                <Route path="/preview/staff/manager-reports" element={<previews.Reports />} />
               </>
             )}
 
@@ -286,6 +289,7 @@ function handleStaffLogout() {
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+        </PageBoundary>
       </SiteLayout>
     </BrowserRouter>
   );
