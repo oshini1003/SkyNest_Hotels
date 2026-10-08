@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { getLocalToday, loadRoomOptions, searchRooms, validateStay } from "../services/roomApi";
+import { MAX_ROOMS } from "../services/bookingIntent";
 import "./RoomSearch.css";
 
 const initialFilters = {
@@ -60,13 +61,21 @@ export default function RoomSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
-  const [selectedRoomId, setSelectedRoomId] = useState(null);
+  // One entry per room added to the booking: { id, guests }.
+  const [selectedRooms, setSelectedRooms] = useState([]);
   const searchRequest = useRef(null);
   const searchVersion = useRef(0);
   const reviewRef = useRef(null);
-  const selectedButtonRef = useRef(null);
   const today = getLocalToday();
-  const selectedRoom = result?.rooms.find((room) => room.id === selectedRoomId);
+
+  const selectedItems = result
+    ? selectedRooms
+      .map(({ id, guests }) => ({ room: result.rooms.find((room) => room.id === id), guests }))
+      .filter((item) => item.room)
+    : [];
+  const selectedTotal = result
+    ? selectedItems.reduce((sum, { room }) => sum + room.pricePerNight * result.nights, 0)
+    : 0;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,32 +104,27 @@ export default function RoomSearch() {
     searchRequest.current?.abort();
   }, []);
 
-  useEffect(() => {
-    if (selectedRoomId && reviewRef.current) {
-      reviewRef.current.focus({ preventScroll: true });
-      reviewRef.current.scrollIntoView({ block: "start" });
-    }
-  }, [selectedRoomId]);
-
   function retryOptions() {
     setOptionsLoading(true);
     setOptionsError("");
     setOptionsAttempt((attempt) => attempt + 1);
   }
 
-  function handleSelectRoom(roomId, event) {
-    selectedButtonRef.current = event.currentTarget;
-    if (selectedRoomId === roomId) {
-      reviewRef.current?.focus({ preventScroll: true });
-      reviewRef.current?.scrollIntoView({ block: "start" });
-      return;
-    }
-    setSelectedRoomId(roomId);
+  function toggleRoom(room) {
+    setSelectedRooms((current) => {
+      if (current.some((item) => item.id === room.id)) return current.filter((item) => item.id !== room.id);
+      if (current.length >= MAX_ROOMS) return current;
+      return [...current, { id: room.id, guests: Math.min(result.guests, room.capacity) }];
+    });
   }
 
-  function handleClearSelection() {
-    selectedButtonRef.current?.focus();
-    setSelectedRoomId(null);
+  function setRoomGuests(roomId, value) {
+    setSelectedRooms((current) => current.map((item) => item.id === roomId ? { ...item, guests: Number(value) } : item));
+  }
+
+  function scrollToReview() {
+    reviewRef.current?.focus({ preventScroll: true });
+    reviewRef.current?.scrollIntoView({ block: "start" });
   }
 
   function clearSearch() {
@@ -130,8 +134,7 @@ export default function RoomSearch() {
     setLoading(false);
     setError("");
     setResult(null);
-    setSelectedRoomId(null);
-    selectedButtonRef.current = null;
+    setSelectedRooms([]);
   }
 
   function handleChange(event) {
@@ -170,6 +173,20 @@ export default function RoomSearch() {
       }
     }
   }
+
+  function continueToBooking() {
+    navigate("/make-booking", {
+      state: {
+        stay: {
+          checkin: result.checkin,
+          checkout: result.checkout,
+          rooms: selectedItems.map(({ room, guests }) => ({ roomId: room.id, guests })),
+        },
+      },
+    });
+  }
+
+  const roomCount = selectedItems.length;
 
   return (
     <section className="room-search-page" aria-labelledby="room-search-heading">
@@ -292,7 +309,7 @@ export default function RoomSearch() {
         </button>
         <p className="room-demo-note room-form-notice">
           Room availability and prices are checked for your selected dates.
-          Selecting a room does not reserve it.
+          Selecting a room does not reserve it. You can add up to {MAX_ROOMS} rooms to one booking.
         </p>
       </form>
 
@@ -328,144 +345,156 @@ export default function RoomSearch() {
 
       {result && (
         <div className="card-grid">
-          {result.rooms.map((room) => (
-            <article className={`card room-card${selectedRoomId === room.id ? " room-card-selected" : ""}`} key={room.id}>
-              <div className={`room-card-image${roomPhoto(room.roomType) ? "" : " room-card-image-placeholder"}`}>
-                {roomPhoto(room.roomType) ? (
-                  <img src={roomPhoto(room.roomType)} alt="" loading="lazy" />
-                ) : <RoomIcon />}
-                <span className="room-number">ROOM {room.number}</span>
-              </div>
-              <div className="room-card-content">
-              <p className="room-card-branch">{room.branch}</p>
-              <h2>{room.roomType}</h2>
-              <p className="room-capacity"><span aria-hidden="true">◦</span> Maximum guests: {room.capacity}</p>
+          {result.rooms.map((room) => {
+            const picked = selectedRooms.some((item) => item.id === room.id);
+            const full = !picked && selectedRooms.length >= MAX_ROOMS;
+            return (
+              <article className={`card room-card${picked ? " room-card-selected" : ""}`} key={room.id}>
+                <div className={`room-card-image${roomPhoto(room.roomType) ? "" : " room-card-image-placeholder"}`}>
+                  {roomPhoto(room.roomType) ? (
+                    <img src={roomPhoto(room.roomType)} alt="" loading="lazy" />
+                  ) : <RoomIcon />}
+                  <span className="room-number">ROOM {room.number}</span>
+                </div>
+                <div className="room-card-content">
+                  <p className="room-card-branch">{room.branch}</p>
+                  <h2>{room.roomType}</h2>
+                  <p className="room-capacity"><span aria-hidden="true">◦</span> Maximum guests: {room.capacity}</p>
 
-              <p className="room-price">
-                {money.format(room.pricePerNight)}
-                <span> per night</span>
-              </p>
+                  <p className="room-price">
+                    {money.format(room.pricePerNight)}
+                    <span> per night</span>
+                  </p>
 
-              <p className="room-estimate">
-                Estimated room charge:{" "}
-                <strong>
-                  {money.format(room.pricePerNight * result.nights)}
-                </strong>
-              </p>
+                  <p className="room-estimate">
+                    Estimated room charge:{" "}
+                    <strong>
+                      {money.format(room.pricePerNight * result.nights)}
+                    </strong>
+                  </p>
 
-              <p className="room-charge-note">
-                Services and other charges are excluded.
-              </p>
-              <button
-                className="button"
-                type="button"
-                aria-pressed={selectedRoomId === room.id}
-                aria-label={`Review this room: ${room.branch}, room ${room.number}`}
-                onClick={(event) => handleSelectRoom(room.id, event)}
-                >
-                <span>Review this room</span><span aria-hidden="true">↗</span>
-                </button>
+                  <p className="room-charge-note">
+                    Services and other charges are excluded.
+                  </p>
+                  <button
+                    className="button"
+                    type="button"
+                    aria-pressed={picked}
+                    disabled={full}
+                    aria-label={`${picked ? "Remove" : "Add"} ${room.branch}, room ${room.number} ${picked ? "from" : "to"} your booking`}
+                    onClick={() => toggleRoom(room)}
+                  >
+                    <span>{picked ? "Remove from booking" : "Add to booking"}</span>
+                    <span aria-hidden="true">{picked ? "−" : "+"}</span>
+                  </button>
 
-                {selectedRoomId === room.id && (
-                <p className="room-selected-label">Selected for review</p>
-                )}
-              </div>
-            </article>
-          ))}
+                  {picked && <p className="room-selected-label">Added to your booking</p>}
+                  {full && <p className="room-selected-label">A booking can have up to {MAX_ROOMS} rooms.</p>}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
-      {result && selectedRoom && (
-  <section
-    className="stay-review"
-    ref={reviewRef}
-    tabIndex={-1}
-    aria-labelledby="stay-review-heading"
-  >
-    <p className="eyebrow">YOUR SELECTION</p>
-    <h2 id="stay-review-heading">Review your stay</h2>
 
-    <p>
-      <strong>
-        {selectedRoom.branch} · {selectedRoom.roomType}
-      </strong>
-    </p>
+      {result && roomCount > 0 && (
+        <div className="room-selection-bar" role="status">
+          <span>
+            <strong>{roomCount} {roomCount === 1 ? "room" : "rooms"} selected</strong>
+            {" · "}{money.format(selectedTotal)}
+          </span>
+          <button className="button" type="button" onClick={scrollToReview}>Review selection</button>
+        </div>
+      )}
 
-    <dl className="stay-details">
-      <div>
-        <dt>Room number</dt>
-        <dd>{selectedRoom.number}</dd>
-      </div>
+      {result && roomCount > 0 && (
+        <section
+          className="stay-review"
+          ref={reviewRef}
+          tabIndex={-1}
+          aria-labelledby="stay-review-heading"
+        >
+          <p className="eyebrow">YOUR SELECTION</p>
+          <h2 id="stay-review-heading">Review your stay</h2>
 
-      <div>
-        <dt>Check-in</dt>
-        <dd>{result.checkin}</dd>
-      </div>
+          <p>
+            <strong>{roomCount} {roomCount === 1 ? "room" : "rooms"} for {result.nights} night{result.nights === 1 ? "" : "s"}</strong>
+          </p>
 
-      <div>
-        <dt>Check-out</dt>
-        <dd>{result.checkout}</dd>
-      </div>
+          <dl className="stay-details">
+            <div>
+              <dt>Check-in</dt>
+              <dd>{result.checkin}</dd>
+            </div>
+            <div>
+              <dt>Check-out</dt>
+              <dd>{result.checkout}</dd>
+            </div>
+            <div>
+              <dt>Nights</dt>
+              <dd>{result.nights}</dd>
+            </div>
+          </dl>
 
-      <div>
-        <dt>Guests</dt>
-        <dd>{result.guests}</dd>
-      </div>
+          <ul className="room-selection-list">
+            {selectedItems.map(({ room, guests }) => (
+              <li className="room-selection-item" key={room.id}>
+                <div className="room-selection-info">
+                  <strong>{room.branch} · {room.roomType}</strong>
+                  <span>Room {room.number} · {money.format(room.pricePerNight)} per night</span>
+                </div>
+                <div className="room-selection-guests">
+                  <label htmlFor={`room-guests-${room.id}`}>Guests</label>
+                  <select
+                    id={`room-guests-${room.id}`}
+                    value={guests}
+                    onChange={(event) => setRoomGuests(room.id, event.target.value)}
+                  >
+                    {Array.from({ length: room.capacity }, (_, index) => index + 1).map((count) => (
+                      <option key={count} value={count}>{count}</option>
+                    ))}
+                  </select>
+                </div>
+                <span className="room-selection-price">{money.format(room.pricePerNight * result.nights)}</span>
+                <button
+                  className="button room-clear-selection"
+                  type="button"
+                  aria-label={`Remove room ${room.number} from your booking`}
+                  onClick={() => toggleRoom(room)}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
 
-      <div>
-        <dt>Nights</dt>
-        <dd>{result.nights}</dd>
-      </div>
+          <p className="room-price">
+            Estimated room charge: {money.format(selectedTotal)}
+          </p>
 
-      <div>
-        <dt>Price per night</dt>
-        <dd>{money.format(selectedRoom.pricePerNight)}</dd>
-      </div>
-    </dl>
+          <p className="room-charge-note">
+            Services and other charges are excluded.
+          </p>
 
-    <p className="room-price">
-      Estimated room charge:{" "}
-      {money.format(selectedRoom.pricePerNight * result.nights)}
-    </p>
+          <p className="room-demo-note">
+            No room has been reserved. Availability and prices can change before a booking is confirmed.
+          </p>
 
-    <p className="room-charge-note">
-      Services and other charges are excluded.
-    </p>
+          <div className="room-review-actions">
+            <button
+              className="button room-clear-selection"
+              type="button"
+              onClick={() => setSelectedRooms([])}
+            >
+              Clear selection
+            </button>
 
-    <p className="room-demo-note">
-      No room has been reserved. Availability and prices can change before a booking is confirmed.
-    </p>
-    
-
-    <div className="room-review-actions">
-      <button
-        className="button room-clear-selection"
-        type="button"
-        onClick={handleClearSelection}
-      >
-        Clear selection
-      </button>
-
-      <button
-        className="button"
-        type="button"
-        onClick={() =>
-          navigate("/make-booking", {
-            state: {
-              stay: {
-                roomId: selectedRoom.id,
-                checkin: result.checkin,
-                checkout: result.checkout,
-                guests: result.guests,
-              },
-            },
-          })
-        }
-      >
-        Continue to booking review
-      </button>
-    </div>
-  </section>
-)}
+            <button className="button" type="button" onClick={continueToBooking}>
+              Continue to booking review
+            </button>
+          </div>
+        </section>
+      )}
     </section>
   );
 }
