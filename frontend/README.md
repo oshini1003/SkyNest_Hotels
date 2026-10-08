@@ -370,3 +370,39 @@ booking details and check the same pages at a narrow window width. Viewing a
 reservation does not check it in. Use an eligible test reservation only when
 intentionally verifying the check-in action. No backend changes, migrations or
 new database grants are included in this update.
+
+## Staff services and billing workspace (8 October 2026)
+
+The service-recording and bill/payment/checkout pages now match the staff arrival
+workspace with cream panels, deep green actions, gold accents and serif headings.
+Each page has scoped styles and layouts that adapt to narrow screens.
+
+- `/staff/bookings/:id/services`: guest and room context, a current bill summary,
+  service selection and charge review, followed by saved service history cards.
+- `/staff/bookings/:id/bill`: invoice totals, guest/stay context, payment review,
+  checkout confirmation, saved service charges and payment history cards.
+
+History retains the saved identifiers, dates, quantities, unit prices, line totals,
+payment methods and payment classifications. The displayed figures use the same
+existing API responses and calculations. This update changes presentation only.
+
+Service recording still reviews a charge before saving it. Payment recording
+still records money already received; it does not charge a card or start a bank
+transfer. Role checks, checked-in/open-bill requirements, exact-zero checkout,
+duplicate-click guards, fresh reads and uncertain-outcome warnings are preserved.
+The existing billing attempt marker and manual reconciliation remain in place.
+
+Checks from the repository root:
+
+```powershell
+node .\frontend\tests\staff-branch-api-regression.mjs
+npm --prefix frontend run build
+```
+
+The client regression uses mocked HTTP. Source comparison verifies that the
+existing state, calculations, handlers and eligibility expressions are unchanged;
+it is not an executed browser interaction test. For visual verification, open an
+existing reservation's services and billing pages, inspect its saved history and
+check both pages at desktop and narrow window widths. No new service, payment or
+checkout is needed for this visual review. No backend files, database objects,
+API contracts or dependencies are changed by this update.

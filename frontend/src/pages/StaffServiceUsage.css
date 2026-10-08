@@ -1,0 +1,176 @@
+.staff-services-page { min-width: 0; color: #173d35; }
+.staff-services-page .ssu-breadcrumbs { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px 24px; margin-bottom: 28px; }
+.staff-services-page .ssu-breadcrumbs a { display: inline-flex; align-items: center; gap: 9px; color: #53685d; font-size: 12px; text-decoration: none; }
+.staff-services-page .ssu-breadcrumbs a:hover { color: #173d35; text-decoration: underline; text-underline-offset: 4px; }
+.staff-services-page .ssu-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 32px; }
+.staff-services-page .ssu-page-heading > div { min-width: 0; }
+.staff-services-page .ssu-eyebrow { margin: 0 0 10px; color: #86632e; font-size: 10px; font-weight: 700; line-height: 1.6; letter-spacing: 1.5px; }
+.staff-services-page h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 4.2vw, 50px); font-weight: 400; line-height: 1.15; letter-spacing: -1px; overflow-wrap: anywhere; }
+.staff-services-page h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 29px; font-weight: 400; line-height: 1.3; letter-spacing: -.4px; overflow-wrap: anywhere; }
+.staff-services-page .ssu-introduction { max-width: 570px; margin: 15px 0 0; color: #5a6b5f; font-size: 13px; line-height: 1.8; }
+.staff-services-page .ssu-status { display: inline-block; flex-shrink: 0; padding: 8px 14px; border: 1px solid #d4ddcf; border-radius: 3px; color: #3b5c49; background: #eef3e9; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.staff-services-page .ssu-status[data-status="Booked"] { border-color: #e2d6bc; color: #735923; background: #f8f1e4; }
+.staff-services-page .ssu-status[data-status="Cancelled"] { border-color: #e7d5d1; color: #853f34; background: #faf0ed; }
+.staff-services-page .ssu-status[data-status="Checked-Out"] { color: #5f6b62; background: #f0f2ed; }
+.staff-services-page .ssu-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "workspace bill"; align-items: start; gap: 28px; }
+.staff-services-page .ssu-workspace { grid-area: workspace; min-width: 0; }
+.staff-services-page .ssu-bill-rail { grid-area: bill; position: sticky; top: 24px; min-width: 0; }
+.staff-services-page .ssu-bill-panel { border: 1px solid #cdd8cb; border-radius: 3px; background: #fffefa; overflow: hidden; }
+.staff-services-page .ssu-bill-heading { padding: 25px 25px 22px; color: #fffdf3; background: #173d35; }
+.staff-services-page .ssu-bill-heading .ssu-eyebrow { color: #e1c596; font-size: 9px; }
+.staff-services-page .ssu-bill-heading h2 { font-size: 27px; }
+.staff-services-page .ssu-bill-status { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin: 20px 0 0; padding-top: 15px; border-top: 1px solid #496356; color: #d9e1d3; font-size: 11px; line-height: 1.6; }
+.staff-services-page .ssu-bill-status strong { color: #fffdf3; font-weight: 500; overflow-wrap: anywhere; }
+.staff-services-page .ssu-bill-body { padding: 25px; }
+.staff-services-page .ssu-bill-details { margin: 0 0 24px; }
+.staff-services-page .ssu-bill-details > div { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.staff-services-page .ssu-bill-details dt { color: #62715f; font-size: 11px; line-height: 1.7; }
+.staff-services-page .ssu-bill-details dd { margin: 0; color: #274c3a; font-size: 12px; font-weight: 600; line-height: 1.7; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.staff-services-page .ssu-bill-details .ssu-bill-total { margin-top: 20px; padding-top: 19px; border-top: 1px solid #dce2d5; }
+.staff-services-page .ssu-bill-total dt { color: #274c3a; font-weight: 600; }
+.staff-services-page .ssu-bill-details .ssu-bill-outstanding { display: block; margin: 21px 0 0; padding: 17px 19px; border-left: 2px solid #b68a45; background: #f2f2e7; }
+.staff-services-page .ssu-bill-outstanding dt { margin-bottom: 5px; color: #5c6f55; }
+.staff-services-page .ssu-bill-outstanding dd { font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 400; text-align: left; letter-spacing: -.5px; }
+.staff-services-page .ssu-bill-body > .ssu-button { width: 100%; }
+.staff-services-page .ssu-panel-note { margin: 0; color: #667366; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.staff-services-page .ssu-bill-body .ssu-panel-note { margin-top: 14px; }
+.staff-services-page .ssu-refresh-button { display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%; min-height: 44px; margin-top: 20px; padding: 16px 0 0; border: 0; border-top: 1px solid #dfe4d6; border-radius: 0; color: #536b56; background: transparent; font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+.staff-services-page .ssu-refresh-button:hover { color: #173d35; text-decoration: underline; text-underline-offset: 4px; }
+.staff-services-page .ssu-refresh-button span { font-size: 21px; }
+.staff-services-page .ssu-guest-panel { padding: 28px 30px 0; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; }
+.staff-services-page .ssu-guest-heading { display: flex; gap: 18px; align-items: center; }
+.staff-services-page .ssu-guest-heading > div { min-width: 0; }
+.staff-services-page .ssu-guest-heading .ssu-eyebrow { margin-bottom: 6px; font-size: 9px; }
+.staff-services-page .ssu-guest-symbol { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 48px; height: 52px; color: #436452; background: #edf1e7; border: 1px solid #dce4d4; }
+.staff-services-page .ssu-room-label { margin: 25px 0 11px; color: #62715f; font-size: 11px; font-weight: 500; }
+.staff-services-page .ssu-room-list { display: grid; gap: 15px; margin: 0; padding: 0; list-style: none; }
+.staff-services-page .ssu-room-list > li { padding-left: 15px; border-left: 2px solid #d6c8a7; }
+.staff-services-page .ssu-room-title { margin: 0; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.staff-services-page .ssu-room-title strong { display: block; color: #31523f; font-weight: 600; }
+.staff-services-page .ssu-room-title span { display: block; color: #60705e; }
+.staff-services-page .ssu-room-dates { margin: 6px 0 0; color: #44634b; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.staff-services-page .ssu-room-dates span { margin-inline: 5px; color: #77806d; font-size: 11px; }
+.staff-services-page .ssu-guest-panel > .ssu-panel-note { margin-top: 22px; padding-block: 17px 19px; border-top: 1px solid #e1e5da; }
+.staff-services-page .ssu-entry-section, .staff-services-page .ssu-history-section { margin-top: 33px; }
+.staff-services-page .ssu-section-heading { margin-bottom: 20px; }
+.staff-services-page .ssu-section-heading .ssu-eyebrow { margin-bottom: 7px; }
+.staff-services-page .ssu-body-copy { margin: 12px 0 0; color: #60715f; font-size: 12px; line-height: 1.85; overflow-wrap: anywhere; }
+.staff-services-page .ssu-bill-body > .ssu-body-copy { margin: 0 0 22px; }
+.staff-services-page .ssu-entry-form { padding: 25px 30px 28px; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; }
+.staff-services-page .ssu-form-introduction { margin: 0 0 22px; color: #60715f; font-size: 12px; line-height: 1.85; }
+.staff-services-page .ssu-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) 125px; gap: 20px; }
+.staff-services-page .ssu-field { min-width: 0; }
+.staff-services-page .ssu-field label { display: block; margin-bottom: 8px; color: #3b5842; font-size: 12px; font-weight: 600; }
+.staff-services-page .ssu-field :is(input, select) { display: block; width: 100%; min-width: 0; min-height: 46px; padding: 11px 13px; border: 1px solid #cbd5c3; border-radius: 3px; background: #fffef9; color: #274c3a; font: inherit; font-size: 13px; line-height: 1.5; }
+.staff-services-page .ssu-service-price { margin-top: 22px; padding: 16px 18px; border-left: 2px solid #b68a45; background: #f4f3e9; }
+.staff-services-page .ssu-service-price > p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px 13px; margin: 0; color: #64725b; font-size: 11px; line-height: 1.8; }
+.staff-services-page .ssu-service-price strong { color: #34523d; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.staff-services-page .ssu-service-price .ssu-service-description { margin-top: 7px; font-size: 12px; overflow-wrap: anywhere; }
+.staff-services-page .ssu-entry-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 23px; }
+.staff-services-page .ssu-button { display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-height: 45px; max-width: 100%; padding: 12px 18px; border: 1px solid #cbd4c4; border-radius: 3px; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.5; text-align: center; text-decoration: none; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.staff-services-page .ssu-button-primary { border-color: #173d35; background: #173d35; color: #fffdf3; }
+.staff-services-page .ssu-button-primary:hover { border-color: #2e5745; background: #2e5745; }
+.staff-services-page .ssu-button-secondary { background: #fffefa; color: #385944; }
+.staff-services-page .ssu-button-secondary:hover { border-color: #94a68e; background: #eef1e7; }
+.staff-services-page :is(a, button, input, select):focus-visible { outline: 2px solid #b68a45; outline-offset: 4px; }
+.staff-services-page :is(button, input, select):disabled { opacity: .55; cursor: not-allowed; }
+.staff-services-page .ssu-entry-review { margin-top: 17px; padding: 26px 30px 28px; border: 1px solid #cbd7c1; border-top: 3px solid #b68a45; border-radius: 3px; background: #f0f2e7; }
+.staff-services-page .ssu-entry-review h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 26px; font-weight: 400; line-height: 1.3; }
+.staff-services-page .ssu-review-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 19px 25px; margin: 25px 0 0; }
+.staff-services-page .ssu-review-details > div { min-width: 0; }
+.staff-services-page .ssu-review-details dt { margin-bottom: 6px; color: #63715b; font-size: 11px; line-height: 1.7; }
+.staff-services-page .ssu-review-details dd { margin: 0; color: #34553d; font-size: 13px; font-weight: 600; line-height: 1.8; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.staff-services-page .ssu-review-details .ssu-review-total { grid-column: 1 / -1; padding-top: 16px; border-top: 1px solid #d3dcc9; }
+.staff-services-page .ssu-review-total dd { font-family: Georgia, "Times New Roman", serif; font-size: 26px; font-weight: 400; }
+.staff-services-page .ssu-save-confirmation { margin: 19px 0 0; color: #576b51; font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
+.staff-services-page .ssu-history-list { display: grid; gap: 15px; margin: 0; padding: 0; list-style: none; }
+.staff-services-page .ssu-history-card { padding: 22px 27px; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; }
+.staff-services-page .ssu-history-top { display: flex; justify-content: space-between; gap: 18px; }
+.staff-services-page .ssu-history-top > div { min-width: 0; }
+.staff-services-page .ssu-entry-reference { margin: 0 0 6px; color: #776e4f; font-size: 10px; line-height: 1.7; }
+.staff-services-page .ssu-history-card h3 { margin: 0; color: #244b39; font-family: Georgia, "Times New Roman", serif; font-size: 23px; font-weight: 400; line-height: 1.4; overflow-wrap: anywhere; }
+.staff-services-page .ssu-line-total { text-align: right; }
+.staff-services-page .ssu-line-total span { display: block; margin-bottom: 7px; color: #65725e; font-size: 10px; line-height: 1.7; }
+.staff-services-page .ssu-line-total strong { color: #2a503b; font-size: 14px; line-height: 1.8; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.staff-services-page .ssu-history-details { display: grid; grid-template-columns: .55fr 1fr 1.25fr; gap: 18px; margin: 20px 0 0; padding-top: 17px; border-top: 1px solid #e0e5d7; }
+.staff-services-page .ssu-history-details > div { min-width: 0; }
+.staff-services-page .ssu-history-details dt { margin-bottom: 6px; color: #667362; font-size: 10px; line-height: 1.7; }
+.staff-services-page .ssu-history-details dd { margin: 0; color: #3c5a45; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.staff-services-page .ssu-empty-note { margin: 0; padding: 24px 27px; border: 1px dashed #cbd5c4; border-radius: 3px; color: #5f7362; background: #f1f3e9; font-size: 12px; line-height: 1.85; }
+.staff-services-page .ssu-empty-note strong { color: #38583e; font-size: 13px; font-weight: 600; }
+.staff-services-page .ssu-empty-note p { margin: 8px 0 0; }
+.staff-services-page .ssu-empty-note .ssu-button { margin-top: 15px; }
+.staff-services-page .ssu-notice { margin: 0 0 24px; padding: 18px 22px; border: 1px solid #cdddc3; border-radius: 3px; color: #365c3b; background: #eef5e7; font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
+.staff-services-page .ssu-notice p { margin: 0; }
+.staff-services-page .ssu-notice p + p { margin-top: 12px; }
+.staff-services-page .ssu-notice .ssu-button { margin-top: 17px; }
+.staff-services-page .ssu-notice-warning { border-color: #dfd3b9; color: #735c2d; background: #f8f3e7; }
+.staff-services-page .ssu-notice-error { border-color: #e4ccbf; color: #8b442f; background: #faf0e9; }
+.staff-services-page .ssu-state-panel { padding: 55px 30px; border: 1px solid #dce0d5; border-radius: 3px; background: #fffefa; text-align: center; }
+.staff-services-page .ssu-state-panel h1 { font-size: clamp(28px, 4vw, 39px); }
+.staff-services-page .ssu-state-panel h2 { font-size: clamp(25px, 4vw, 33px); }
+.staff-services-page .ssu-state-panel > p:not(.ssu-eyebrow) { max-width: 520px; margin: 15px auto 0; color: #667464; font-size: 13px; line-height: 1.8; }
+.staff-services-page .ssu-state-panel .ssu-button { margin-top: 23px; }
+.staff-services-page p.ssu-error-copy { color: #93472f; }
+
+@media (max-width: 1000px) {
+  .staff-services-page .ssu-layout { grid-template-columns: minmax(0, 1fr) 305px; gap: 20px; }
+  .staff-services-page .ssu-guest-panel { padding: 25px 23px 0; }
+  .staff-services-page .ssu-entry-form, .staff-services-page .ssu-entry-review { padding: 24px; }
+  .staff-services-page .ssu-history-card { padding: 21px 23px; }
+  .staff-services-page .ssu-form-fields { grid-template-columns: minmax(0, 1fr) 100px; gap: 15px; }
+  .staff-services-page .ssu-history-details { grid-template-columns: minmax(0, .6fr) minmax(0, 1fr); }
+  .staff-services-page .ssu-history-details > div:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 800px) {
+  .staff-services-page .ssu-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bill" "workspace"; gap: 25px; }
+  .staff-services-page .ssu-bill-rail { position: static; }
+  .staff-services-page .ssu-bill-panel { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr); }
+  .staff-services-page .ssu-bill-heading { padding: 25px; }
+  .staff-services-page .ssu-bill-details { margin-bottom: 18px; }
+  .staff-services-page .ssu-bill-details .ssu-bill-outstanding { margin-top: 16px; }
+  .staff-services-page .ssu-form-fields { grid-template-columns: minmax(0, 1fr) 135px; gap: 20px; }
+  .staff-services-page .ssu-history-details { grid-template-columns: .55fr 1fr 1.25fr; }
+  .staff-services-page .ssu-history-details > div:last-child { grid-column: auto; }
+}
+@media (max-width: 580px) {
+  .staff-services-page .ssu-breadcrumbs { margin-bottom: 24px; }
+  .staff-services-page .ssu-breadcrumbs a { font-size: 11px; }
+  .staff-services-page .ssu-page-heading { align-items: flex-start; flex-direction: column; gap: 16px; margin-bottom: 25px; }
+  .staff-services-page h1 { font-size: 36px; }
+  .staff-services-page .ssu-eyebrow { font-size: 9px; letter-spacing: 1.3px; }
+  .staff-services-page .ssu-introduction { font-size: 12px; margin-top: 12px; }
+  .staff-services-page .ssu-status { padding: 6px 11px; font-size: 11px; }
+  .staff-services-page .ssu-bill-panel { display: block; }
+  .staff-services-page .ssu-bill-heading, .staff-services-page .ssu-bill-body { padding: 22px; }
+  .staff-services-page .ssu-bill-status { margin-top: 15px; padding-top: 12px; }
+  .staff-services-page .ssu-bill-details > div { margin-bottom: 12px; }
+  .staff-services-page .ssu-bill-details .ssu-bill-total { margin-top: 14px; padding-top: 14px; }
+  .staff-services-page .ssu-bill-details .ssu-bill-outstanding { padding: 14px 16px; }
+  .staff-services-page .ssu-bill-outstanding dd { font-size: 26px; }
+  .staff-services-page .ssu-guest-panel { padding: 23px 21px 0; }
+  .staff-services-page .ssu-guest-heading { gap: 13px; }
+  .staff-services-page .ssu-guest-symbol { width: 41px; height: 48px; }
+  .staff-services-page .ssu-guest-heading h2 { font-size: 25px; }
+  .staff-services-page .ssu-entry-form, .staff-services-page .ssu-entry-review { padding: 23px 21px; }
+  .staff-services-page .ssu-form-fields { grid-template-columns: minmax(0, 1fr) 90px; gap: 15px; }
+  .staff-services-page .ssu-field :is(input, select) { font-size: 16px; }
+  .staff-services-page .ssu-entry-actions { flex-direction: column; }
+  .staff-services-page .ssu-entry-actions .ssu-button { width: 100%; }
+  .staff-services-page .ssu-review-details { gap: 18px; }
+  .staff-services-page .ssu-history-card { padding: 22px 21px; }
+  .staff-services-page .ssu-history-top { flex-direction: column; gap: 14px; }
+  .staff-services-page .ssu-line-total { text-align: left; }
+  .staff-services-page .ssu-line-total span { display: inline; margin-right: 12px; }
+  .staff-services-page .ssu-history-details { grid-template-columns: minmax(0, .65fr) minmax(0, 1fr); gap: 16px; }
+  .staff-services-page .ssu-history-details > div:last-child { grid-column: 1 / -1; }
+  .staff-services-page .ssu-empty-note { padding: 21px; }
+  .staff-services-page .ssu-notice { padding: 17px; font-size: 12px; }
+  .staff-services-page .ssu-state-panel { padding: 40px 22px; }
+}
+@media (max-width: 380px) {
+  .staff-services-page .ssu-form-fields, .staff-services-page .ssu-review-details { grid-template-columns: minmax(0, 1fr); }
+  .staff-services-page .ssu-guest-heading { align-items: flex-start; }
+  .staff-services-page .ssu-guest-symbol { width: 34px; height: 41px; }
+  .staff-services-page .ssu-guest-heading h2 { font-size: 23px; }
+}
