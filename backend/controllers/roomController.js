@@ -197,15 +197,313 @@ const updateRoomStatus = asyncHandler(async (req, res) => {
   } finally { conn.release(); }
   res.json({ roomId: id, roomStatus });
 });
+function cleanText(value, max) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text.length > 0 && text.length <= max ? text : null;
+}
 
+// DailyRate must be a positive number with at most 2 decimal places.
+function cleanRate(value) {
+  const n = Number(value);
+  if (value === '' || value === null || !Number.isFinite(n) || n <= 0 || n >= 100000000) return null;
+  return Math.round(n * 100) / 100 === n ? n : null;
+}
+
+function handleDbError(err, res, inUseMessage) {
+  if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+    res.status(409).json({ error: inUseMessage });
+    return true;
+  }
+  if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+    res.status(400).json({ error: 'The branch, room type or amenity you referred to does not exist.' });
+    return true;
+  }
+  if (err.code === 'ER_DUP_ENTRY') {
+    res.status(409).json({ error: 'That value already exists.' });
+    return true;
+  }
+  if (err.code === 'ER_CHECK_CONSTRAINT_VIOLATED') {
+    res.status(400).json({ error: 'One of the values is not allowed.' });
+    return true;
+  }
+  return false;
+}
+
+async function roomHasActiveBooking(conn, roomId) {
+  const [[active]] = await conn.execute(
+    `SELECT br.BookedRoomID FROM BOOKED_ROOMS br
+     JOIN BOOKING b ON b.BookingID = br.BookingID
+     WHERE br.RoomID = ? AND b.BookingStatus IN ('Booked','Checked-In')
+     LIMIT 1 FOR SHARE`,
+    [roomId]
+  );
+  return Boolean(active);
+}
+
+const updateBranch = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Branch ID must be a positive whole number.' });
+
+  const body = req.body || {};
+  const name = body.name === undefined ? undefined : cleanText(body.name, 100);
+  const location = body.location === undefined ? undefined : cleanText(body.location, 150);
+  const contactNumber = body.contactNumber === undefined ? undefined : cleanText(body.contactNumber, 20);
+
+  if (name === null) return res.status(400).json({ error: 'name must be 1 to 100 characters.' });
+  if (location === null) return res.status(400).json({ error: 'location must be 1 to 150 characters.' });
+  if (contactNumber === null) return res.status(400).json({ error: 'contactNumber must be 1 to 20 characters.' });
+  if (name === undefined && location === undefined && contactNumber === undefined) {
+    return res.status(400).json({ error: 'Send at least one of name, location, contactNumber.' });
+  }
+
+  const [result] = await pool.execute(
+    `UPDATE BRANCH
+     SET Name = COALESCE(?, Name),
+         Location = COALESCE(?, Location),
+         ContactNumber = COALESCE(?, ContactNumber)
+     WHERE BranchID = ?`,
+    [name ?? null, location ?? null, contactNumber ?? null, id]
+  );
+  if (result.affectedRows === 0) return res.status(404).json({ error: 'Branch not found.' });
+  res.json({ branchId: id, message: 'Branch updated.' });
+});
+
+const deleteBranch = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Branch ID must be a positive whole number.' });
+  try {
+    const [result] = await pool.execute('DELETE FROM BRANCH WHERE BranchID = ?', [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Branch not found.' });
+    res.json({ branchId: id, message: 'Branch deleted.' });
+  } catch (err) {
+    if (handleDbError(err, res, 'Cannot delete this branch: rooms or staff still belong to it.')) return;
+    throw err;
+  }
+});
+
+const updateRoomType = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Room type ID must be a positive whole number.' });
+
+  const body = req.body || {};
+  const name = body.name === undefined ? undefined : cleanText(body.name, 100);
+  const capacity = body.capacity === undefined ? undefined : positiveInteger(body.capacity);
+  const dailyRate = body.dailyRate === undefined ? undefined : cleanRate(body.dailyRate);
+
+  if (name === null) return res.status(400).json({ error: 'name must be 1 to 100 characters.' });
+  if (capacity === null) return res.status(400).json({ error: 'capacity must be a positive whole number.' });
+  if (dailyRate === null) return res.status(400).json({ error: 'dailyRate must be a positive number with at most 2 decimals.' });
+
+  // Optional: amenityIds replaces the room type's whole amenity list.
+  let amenityIds;
+  if (body.amenityIds !== undefined) {
+    const ids = Array.isArray(body.amenityIds) ? body.amenityIds.map((x) => positiveInteger(x)) : null;
+    if (!ids || ids.includes(null)) {
+      return res.status(400).json({ error: 'amenityIds must be a list of positive whole numbers.' });
+    }
+    amenityIds = [...new Set(ids)];
+  }
+
+  if (name === undefined && capacity === undefined && dailyRate === undefined && amenityIds === undefined) {
+    return res.status(400).json({ error: 'Send at least one of name, capacity, dailyRate, amenityIds.' });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [result] = await conn.execute(
+      `UPDATE ROOM_TYPE
+       SET Name = COALESCE(?, Name),
+           Capacity = COALESCE(?, Capacity),
+           DailyRate = COALESCE(?, DailyRate)
+       WHERE RoomTypeID = ?`,
+      [name ?? null, capacity ?? null, dailyRate ?? null, id]
+    );
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Room type not found.' });
+    }
+    if (amenityIds !== undefined) {
+      await conn.execute('DELETE FROM ROOM_TYPE_AMENITY WHERE RoomTypeID = ?', [id]);
+      if (amenityIds.length) {
+        await conn.query('INSERT INTO ROOM_TYPE_AMENITY (RoomTypeID, AmenityID) VALUES ?', [
+          amenityIds.map((amenityId) => [id, amenityId]),
+        ]);
+      }
+    }
+    await conn.commit();
+    res.json({ roomTypeId: id, message: 'Room type updated.' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* keep the original error */ }
+    if (handleDbError(err, res, 'This room type is in use.')) return;
+    throw err;
+  } finally {
+    conn.release();
+  }
+});
+
+const deleteRoomType = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Room type ID must be a positive whole number.' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Remove its amenity links first, then the room type itself.
+    await conn.execute('DELETE FROM ROOM_TYPE_AMENITY WHERE RoomTypeID = ?', [id]);
+    const [result] = await conn.execute('DELETE FROM ROOM_TYPE WHERE RoomTypeID = ?', [id]);
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Room type not found.' });
+    }
+    await conn.commit();
+    res.json({ roomTypeId: id, message: 'Room type deleted.' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* keep the original error */ }
+    if (handleDbError(err, res, 'Cannot delete this room type: rooms still use it.')) return;
+    throw err;
+  } finally {
+    conn.release();
+  }
+});
+
+
+const updateAmenity = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Amenity ID must be a positive whole number.' });
+
+  const name = cleanText((req.body || {}).name, 100);
+  if (name === null) return res.status(400).json({ error: 'name must be 1 to 100 characters.' });
+
+  try {
+    const [result] = await pool.execute('UPDATE AMENITY SET AmenityName = ? WHERE AmenityID = ?', [name, id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Amenity not found.' });
+    res.json({ amenityId: id, name, message: 'Amenity updated.' });
+  } catch (err) {
+    if (handleDbError(err, res, 'This amenity is in use.')) return;
+    throw err;
+  }
+});
+
+const deleteAmenity = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Amenity ID must be a positive whole number.' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Unlink it from every room type, then delete it.
+    await conn.execute('DELETE FROM ROOM_TYPE_AMENITY WHERE AmenityID = ?', [id]);
+    const [result] = await conn.execute('DELETE FROM AMENITY WHERE AmenityID = ?', [id]);
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Amenity not found.' });
+    }
+    await conn.commit();
+    res.json({ amenityId: id, message: 'Amenity deleted.' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* keep the original error */ }
+    if (handleDbError(err, res, 'Cannot delete this amenity: it is still in use.')) return;
+    throw err;
+  } finally {
+    conn.release();
+  }
+});
+
+
+
+const updateRoom = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Room ID must be a positive whole number.' });
+
+  const body = req.body || {};
+  const roomNumber = body.roomNumber === undefined ? undefined : cleanText(body.roomNumber, 10);
+  const roomTypeId = body.roomTypeId === undefined ? undefined : positiveInteger(body.roomTypeId);
+
+  if (roomNumber === null) return res.status(400).json({ error: 'roomNumber must be 1 to 10 characters.' });
+  if (roomTypeId === null) return res.status(400).json({ error: 'roomTypeId must be a positive whole number.' });
+  if (roomNumber === undefined && roomTypeId === undefined) {
+    return res.status(400).json({ error: 'Send at least one of roomNumber, roomTypeId.' });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Lock the room row so a booking cannot slip in while we edit.
+    const [[room]] = await conn.execute('SELECT RoomID FROM ROOM WHERE RoomID = ? FOR UPDATE', [id]);
+    if (!room) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Room not found.' });
+    }
+    if (await roomHasActiveBooking(conn, id)) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Cannot modify a room that has an active booking.' });
+    }
+    await conn.execute(
+      `UPDATE ROOM
+       SET RoomNumber = COALESCE(?, RoomNumber),
+           RoomTypeID = COALESCE(?, RoomTypeID)
+       WHERE RoomID = ?`,
+      [roomNumber ?? null, roomTypeId ?? null, id]
+    );
+    await conn.commit();
+    res.json({ roomId: id, message: 'Room updated.' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* keep the original error */ }
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'That room number already exists at this branch.' });
+    }
+    if (handleDbError(err, res, 'This room is in use.')) return;
+    throw err;
+  } finally {
+    conn.release();
+  }
+});
+
+const deleteRoom = asyncHandler(async (req, res) => {
+  const id = positiveInteger(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Room ID must be a positive whole number.' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[room]] = await conn.execute('SELECT RoomID FROM ROOM WHERE RoomID = ? FOR UPDATE', [id]);
+    if (!room) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Room not found.' });
+    }
+    if (await roomHasActiveBooking(conn, id)) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Cannot delete a room that has an active booking.' });
+    }
+    await conn.execute('DELETE FROM ROOM WHERE RoomID = ?', [id]);
+    await conn.commit();
+    res.json({ roomId: id, message: 'Room deleted.' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* keep the original error */ }
+    if (handleDbError(err, res, 'This room has booking history and cannot be deleted. Set its status to Maintenance instead.')) return;
+    throw err;
+  } finally {
+    conn.release();
+  }
+});
 module.exports = {
   listBranches,
   createBranch,
+  updateBranch,
+  deleteBranch,
   listRoomTypes,
   createRoomType,
+  updateRoomType,
+  deleteRoomType,
   listAmenities,
   createAmenity,
+  updateAmenity,
+  deleteAmenity,
   searchRooms,
   createRoom,
+  updateRoom,
+  deleteRoom,
   updateRoomStatus,
 };
