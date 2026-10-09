@@ -2,7 +2,7 @@ import { API_BASE, clearSession } from "./session";
 import { readStaffSession } from "./staffAuth";
 
 const expiryMessage = "Your staff session has expired. Please sign in again.";
-const accessMessage = "Only managers and administrators can manage branches and room types.";
+const accessMessage = "Only managers and administrators can manage the property catalogue.";
 const loadMessage = "The property catalogue could not be verified. Please refresh and try again.";
 const uncertainMessage = "We could not confirm whether this item was saved. Refresh the list and check it before clearing this action or adding the item again.";
 const inFlight = new Set();
@@ -31,7 +31,7 @@ function money(value) {
   return match ? `${match[1]}.${(match[2] || "").padEnd(2, "0")}` : null;
 }
 function catalogueKind(kind) {
-  if (!["branches", "room-types"].includes(kind)) throw failure("Choose branches or room types.", 400);
+  if (!["branches", "room-types", "rooms", "amenities"].includes(kind)) throw failure("Choose a valid property catalogue.", 400);
   return kind;
 }
 function draftText(value, maximum, label) {
@@ -67,7 +67,23 @@ export function parseRoomTypeDraft(draft) {
   }
   return { name, capacity, dailyRate, amenityIds };
 }
-function parseDraft(kind, draft) { return kind === "branches" ? parseBranchDraft(draft) : parseRoomTypeDraft(draft); }
+export function parseRoomDraft(draft) {
+  if (!object(draft)) throw failure("Enter the room details.", 400);
+  const branchId = integer(draft.branchId);
+  const roomTypeId = integer(draft.roomTypeId);
+  if (branchId === null || roomTypeId === null) throw failure("Choose an existing branch and room type.", 400);
+  const roomNumber = draftText(draft.roomNumber, 10, "a room number");
+  return { branchId, roomTypeId, roomNumber };
+}
+export function parseAmenityDraft(draft) {
+  if (!object(draft)) throw failure("Enter the amenity details.", 400);
+  return { name: draftText(draft.name, 100, "an amenity name") };
+}
+function parseDraft(kind, draft) {
+  if (kind === "branches") return parseBranchDraft(draft);
+  if (kind === "room-types") return parseRoomTypeDraft(draft);
+  return kind === "rooms" ? parseRoomDraft(draft) : parseAmenityDraft(draft);
+}
 
 function currentStaff(token, staffId) {
   const session = readStaffSession();
@@ -139,13 +155,21 @@ function rows(value, kind) {
   if (!Array.isArray(value)) throw failure(loadMessage);
   const seen = new Set();
   return value.map((row) => {
-    const idKey = kind === "branches" ? "BranchID" : kind === "room-types" ? "RoomTypeID" : "AmenityID";
+    const idKey = { branches: "BranchID", "room-types": "RoomTypeID", rooms: "RoomID", amenities: "AmenityID" }[kind];
     const id = integer(row?.[idKey]);
     if (!object(row) || id === null || seen.has(id)) throw failure(loadMessage);
     seen.add(id);
     if (kind === "amenities") {
       if (!plainText(row.AmenityName, 100)) throw failure(loadMessage);
       return { AmenityID: id, AmenityName: row.AmenityName };
+    }
+    if (kind === "rooms") {
+      if (!plainText(row.RoomNumber, 10) || !["Available", "Occupied"].includes(row.RoomStatus) ||
+          integer(row.BranchID) === null || !plainText(row.BranchName, 100) || integer(row.RoomTypeID) === null ||
+          !plainText(row.RoomTypeName, 100) || integer(row.Capacity) === null || money(row.DailyRate) === null) throw failure(loadMessage);
+      return { RoomID: id, RoomNumber: row.RoomNumber, RoomStatus: row.RoomStatus,
+        BranchID: integer(row.BranchID), BranchName: row.BranchName, RoomTypeID: integer(row.RoomTypeID),
+        RoomTypeName: row.RoomTypeName, Capacity: integer(row.Capacity), DailyRate: money(row.DailyRate) };
     }
     if (!plainText(row.Name, 100)) throw failure(loadMessage);
     if (kind === "branches") {
@@ -163,14 +187,25 @@ export async function loadPropertyCatalogue(kind, token, signal) {
   catalogueKind(kind);
   const staffId = requireManager(token);
   await liveScope(token, staffId, signal);
-  const results = await Promise.all([
-    request(`/${kind}`, token, staffId, signal),
-    ...(kind === "room-types" ? [request("/amenities", token, staffId, signal)] : []),
-  ]);
+  const paths = [kind, ...(kind === "room-types" ? ["amenities"] : []),
+    ...(kind === "rooms" ? ["branches", "room-types"] : []), ...(kind === "amenities" ? ["room-types"] : [])];
+  const results = await Promise.all(paths.map((path) => request(`/${path}`, token, staffId, signal)));
   if (currentStaff(token, staffId) === null || signal?.aborted) throw cancelled();
-  const catalogueRows = rows(readResult(results[0], token, staffId), kind);
-  const amenities = results.length === 2 ? rows(readResult(results[1], token, staffId), "amenities") : [];
-  return { rows: catalogueRows, amenities };
+  const catalogues = Object.fromEntries(paths.map((path, index) => [path, rows(readResult(results[index], token, staffId), path)]));
+  if (kind === "rooms") {
+    // These are catalogue records, not availability for any stay dates. The endpoint omits maintenance rooms.
+    const branches = catalogues.branches;
+    const roomTypes = catalogues["room-types"];
+    for (const room of catalogues.rooms) {
+      const branch = branches.find((item) => item.BranchID === room.BranchID);
+      const roomType = roomTypes.find((item) => item.RoomTypeID === room.RoomTypeID);
+      if (!branch || !roomType || branch.Name !== room.BranchName || roomType.Name !== room.RoomTypeName ||
+          roomType.Capacity !== room.Capacity || roomType.DailyRate !== room.DailyRate) throw failure(loadMessage);
+    }
+    return { rows: catalogues.rooms, branches, roomTypes, amenities: [] };
+  }
+  if (kind === "amenities") return { rows: catalogues.amenities, roomTypes: catalogues["room-types"], amenities: catalogues.amenities, branches: [] };
+  return { rows: catalogues[kind], amenities: catalogues.amenities || [] };
 }
 
 function attemptKey(kind, staffId) { return `skynest_property_attempt:${catalogueKind(kind)}:${staffId}`; }
@@ -209,7 +244,13 @@ function persistAttempt(key, attempt) {
   if (sessionStorage.getItem(key) !== raw) throw new Error("Storage write was not retained");
 }
 function acknowledgement(kind, data, draft) {
+  if (kind === "rooms") {
+    const id = integer(data?.roomId);
+    return object(data) && id !== null && integer(data.branchId) === draft.branchId && integer(data.roomTypeId) === draft.roomTypeId &&
+      data.roomNumber === draft.roomNumber ? id : null;
+  }
   if (!object(data) || data.name !== draft.name) return null;
+  if (kind === "amenities") return integer(data.amenityId);
   if (kind === "branches") {
     const id = integer(data.branchId);
     return id !== null && data.location === draft.location && data.contactNumber === draft.contactNumber ? id : null;
@@ -234,6 +275,13 @@ export async function createPropertyItem(kind, draft, token, signal) {
       const available = new Set(amenities.map((row) => row.AmenityID));
       if (parsed.amenityIds.some((id) => !available.has(id))) throw failure("The amenity choices have changed. Refresh and choose them again.", 400);
     }
+    if (kind === "rooms") {
+      const selections = await Promise.all(["branches", "room-types"].map(async (path) =>
+        rows(readResult(await request(`/${path}`, token, staffId, signal), token, staffId), path)));
+      if (!selections[0].some((item) => item.BranchID === parsed.branchId) || !selections[1].some((item) => item.RoomTypeID === parsed.roomTypeId)) {
+        throw failure("The branch or room type choices have changed. Refresh and choose them again.", 400);
+      }
+    }
     if (signal?.aborted || currentStaff(token, staffId) === null) throw cancelled();
     if (readPropertyAttempt(kind, staffId)) throw failure("Check the previous property action before adding another item.", 0, true);
     const attempt = { kind, staffId, stage: "pending", id: null, draft: parsed };
@@ -249,6 +297,8 @@ export async function createPropertyItem(kind, draft, token, signal) {
       return { id: savedId, ...parsed };
     }
     const rejections = { 400: "Check the required fields. The item was not saved.", 401: expiryMessage, 403: accessMessage };
+    if (kind === "rooms") rejections[409] = "That room number already exists at this branch. Check the room list or choose another number.";
+    if (kind === "amenities") rejections[409] = "That amenity already exists. Check the amenity list before adding it again.";
     if (!response.ok && rejections[response.status]) {
       try { sessionStorage.removeItem(key); } catch { /* Preserve a blocking record if storage cannot be cleared. */ }
       if (response.status === 401) expireCurrent(token, staffId);
@@ -260,11 +310,19 @@ export async function createPropertyItem(kind, draft, token, signal) {
 
 // The success receipt identifies the creation; only a fresh catalogue supplies its displayed details.
 export function propertyAttemptMatchesCatalogue(attempt, catalogue) {
-  if (attempt?.stage !== "saved" || !["branches", "room-types"].includes(attempt.kind)
+  if (attempt?.stage !== "saved" || !["branches", "room-types", "rooms", "amenities"].includes(attempt.kind)
       || !Number.isInteger(attempt.id) || attempt.id <= 0 || !attempt.draft
       || !Array.isArray(catalogue?.rows) || !Array.isArray(catalogue?.amenities)) return false;
-  const branch = attempt.kind === "branches";
   const draft = attempt.draft;
+  if (attempt.kind === "rooms") {
+    const room = catalogue.rows.find((item) => item?.RoomID === attempt.id);
+    return Boolean(room && room.BranchID === draft.branchId && room.RoomTypeID === draft.roomTypeId && room.RoomNumber === draft.roomNumber);
+  }
+  if (attempt.kind === "amenities") {
+    const amenity = catalogue.rows.find((item) => item?.AmenityID === attempt.id);
+    return Boolean(amenity && amenity.AmenityName === draft.name);
+  }
+  const branch = attempt.kind === "branches";
   const row = catalogue.rows.find((item) => (branch ? item?.BranchID : item?.RoomTypeID) === attempt.id);
   if (!row || row.Name !== draft.name) return false;
   if (branch) return row.Location === draft.location && row.ContactNumber === draft.contactNumber;

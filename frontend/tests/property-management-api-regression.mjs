@@ -113,7 +113,7 @@ try {
   for (const amenityIds of [undefined, null, {}, [1, "1"], [0], [true], ["01"]]) assert.throws(() => parseType({ ...typeDraft, amenityIds }), status(400));
   assert.deepEqual(parseType({ ...typeDraft, amenityIds: [] }).amenityIds, []);
   await assert.rejects(save("branches", { ...branchDraft, name: " " }, managerToken), status(400));
-  await assert.rejects(load("rooms", managerToken), status(400)); assert.equal(calls.length, 0);
+  await assert.rejects(load("invalid-catalogue", managerToken), status(400)); assert.equal(calls.length, 0);
 
   for (const role of ["Receptionist", "ServiceStaff"]) {
     reset(); login(managerToken, 2, role);

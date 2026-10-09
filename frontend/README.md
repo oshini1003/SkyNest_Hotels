@@ -586,3 +586,26 @@ npm --prefix frontend run build
 
 The client regressions use mocked HTTP/storage and actual Vite-loaded modules.
 Build checks verify emitted assets, not browser rendering or live database writes.
+
+## Property management, Part 2 (9 October 2026)
+
+The manager/admin property workspace now includes **Rooms** (`/staff/rooms`) and
+**Amenities** (`/staff/amenities`). Rooms can be searched and filtered by branch,
+type and saved status, then added with a branch, room type and unique room number.
+Amenities can be searched and added for selection when creating a new room type.
+Both pages use the existing property design, review-before-save forms and
+session-aware interrupted-save recovery. All four property tabs are linked from
+each page; the two new pages are deferred production bundles.
+
+The existing room GET excludes maintenance rooms. The page labels its count as
+listed rooms and does not promise date availability. Manual room-status changes,
+room/amenity edit/delete and editing existing room-type amenity links are outside
+this frontend-only delivery. No backend or database files change. Read
+`docs/PROPERTY_MANAGEMENT_PART2.md` for the API limits and local browser checks.
+
+```powershell
+node .\frontend\tests\property-inventory-api-regression.mjs
+node .\frontend\tests\property-management-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+npm --prefix frontend run build
+```

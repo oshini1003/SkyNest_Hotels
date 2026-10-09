@@ -56,6 +56,22 @@ export default function StaffHome({ staff, onLogout }) {
                   </span>
                   <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
                 </Link>
+                <Link className="staff-workspace-card" to="/staff/rooms">
+                  <span className="staff-workspace-icon"><WorkspaceIcon property /></span>
+                  <span className="staff-workspace-copy">
+                    <span className="staff-workspace-title">Rooms</span>
+                    <span className="staff-workspace-description">Browse listed rooms by branch and type, or add a room to the collection.</span>
+                  </span>
+                  <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+                </Link>
+                <Link className="staff-workspace-card" to="/staff/amenities">
+                  <span className="staff-workspace-icon"><WorkspaceIcon property /></span>
+                  <span className="staff-workspace-copy">
+                    <span className="staff-workspace-title">Amenities</span>
+                    <span className="staff-workspace-description">Explore room comforts and add amenities for new room types.</span>
+                  </span>
+                  <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+                </Link>
               </>
             )}
             {canViewReports(staff.role) && (

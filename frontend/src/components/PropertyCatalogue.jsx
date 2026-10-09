@@ -219,7 +219,7 @@ function PropertyCatalogueSession({ kind, session }) {
   return <section className="property-page" aria-labelledby="property-heading">
     <nav className="pc-breadcrumb" aria-label="Staff workspace"><Link to="/staff/dashboard">Dashboard</Link><span aria-hidden="true">/</span><Link to="/staff">Staff account</Link><span aria-hidden="true">/</span><span>Property management</span></nav>
     <header className="pc-heading"><div><p className="pc-eyebrow">SKYNEST / PROPERTY COLLECTION</p><h1 id="property-heading">{title}</h1><p className="pc-intro">{isBranch ? "A considered welcome, in every destination. Keep your hotel locations and their contact details together." : "Set the foundations of a comfortable stay. Explore room categories, guest capacity and the comforts included."}</p></div><a className="pc-button" href="#property-add" onClick={() => formHeading.current?.focus()}>{addLabel}<span aria-hidden="true">+</span></a></header>
-    <nav className="pc-tabs" aria-label="Property catalogues"><Link to="/staff/branches" aria-current={isBranch ? "page" : undefined}>Branches</Link><Link to="/staff/room-types" aria-current={!isBranch ? "page" : undefined}>Room types</Link></nav>
+    <nav className="pc-tabs" aria-label="Property catalogues"><Link to="/staff/branches" aria-current={isBranch ? "page" : undefined}>Branches</Link><Link to="/staff/room-types" aria-current={!isBranch ? "page" : undefined}>Room types</Link><Link to="/staff/rooms">Rooms</Link><Link to="/staff/amenities">Amenities</Link></nav>
 
     {notice && <div className="pc-notice" role="status">{notice}</div>}
     {actionError && <div className="pc-error" role="alert">{actionError}</div>}

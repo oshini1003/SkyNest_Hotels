@@ -21,6 +21,7 @@ function Header({ session, staffSession, staffContext }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef(null);
   const isStaffWorkspace = staffContext && Boolean(staffSession);
+  const isPropertyPage = ["/staff/branches", "/staff/room-types", "/staff/rooms", "/staff/amenities"].includes(pathname);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -70,7 +71,7 @@ function Header({ session, staffSession, staffContext }) {
                   <NavLink to="/staff/bookings">Bookings</NavLink>
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/reports">Reports</NavLink>}
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/services">Catalogue</NavLink>}
-                  {canViewReports(staffSession.staff.role) && <Link to="/staff/branches" className={pathname === "/staff/branches" || pathname === "/staff/room-types" ? "active" : undefined} aria-current={pathname === "/staff/branches" ? "page" : pathname === "/staff/room-types" ? "location" : undefined}>Property</Link>}
+                  {canViewReports(staffSession.staff.role) && <Link to="/staff/branches" className={isPropertyPage ? "active" : undefined} aria-current={pathname === "/staff/branches" ? "page" : isPropertyPage ? "location" : undefined}>Property</Link>}
                   <NavLink to="/staff" end className="sk-account-link">My account</NavLink>
                 </>
               )}
