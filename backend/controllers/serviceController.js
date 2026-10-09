@@ -35,36 +35,8 @@ const listServices = asyncHandler(async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/services  (Manager/Admin only)
-const createService = asyncHandler(async (req, res) => {
-  const { serviceName, description, unitPrice } = req.body;
-  if (!serviceName || unitPrice == null) {
-    return res.status(400).json({ error: 'serviceName and unitPrice are required.' });
-  }
-  const [result] = await pool.execute(
-    `INSERT INTO SERVICE_CATALOGUE (ServiceName, Description, UnitPrice) VALUES (?, ?, ?)`,
-    [serviceName, description || null, unitPrice]
-  );
-  res.status(201).json({ serviceId: result.insertId, serviceName, unitPrice });
-});
-
-// PUT /api/services/:id  (Manager/Admin only) - update price/description, or retire (IsActive=false)
-const updateService = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { serviceName, description, unitPrice, isActive } = req.body;
-
-  const [result] = await pool.execute(
-    `UPDATE SERVICE_CATALOGUE
-     SET ServiceName = COALESCE(?, ServiceName),
-         Description = COALESCE(?, Description),
-         UnitPrice = COALESCE(?, UnitPrice),
-         IsActive = COALESCE(?, IsActive)
-     WHERE ServiceID = ?`,
-    [serviceName ?? null, description ?? null, unitPrice ?? null, isActive ?? null, id]
-  );
-  if (result.affectedRows === 0) return res.status(404).json({ error: 'Service not found.' });
-  res.json({ serviceId: id, updated: true });
-});
+// Catalogue management is separate from unchanged public and booking-service flows.
+const { listManagedServices, createService, updateService } = require('./serviceCatalogueController');
 
 // POST /api/service-usage   { bookingId, serviceId, quantity }
 // Guests request only for their own booking; front desk/service staff use their assigned branch.
@@ -128,4 +100,4 @@ const listServiceUsageForBooking = asyncHandler(async (req, res) => {
   res.json(rows);
 });
 
-module.exports = { listServices, createService, updateService, logServiceUsage, listServiceUsageForBooking };
+module.exports = { listServices, listManagedServices, createService, updateService, logServiceUsage, listServiceUsageForBooking };

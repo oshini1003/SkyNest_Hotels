@@ -47,6 +47,7 @@ const StaffBookingDetails = lazyPage(() => import("./pages/StaffBookingDetails")
 const StaffServiceUsage = lazyPage(() => import("./pages/StaffServiceUsage"));
 const StaffBilling = lazyPage(() => import("./pages/StaffBilling"));
 const ManagerReports = lazyPage(() => import("./pages/ManagerReports"));
+const ManagerServices = lazyPage(() => import("./pages/ManagerServices"));
 const ManagerDashboard = lazyPage(() => import("./pages/ManagerDashboard"));
 const Branches = lazyPage(() => import("./pages/Branches"));
 
@@ -269,6 +270,10 @@ function handleStaffLogout() {
             <Route
               path="/staff/reports"
               element={<StaffOnly session={staffSession}><ManagerReports key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/services"
+              element={<StaffOnly session={staffSession}><ManagerServices key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
             <Route
               path="/staff/bookings"

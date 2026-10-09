@@ -68,6 +68,7 @@ function Header({ session, staffSession, staffContext }) {
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/dashboard">Dashboard</NavLink>}
                   <NavLink to="/staff/bookings">Bookings</NavLink>
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/reports">Reports</NavLink>}
+                  {canViewReports(staffSession.staff.role) && <NavLink to="/staff/services">Catalogue</NavLink>}
                   <NavLink to="/staff" end className="sk-account-link">My account</NavLink>
                 </>
               )}

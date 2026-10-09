@@ -39,6 +39,16 @@ export default function StaffHome({ staff, onLogout }) {
 
           <div className="staff-dashboard-actions">
             {canViewReports(staff.role) && (
+              <Link className="staff-workspace-card" to="/staff/services">
+                <span className="staff-workspace-icon"><WorkspaceIcon /></span>
+                <span className="staff-workspace-copy">
+                  <span className="staff-workspace-title">Service catalogue</span>
+                  <span className="staff-workspace-description">Manage service details, current prices and availability.</span>
+                </span>
+                <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+              </Link>
+            )}
+            {canViewReports(staff.role) && (
               <Link className="staff-workspace-card" to="/staff/dashboard">
                 <span className="staff-workspace-icon"><WorkspaceIcon reports /></span>
                 <span className="staff-workspace-copy">

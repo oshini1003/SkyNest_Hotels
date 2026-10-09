@@ -448,7 +448,7 @@ required for this presentation update.
 
 ## Page bundles and loading states (8 October 2026)
 
-The home page and shared navigation load immediately. Eighteen other live pages
+The home page and shared navigation load immediately. Nineteen other live pages
 load their JavaScript and styles when first opened. Each has a stable, module-level
 lazy component and its own Suspense loading screen in the approved cream, green
 and gold theme. Existing page-level API loading and error messages still apply
@@ -497,3 +497,42 @@ throttling and the failure screen by blocking an unopened public page module;
 restore the connection and use Refresh page. Do not block a request while saving.
 Check desktop and phone widths. Existing records can be viewed for these checks;
 no new booking, payment, service or database migration is needed.
+
+## Manager service catalogue (8 October 2026)
+
+Managers and administrators can open `/staff/services` from Catalogue in the staff
+navigation or Service catalogue on the staff account page. The page uses the
+approved cream, deep-green and gold theme, with service cards, search, active and
+retired filters, a single-line description, current LKR prices and an explicit
+review step before creating, editing, retiring or reactivating a service.
+
+`serviceManagementApi.js` uses the manager-only `GET /api/management/services` and
+the strict `POST /api/services` / `PUT /api/services/:id` contracts. Updates send
+the original row values so the backend can reject a stale edit while holding the
+service row lock. The page is deferred separately, bringing the live page bundle
+count to nineteen. Ordinary staff and guests cannot use catalogue management.
+
+Each write is sent once, with redirects disabled. A session-storage record blocks
+another submission in the same tab until a successful acknowledgement or explicit
+inspection of an uncertain result. Storage errors cannot turn a confirmed save
+into a failure. This is not server idempotency or protection across every tab.
+After an uncertain save, allow any in-flight request to finish before reloading
+and inspecting; do not immediately resubmit the same change.
+
+Existing usage prices and charges stay saved. Renaming a service changes its
+label in historical joins. Retired services disappear from the public catalogue;
+a request already being processed can still finish. Catalogue changes do not add
+events to the existing booking-workflow audit trail. No database migration or
+additional runtime grants are required.
+
+Checks from the repository root:
+
+```powershell
+node .\backend\tests\service-catalogue-regression.cjs
+node .\frontend\tests\service-management-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+```
+
+These checks use mocked HTTP/database fixtures and a real production build.
+Live MySQL writes and browser rendering need the separate local checks described
+in `docs/SERVICE_CATALOGUE_MANAGEMENT.md`.
