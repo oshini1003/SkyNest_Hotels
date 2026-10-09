@@ -297,3 +297,22 @@
   .booking-review-page .review-actions { align-items: stretch; flex-direction: column; }
   .booking-review-page .review-actions > .review-text-link { align-self: flex-start; }
 }
+
+/* ---- Multi-room review (append to the end of MakeBooking.css) ---- */
+.booking-review-page .review-room-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.booking-review-page .review-room-list > li + li {
+  border-top: 1px solid #e6e8df;
+}
+
+.booking-review-page .review-room-meta {
+  display: block;
+  margin-top: 6px;
+  color: #61736a;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

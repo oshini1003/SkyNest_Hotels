@@ -564,3 +564,99 @@
   .room-search-page .room-search-placeholder { display: block; }
   .room-search-page .room-placeholder-icon { width: 48px; margin-bottom: 16px; }
 }
+
+/* ---- Multi-room selection (append to the end of RoomSearch.css) ---- */
+.room-search-page .room-selection-bar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-top: 28px;
+  padding: 14px 20px;
+  border: 1px solid #173d35;
+  border-radius: 3px;
+  background: #fffefa;
+  box-shadow: 0 8px 30px #173d3524;
+  font-size: 13px;
+}
+
+.room-search-page .room-selection-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-search-page .room-selection-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e0e4d8;
+}
+
+.room-search-page .room-selection-info strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.room-search-page .room-selection-info span {
+  display: block;
+  margin-top: 4px;
+  color: #6c7967;
+  font-size: 12px;
+}
+
+.room-search-page .room-selection-guests {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #496052;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.room-search-page .room-selection-guests select {
+  height: 40px;
+  padding: 6px 10px;
+  border: 1px solid #d6dccf;
+  border-radius: 2px;
+  background: #fffefa;
+  color: #173d35;
+  font: inherit;
+  font-size: 13px;
+}
+
+.room-search-page .room-selection-price {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.room-search-page .room-selection-item .room-clear-selection {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-color: #c9d2c0;
+  background: transparent;
+  color: #496149;
+}
+
+.room-search-page .room-selection-item .room-clear-selection:hover {
+  background: #eef1e8;
+}
+
+.room-search-page .stay-review > .room-price {
+  margin-top: 22px;
+}
+
+@media (max-width: 680px) {
+  .room-search-page .room-selection-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .room-search-page .room-selection-info { grid-column: 1 / -1; }
+  .room-search-page .room-selection-bar { bottom: 8px; padding: 12px 16px; }
+}
