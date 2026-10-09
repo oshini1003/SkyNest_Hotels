@@ -11,7 +11,7 @@ const guestLabel = (count) => `${count} ${count === 1 ? "guest" : "guests"}`;
 function ReviewProgress({ complete = false }) {
   return (
     <ol className="review-progress" aria-label="Reservation progress">
-      <li><span aria-hidden="true">01</span> Choose a room</li>
+      <li><span aria-hidden="true">01</span> Choose rooms</li>
       <li aria-current={complete ? undefined : "step"}><span aria-hidden="true">02</span> Review your stay</li>
       <li aria-current={complete ? "step" : undefined}><span aria-hidden="true">03</span> Confirmation</li>
     </ol>
@@ -262,7 +262,7 @@ function BookingReview({ selection, token, alreadyAttempted }) {
           <dl className="review-price-details">
             <div><dt>Nights</dt><dd>{nights}</dd></div>
             {rooms.map((room) => (
-              <div key={room.id}><dt>Room {room.number} · {room.roomType}</dt><dd>{money.format(room.pricePerNight * nights)}</dd></div>
+              <div key={room.id}><dt>{room.branch} · Room {room.number} · {room.roomType}</dt><dd>{money.format(room.pricePerNight * nights)}</dd></div>
             ))}
           </dl>
           <div className="review-total"><p>Estimated room charge</p><strong>{money.format(total)}</strong></div>

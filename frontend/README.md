@@ -3,6 +3,22 @@
 React, JavaScript and CSS, built with Vite. This client uses the Express API;
 MySQL credentials and database connections belong in the backend only.
 
+## Multi-room booking and guest edits (9 October 2026)
+
+Rooms now supports selecting up to ten rooms with individual guest counts.
+Booking review checks the complete selection and submits one atomic booking
+request. Existing single-room links and sign-in return destinations remain valid.
+My bookings can edit the dates, guests or room of one Booked room entry at a time.
+Bill and service links are retained; cancellation still applies to the whole
+reservation.
+
+The integration retains Samalee's interface and adds stale-search protection,
+shared edit/cancel guards and persisted reconciliation for uncertain changes.
+The save response must match the booking and room entry before success is shown.
+The existing backend and database procedures are reused without modification.
+See [the verification guide](../docs/MULTI_ROOM_UI_VERIFICATION.md) for test commands,
+browser checks and the limits of browser attempt guards and concurrent edits.
+
 ## Run locally
 
 From this `frontend` directory:

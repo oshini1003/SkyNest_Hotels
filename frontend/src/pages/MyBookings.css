@@ -687,6 +687,53 @@
   font-size: 12px;
 }
 
+.my-bookings-page .mb-editor-estimate {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #dce0d5;
+  background: #fffefa;
+  color: #173d35;
+  font-size: 14px;
+}
+
+.my-bookings-page .mb-editor-estimate span {
+  display: block;
+  margin-top: 6px;
+  color: #61736a;
+  font-size: 12px;
+}
+
+.my-bookings-page .mb-change-review {
+  display: grid;
+  gap: 12px;
+  margin: 0 26px 26px;
+  padding: 22px;
+  border: 1px solid #dce0d5;
+  border-left: 3px solid #b68a45;
+  background: #f7f8f1;
+}
+
+.my-bookings-page .mb-change-review h3 {
+  margin: 0;
+  color: #173d35;
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.my-bookings-page .mb-change-review p {
+  margin: 0;
+  color: #496052;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.my-bookings-page .mb-edit-link:disabled,
+.my-bookings-page .mb-cancel-link:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
 .my-bookings-page .mb-editor-actions {
   display: flex;
   flex-wrap: wrap;
@@ -702,6 +749,7 @@
 }
 
 @media (max-width: 680px) {
+  .my-bookings-page .mb-change-review { margin: 0 18px 18px; padding: 18px; }
   .my-bookings-page .mb-room-editor { padding: 18px; }
   .my-bookings-page .mb-editor-grid { grid-template-columns: minmax(0, 1fr); }
   .my-bookings-page .mb-editor-rooms { grid-template-columns: minmax(0, 1fr); align-items: stretch; }

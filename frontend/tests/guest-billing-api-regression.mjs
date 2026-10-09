@@ -271,8 +271,9 @@ try {
   const arrival = future.toISOString().slice(0, 10); future.setUTCDate(future.getUTCDate() + 2);
   const stay = { roomId: 3, checkin: arrival, checkout: future.toISOString().slice(0, 10), guests: 2 };
   const stayState = intent.guestSignInState("/make-booking", { stay });
-  assert.deepEqual(stayState, { returnTo: "/make-booking", stay });
-  assert.deepEqual(intent.guestReturnDestination(stayState), { pathname: "/make-booking", state: { stay } });
+  const normalizedStay = { checkin: stay.checkin, checkout: stay.checkout, rooms: [{ roomId: 3, guests: 2 }] };
+  assert.deepEqual(stayState, { returnTo: "/make-booking", stay: normalizedStay });
+  assert.deepEqual(intent.guestReturnDestination(stayState), { pathname: "/make-booking", state: { stay: normalizedStay } });
 
   console.log("PASS: guest bill estimates/history, exact saved charges and payment/service reconciliation, duplicate and malformed responses, safe GET-only requests, guest ownership error privacy, stale-session/abort/timeout handling and sign-in return destinations (actual Vite-loaded modules; mocked HTTP, no live backend).");
 } finally {
