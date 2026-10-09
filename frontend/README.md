@@ -552,3 +552,37 @@ node .\frontend\tests\page-loading-regression.mjs
 These checks use mocked HTTP/database fixtures and a real production build.
 Live MySQL writes and browser rendering need the separate local checks described
 in `docs/SERVICE_CATALOGUE_MANAGEMENT.md`.
+
+## Property management, Part 1 (9 October 2026)
+
+Managers and administrators can open **Property** from staff navigation, or the
+new **Hotel branches** and **Room types** workspace cards. `/staff/branches` and
+`/staff/room-types` show live catalogues with search, responsive cards, labelled
+forms and a review step before creating an entry. The room-type form uses the
+existing amenity choices. Both pages follow the cream, deep-green and gold theme
+and load as deferred pages, bringing the production page count to twenty-one.
+
+The frontend checks the current staff scope, validates bounded text and decimal
+rates, sends each create once, and retains a pending/saved action in sessionStorage
+until the result is inspected. Interrupted saves must be checked before retrying;
+the guard is per tab and does not provide server idempotency. New capacities are
+limited to 1-100 guests for the current booking selectors; existing larger valid
+capacities can still be listed.
+
+This batch changes no backend or database code. Existing APIs support list/create
+only for branches and room types. Editing/deleting them, individual room management
+and creating amenities are not included. The existing create endpoints rely on
+token roles and minimal input validation; frontend scope checks do not replace
+server enforcement. See `docs/PROPERTY_MANAGEMENT_PART1.md` for the precise limits
+and local browser verification steps.
+
+```powershell
+node .\frontend\tests\property-management-api-regression.mjs
+node .\frontend\tests\staff-branch-api-regression.mjs
+node .\frontend\tests\service-management-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+npm --prefix frontend run build
+```
+
+The client regressions use mocked HTTP/storage and actual Vite-loaded modules.
+Build checks verify emitted assets, not browser rendering or live database writes.

@@ -10,7 +10,7 @@ import { build, createServer } from "vite";
 const frontendRoot = fileURLToPath(new URL("../", import.meta.url));
 const pages = [
   "Branches", "GuestBill", "GuestLogin", "GuestProfile", "GuestRegister",
-  "GuestServices", "MakeBooking", "ManagerDashboard", "ManagerReports", "ManagerServices",
+  "GuestServices", "MakeBooking", "ManagerDashboard", "ManagerReports", "ManagerServices", "ManagerBranches", "ManagerRoomTypes",
   "MyBookings", "RoomSearch", "ServiceCatalogue", "StaffBilling",
   "StaffBookingDetails", "StaffBookingList", "StaffHome", "StaffLogin",
   "StaffServiceUsage",

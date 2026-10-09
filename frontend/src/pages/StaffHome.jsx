@@ -5,10 +5,10 @@ import { canViewReports } from "../services/reportApi";
 import ChangePasswordForm from "./ChangePasswordForm";
 import "./StaffHome.css";
 
-function WorkspaceIcon({ reports = false }) {
+function WorkspaceIcon({ reports = false, property = false }) {
   return (
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      {reports ? <><path d="M4 3v17h17" /><path d="M8 15v-4m5 4V6m5 9V9" /></> : <><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M8 3v4m8-4v4M4 11h16m-11 4h2m3 0h1m-6 3h2" /></>}
+      {property ? <><path d="M5 21V5l7-3 7 3v16M3 21h18M10 21v-5h4v5M8 7h1m6 0h1M8 11h1m6 0h1" /></> : reports ? <><path d="M4 3v17h17" /><path d="M8 15v-4m5 4V6m5 9V9" /></> : <><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M8 3v4m8-4v4M4 11h16m-11 4h2m3 0h1m-6 3h2" /></>}
     </svg>
   );
 }
@@ -38,6 +38,26 @@ export default function StaffHome({ staff, onLogout }) {
           {isBranchRestricted(staff.role) && <p className="staff-dashboard-description">Your booking workspace is limited to your assigned branch.</p>}
 
           <div className="staff-dashboard-actions">
+            {canViewReports(staff.role) && (
+              <>
+                <Link className="staff-workspace-card" to="/staff/branches">
+                  <span className="staff-workspace-icon"><WorkspaceIcon property /></span>
+                  <span className="staff-workspace-copy">
+                    <span className="staff-workspace-title">Hotel branches</span>
+                    <span className="staff-workspace-description">View destinations and add a branch with its location and contact details.</span>
+                  </span>
+                  <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+                </Link>
+                <Link className="staff-workspace-card" to="/staff/room-types">
+                  <span className="staff-workspace-icon"><WorkspaceIcon property /></span>
+                  <span className="staff-workspace-copy">
+                    <span className="staff-workspace-title">Room types</span>
+                    <span className="staff-workspace-description">Review accommodation categories, rates and amenities, or add a new type.</span>
+                  </span>
+                  <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+                </Link>
+              </>
+            )}
             {canViewReports(staff.role) && (
               <Link className="staff-workspace-card" to="/staff/services">
                 <span className="staff-workspace-icon"><WorkspaceIcon /></span>

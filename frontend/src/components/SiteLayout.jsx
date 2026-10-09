@@ -17,6 +17,7 @@ function Brand({ to = "/", compact = false }) {
 }
 
 function Header({ session, staffSession, staffContext }) {
+  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef(null);
   const isStaffWorkspace = staffContext && Boolean(staffSession);
@@ -69,6 +70,7 @@ function Header({ session, staffSession, staffContext }) {
                   <NavLink to="/staff/bookings">Bookings</NavLink>
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/reports">Reports</NavLink>}
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/services">Catalogue</NavLink>}
+                  {canViewReports(staffSession.staff.role) && <Link to="/staff/branches" className={pathname === "/staff/branches" || pathname === "/staff/room-types" ? "active" : undefined} aria-current={pathname === "/staff/branches" ? "page" : pathname === "/staff/room-types" ? "location" : undefined}>Property</Link>}
                   <NavLink to="/staff" end className="sk-account-link">My account</NavLink>
                 </>
               )}
