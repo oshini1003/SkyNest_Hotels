@@ -1,0 +1,68 @@
+-- ROOM_TYPE
+
+CREATE TABLE ROOM_TYPE (
+    RoomTypeID   INT AUTO_INCREMENT PRIMARY KEY,
+    Name         VARCHAR(100)   NOT NULL,
+    Capacity     INT           NOT NULL CHECK (Capacity > 0),
+    DailyRate    DECIMAL(10,2) NOT NULL CHECK (DailyRate >= 0)
+) ENGINE=InnoDB;
+
+-- AMENITY  +  ROOM_TYPE_AMENITY
+
+CREATE TABLE AMENITY (
+    AmenityID    INT AUTO_INCREMENT PRIMARY KEY,
+    AmenityName  VARCHAR(100) NOT NULL UNIQUE
+) ENGINE=InnoDB;
+
+CREATE TABLE ROOM_TYPE_AMENITY (
+    RoomTypeID  INT NOT NULL,
+    AmenityID   INT NOT NULL,
+    PRIMARY KEY (RoomTypeID, AmenityID),
+    FOREIGN KEY (RoomTypeID) REFERENCES ROOM_TYPE(RoomTypeID) ON DELETE CASCADE,
+    FOREIGN KEY (AmenityID)  REFERENCES AMENITY(AmenityID)   ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ROOM
+
+CREATE TABLE ROOM (
+    RoomID       INT AUTO_INCREMENT PRIMARY KEY,
+    BranchID     INT NOT NULL,
+    RoomTypeID   INT NOT NULL,
+    RoomNumber   VARCHAR(10) NOT NULL,
+    RoomStatus   ENUM('Available','Occupied','Maintenance') NOT NULL DEFAULT 'Available',
+    UNIQUE KEY uq_room_branch_number (BranchID, RoomNumber),
+    FOREIGN KEY (BranchID)   REFERENCES BRANCH(BranchID),
+    FOREIGN KEY (RoomTypeID) REFERENCES ROOM_TYPE(RoomTypeID)
+) ENGINE=InnoDB;
+
+
+-- GUEST  +  GUEST_ACCOUNT
+
+CREATE TABLE GUEST (
+    GuestID         INT AUTO_INCREMENT PRIMARY KEY,
+    Name            VARCHAR(100) NOT NULL,
+    ContactNumber   VARCHAR(20)  NOT NULL,
+    Email           VARCHAR(150),
+    IDNumber        VARCHAR(30)  NOT NULL UNIQUE,
+    Address         VARCHAR(255)
+) ENGINE=InnoDB;
+
+CREATE TABLE GUEST_ACCOUNT (
+    GuestID        INT PRIMARY KEY,
+    Username       VARCHAR(60)  NOT NULL UNIQUE,
+    PasswordHash   VARCHAR(255) NOT NULL,
+    FOREIGN KEY (GuestID) REFERENCES GUEST(GuestID) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
+CREATE TABLE BOOKED_ROOMS (
+    BookedRoomID     INT AUTO_INCREMENT PRIMARY KEY,
+    BookingID        INT NOT NULL,
+    RoomID           INT NOT NULL,
+    CheckInDateTime  DATETIME NOT NULL,
+    CheckOutDateTime DATETIME NOT NULL,
+    GuestCount       INT NOT NULL DEFAULT 1 CHECK (GuestCount > 0),
+    CHECK (CheckOutDateTime > CheckInDateTime),
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID) ON DELETE CASCADE,
+    FOREIGN KEY (RoomID)    REFERENCES ROOM(RoomID)
+) ENGINE=InnoDB;
