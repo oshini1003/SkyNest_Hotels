@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { canViewReports } from "../services/reportApi";
+import RoutePresentation from "./RoutePresentation";
 import "./SiteLayout.css";
 
 function Brand({ to = "/", compact = false }) {
@@ -136,6 +137,7 @@ function Footer({ showPreviews }) {
 
 export default function SiteLayout({ session, staffSession, showPreviews, children }) {
   const location = useLocation();
+  const mainRef = useRef(null);
   const staffContext = location.pathname === "/staff" || location.pathname.startsWith("/staff/");
   const isPreview = showPreviews && location.pathname.startsWith("/preview/");
   const publicHotelPage = ["/", "/branches", "/rooms", "/services"].includes(location.pathname);
@@ -144,10 +146,11 @@ export default function SiteLayout({ session, staffSession, showPreviews, childr
 
   return (
     <div className={`skynest-layout${staffContext ? " skynest-layout--staff" : ""}${publicHotelPage ? " skynest-layout--hotel" : ""}`}>
+      <RoutePresentation mainRef={mainRef} showPreviews={showPreviews} />
       <a className="sk-skip-link" href="#skynest-main">Skip to main content</a>
       <Header key={headerKey} session={session} staffSession={staffSession} staffContext={staffContext} />
       {isPreview && <div className="sk-preview-banner"><span>Development preview</span> Sample data for reviewing the interface.</div>}
-      <main id="skynest-main" className="main-content sk-main" tabIndex={-1}>
+      <main ref={mainRef} id="skynest-main" className="main-content sk-main" tabIndex={-1}>
         {children}
       </main>
       <Footer showPreviews={showPreviews} />

@@ -69,13 +69,22 @@ const previews = showPreviews ? {
 } : null;
 
 function NotFound() {
+  const { pathname } = useLocation();
+  const staffPage = pathname === "/staff" || pathname.startsWith("/staff/");
+  const guestPage = pathname === "/guest" || pathname.startsWith("/guest/");
+  const destination = staffPage ? "/staff" : guestPage ? "/guest/bookings" : "/rooms";
+  const destinationLabel = staffPage ? "Return to staff workspace" : guestPage ? "Go to my bookings" : "Find a room";
+
   return (
-    <section>
-      <h1>Page not found</h1>
-      <p>The page you requested does not exist.</p>
-      <Link className="button" to="/">
-        Return home
-      </Link>
+    <section className="page-status" aria-labelledby="not-found-title">
+      <span className="page-status-mark page-status-mark--code" aria-hidden="true">404</span>
+      <p className="page-status-eyebrow">SKYNEST HOTELS</p>
+      <h1 id="not-found-title">We couldn’t find this page</h1>
+      <p className="page-status-copy">The link may be out of date, or the address may have been entered incorrectly. Choose where you would like to go next.</p>
+      <div className="page-status-actions">
+        <Link className="page-status-button" to={destination}>{destinationLabel}</Link>
+        <Link className="page-status-button page-status-button--outline" to="/">Hotel home</Link>
+      </div>
     </section>
   );
 }

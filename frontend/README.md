@@ -609,3 +609,16 @@ node .\frontend\tests\property-management-api-regression.mjs
 node .\frontend\tests\page-loading-regression.mjs
 npm --prefix frontend run build
 ```
+
+## Shared frontend polish (Part 4 review)
+
+Current routes use descriptive SkyNest browser-tab titles. Navigation to a new
+page focuses its main content; link navigation scrolls to the top, while browser
+history and hash navigation retain their existing behavior. Same-page form state
+changes do not reset the page. Missing URLs provide themed recovery links.
+
+Branch/room-type review screens return keyboard focus to the form when Back to
+details is selected. Dashboard room totals wrap on narrow screens.
+
+See `../docs/FRONTEND_PART4_REVIEW.md` for the browser checks and remaining Part 3
+integration work. This stage does not add property editing or change the backend.

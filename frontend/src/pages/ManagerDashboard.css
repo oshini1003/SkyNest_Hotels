@@ -37,8 +37,8 @@
 .md-metric-description { margin: 12px 0 0; font-size: 11px; line-height: 1.65; color: #61736a; }
 .md-detail-grid { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.4fr); gap: 24px; }
 .md-rooms, .md-branches { min-width: 0; padding: 25px; background: #fffefa; border: 1px solid #dfe5dd; border-radius: 8px; }
-.md-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.md-total-rooms { padding: 5px 8px; border-radius: 3px; background: #f0f2e9; color: #526758; font-size: 10px; white-space: nowrap; }
+.md-panel-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.md-total-rooms { max-width: 100%; padding: 5px 8px; border-radius: 3px; background: #f0f2e9; color: #526758; font-size: 10px; overflow-wrap: anywhere; }
 .md-occupancy-value { margin: 26px 0 18px; font: 400 2.65rem/1.1 var(--sk-font-display, Georgia, serif); letter-spacing: -1px; }
 .md-occupancy-value span { display: block; margin-top: 9px; font: 400 11px/1.5 Arial, sans-serif; letter-spacing: 0; color: #61736a; }
 .md-occupancy-value--empty { font-size: 1.8rem; letter-spacing: -.3px; }
@@ -47,9 +47,10 @@
 .md-room-bar--available, .md-dot--available { background: #d3b878; }
 .md-room-bar--maintenance, .md-dot--maintenance { background: #a4afa7; }
 .md-room-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 18px 0 23px; }
-.md-room-legend dt { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #526758; }
+.md-room-legend > div { min-width: 0; }
+.md-room-legend dt { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #526758; overflow-wrap: anywhere; }
 .md-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.md-room-legend dd { margin: 6px 0 0 12px; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.md-room-legend dd { margin: 6px 0 0 12px; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .md-panel-note { margin: 18px 0 0; color: #61736a; font-size: 10px; line-height: 1.7; }
 .md-branch-table-wrap { margin-top: 23px; overflow-x: auto; }
 .md-branch-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
