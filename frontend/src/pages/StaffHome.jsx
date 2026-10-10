@@ -38,6 +38,16 @@ export default function StaffHome({ staff, onLogout }) {
           {isBranchRestricted(staff.role) && <p className="staff-dashboard-description">Your booking workspace is limited to your assigned branch.</p>}
 
           <div className="staff-dashboard-actions">
+            {staff.role === "Admin" && (
+              <Link className="staff-workspace-card" to="/staff/accounts">
+                <span className="staff-workspace-icon"><WorkspaceIcon property /></span>
+                <span className="staff-workspace-copy">
+                  <span className="staff-workspace-title">Create a staff account</span>
+                  <span className="staff-workspace-description">Set up a team member’s sign-in, role and branch assignment.</span>
+                </span>
+                <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+              </Link>
+            )}
             {canViewReports(staff.role) && (
               <>
                 <Link className="staff-workspace-card" to="/staff/branches">

@@ -22,6 +22,7 @@ const pageNames = {
   "/staff/room-types": "Manage room types",
   "/staff/rooms": "Manage rooms",
   "/staff/amenities": "Manage amenities",
+  "/staff/accounts": "Create a staff account",
 };
 
 function pageName(pathname, showPreviews) {

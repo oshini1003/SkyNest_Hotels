@@ -42,6 +42,7 @@ const ServiceCatalogue = lazyPage(() => import("./pages/ServiceCatalogue"));
 const GuestProfile = lazyPage(() => import("./pages/GuestProfile"));
 const StaffLogin = lazyPage(() => import("./pages/StaffLogin"));
 const StaffHome = lazyPage(() => import("./pages/StaffHome"));
+const StaffAccounts = lazyPage(() => import("./pages/StaffAccounts"));
 const StaffBookingList = lazyPage(() => import("./pages/StaffBookingList"));
 const StaffBookingDetails = lazyPage(() => import("./pages/StaffBookingDetails"));
 const StaffServiceUsage = lazyPage(() => import("./pages/StaffServiceUsage"));
@@ -303,6 +304,10 @@ function handleStaffLogout() {
             <Route
               path="/staff/amenities"
               element={<StaffOnly session={staffSession}><ManagerAmenities key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/accounts"
+              element={<StaffOnly session={staffSession}><StaffAccounts key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
             <Route
               path="/staff/bookings"

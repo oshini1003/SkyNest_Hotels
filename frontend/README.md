@@ -622,3 +622,31 @@ details is selected. Dashboard room totals wrap on narrow screens.
 
 See `../docs/FRONTEND_PART4_REVIEW.md` for the browser checks and remaining Part 3
 integration work. This stage does not add property editing or change the backend.
+
+
+## Staff account creation (Part 3 frontend)
+
+Administrators can open **Staff accounts** (`/staff/accounts`) to create a staff
+profile and sign-in through the existing registration endpoint. The page includes
+role and branch selection, password confirmation, review before saving and a
+saved receipt. Receptionist and service-staff accounts require a branch. The
+administrator remains signed in after creation.
+
+Current Admin access and branch choices are checked before a save. A same-tab
+pending marker blocks repeat submissions after an uncertain response; passwords
+and email are excluded from browser storage. No write is automatically retried.
+
+This page does not offer a staff directory, editing or deletion: those endpoints
+are absent from the inspected backend. Samalee's receptionist booking creation
+is separate. No backend or database code changes are included.
+
+See `../docs/STAFF_ACCOUNT_CREATION.md` for permissions, recovery limits and local
+browser checks. The new page is loaded on demand and has its own stylesheet.
+
+```powershell
+node .\frontend\tests\staff-account-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+```
+
+These are mocked client and real production-build checks, not live registration
+or browser-rendering verification.

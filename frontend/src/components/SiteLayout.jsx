@@ -73,6 +73,7 @@ function Header({ session, staffSession, staffContext }) {
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/reports">Reports</NavLink>}
                   {canViewReports(staffSession.staff.role) && <NavLink to="/staff/services">Catalogue</NavLink>}
                   {canViewReports(staffSession.staff.role) && <Link to="/staff/branches" className={isPropertyPage ? "active" : undefined} aria-current={pathname === "/staff/branches" ? "page" : isPropertyPage ? "location" : undefined}>Property</Link>}
+                  {staffSession.staff.role === "Admin" && <NavLink to="/staff/accounts">Staff accounts</NavLink>}
                   <NavLink to="/staff" end className="sk-account-link">My account</NavLink>
                 </>
               )}
