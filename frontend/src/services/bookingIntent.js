@@ -27,6 +27,15 @@ export function selectedStay(value) {
   }
 }
 
+// The guest a receptionist is booking for. Only non-sensitive display fields travel in router state.
+export function selectedGuest(value) {
+  if (!value || typeof value !== "object") return null;
+  const { guestId, name, contactNumber } = value;
+  if (!validId(guestId) || typeof name !== "string" || !name.trim()) return null;
+  return { guestId, name, contactNumber: typeof contactNumber === "string" ? contactNumber : "" };
+}
+
+
 export function guestReturnDestination(state) {
   if (guestStayPath(state?.returnTo)) return { pathname: state.returnTo };
   if (state?.returnTo === "/guest/bookings") return { pathname: "/guest/bookings" };
