@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
 import { getLocalToday, loadRoomOptions, searchRooms, validateStay } from "../services/roomApi";
-import { MAX_ROOMS } from "../services/bookingIntent";
 import "./RoomSearch.css";
 import { Link, useLocation, useNavigate } from "react-router";
 import { MAX_ROOMS, selectedGuest } from "../services/bookingIntent";
