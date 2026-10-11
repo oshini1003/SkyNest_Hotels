@@ -41,7 +41,7 @@ function ReportTable({ type, rows, title }) {
     </tr>);
   } else if (type === "service-usage") {
     headings = ["Room", "Service", "Branch", "Usage entries", "Total quantity", "Recorded charges"];
-    body = rows.map((row) => <tr key={`${row.RoomID ?? row.RoomNumber}:${row.ServiceID}`}>
+    body = rows.map((row) => <tr key={`${row.BranchScope ?? ''}:${row.BranchID ?? ''}:${row.RoomID ?? row.RoomNumber ?? 'all'}:${row.ServiceID}`}>
       <th scope="row">{row.RoomNumber ? `Room ${row.RoomNumber}` : "Unassigned"}</th>
       <td>{row.ServiceName}</td>
       <td>{row.BranchName}</td>
