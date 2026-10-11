@@ -31,3 +31,14 @@ BEGIN
     RETURN fn_calculate_room_charges(p_booking_id) + fn_calculate_service_charges(p_booking_id);
 END //
 
+CREATE FUNCTION fn_calculate_outstanding_balance(p_booking_id INT)
+RETURNS DECIMAL(10,2) DETERMINISTIC READS SQL DATA
+BEGIN
+    DECLARE v_total DECIMAL(10,2);
+    DECLARE v_paid DECIMAL(10,2);
+    SET v_total = fn_calculate_bill_total(p_booking_id);
+    SELECT IFNULL(SUM(Amount), 0) INTO v_paid FROM PAYMENT WHERE BookingID = p_booking_id;
+    RETURN v_total - v_paid;
+END //
+
+DELIMITER ;
