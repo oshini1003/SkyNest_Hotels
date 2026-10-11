@@ -13,7 +13,7 @@ const pages = [
   "GuestServices", "MakeBooking", "ManagerDashboard", "ManagerReports", "ManagerServices", "ManagerBranches", "ManagerRoomTypes", "ManagerRooms", "ManagerAmenities",
   "MyBookings", "RoomSearch", "ServiceCatalogue", "StaffBilling",
   "StaffBookingDetails", "StaffBookingList", "StaffHome", "StaffLogin",
-  "StaffServiceUsage", "StaffAccounts",
+  "StaffServiceUsage", "StaffAccounts", "StaffNewBooking", "StaffMakeBooking",
 ];
 const previewPages = new Set([
   "GuestBookings", "StaffBookings", "StaffBillDetails", "StaffPayment",

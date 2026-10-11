@@ -38,6 +38,16 @@ export default function StaffHome({ staff, onLogout }) {
           {isBranchRestricted(staff.role) && <p className="staff-dashboard-description">Your booking workspace is limited to your assigned branch.</p>}
 
           <div className="staff-dashboard-actions">
+            {handlesReception && (
+              <Link className="staff-workspace-card" to="/staff/bookings/new">
+                <span className="staff-workspace-icon"><WorkspaceIcon /></span>
+                <span className="staff-workspace-copy">
+                  <span className="staff-workspace-title">Create a booking</span>
+                  <span className="staff-workspace-description">Find an existing guest or welcome a walk-in, then choose rooms for their stay.</span>
+                </span>
+                <span className="staff-workspace-arrow" aria-hidden="true">↗</span>
+              </Link>
+            )}
             {staff.role === "Admin" && (
               <Link className="staff-workspace-card" to="/staff/accounts">
                 <span className="staff-workspace-icon"><WorkspaceIcon property /></span>

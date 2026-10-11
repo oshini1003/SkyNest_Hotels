@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
 import { getLocalToday, loadRoomOptions, searchRooms, validateStay } from "../services/roomApi";
-import { MAX_ROOMS } from "../services/bookingIntent";
 import "./RoomSearch.css";
+import { Link, useLocation, useNavigate } from "react-router";
+import { MAX_ROOMS, selectedGuest } from "../services/bookingIntent";
+import { isCurrentStaff, loadStaffRoomOptions, searchStaffRooms } from "../services/staffGuestBookingApi";
 
 const initialFilters = {
   branch: "",
@@ -50,11 +51,16 @@ function RoomIcon() {
   );
 }
 
-export default function RoomSearch() {
+export default function RoomSearch({ staffSession }) {
   const location = useLocation();
   const navigate = useNavigate();
+  // Public room searches never inherit staff identity from navigation state.
+  const staffRoute = location.pathname === "/staff/bookings/rooms";
+  const staffToken = staffRoute ? staffSession?.token : null;
+  const bookingFor = staffToken ? selectedGuest(location.state?.bookingFor) : null;
+  const selectedGuestId = bookingFor?.guestId;
   const [filters, setFilters] = useState(() => initialRoomFilters(location.state));
-  const [options, setOptions] = useState({ branches: [], roomTypes: [] });
+  const [options, setOptions] = useState({ branches: [], roomTypes: [], scope: null });
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState("");
   const [optionsAttempt, setOptionsAttempt] = useState(0);
@@ -67,6 +73,9 @@ export default function RoomSearch() {
   const searchVersion = useRef(0);
   const reviewRef = useRef(null);
   const today = getLocalToday();
+  const scope = options.scope;
+  const assignedBranch = staffRoute && scope?.role === "Receptionist";
+  const verifiedStaff = !staffRoute || Boolean(scope && bookingFor && isCurrentStaff(staffToken));
 
   const selectedItems = result
     ? selectedRooms
@@ -80,24 +89,37 @@ export default function RoomSearch() {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    loadRoomOptions(controller.signal)
-      .then((data) => {
-        if (active) {
-          setOptions(data);
-          setFilters((current) => current.branch && !data.branches.some((branch) => String(branch.id) === current.branch)
-            ? { ...current, branch: "" }
-            : current);
-        }
-      })
-      .catch((failure) => {
-        if (active && failure.name !== "AbortError") setOptionsError(failure.message);
-      })
+    if (staffRoute && (!staffToken || !selectedGuestId)) {
+      return () => { active = false; controller.abort(); };
+    }
+    const load = staffRoute
+      ? loadStaffRoomOptions(staffToken, controller.signal)
+      : loadRoomOptions(controller.signal);
+    load.then((data) => {
+      if (!active || controller.signal.aborted) return;
+      if (staffRoute && !isCurrentStaff(staffToken)) {
+        setOptionsError("Your staff session has changed. Please sign in again.");
+        return;
+      }
+      setOptions(data);
+      setFilters((current) => data.scope?.role === "Receptionist"
+        ? { ...current, branch: String(data.scope.branchId) }
+        : current.branch && !data.branches.some((branch) => String(branch.id) === current.branch)
+          ? { ...current, branch: "" }
+          : current);
+    }).catch((failure) => {
+      if (active && !controller.signal.aborted) {
+        setOptionsError(failure.name === "AbortError"
+          ? "Your staff session has changed. Please sign in again."
+          : failure.message);
+      }
+    })
       .finally(() => { if (active) setOptionsLoading(false); });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [optionsAttempt]);
+  }, [optionsAttempt, staffRoute, staffToken, selectedGuestId]);
 
   useEffect(() => () => {
     searchVersion.current += 1;
@@ -139,13 +161,23 @@ export default function RoomSearch() {
 
   function handleChange(event) {
     const { name, value } = event.target;
+    if (name === "branch" && assignedBranch) return;
     clearSearch();
     setFilters((current) => ({ ...current, [name]: value }));
+  }
+
+  function clearFilters() {
+    clearSearch();
+    setFilters({ ...initialFilters, branch: assignedBranch ? String(scope.branchId) : "" });
   }
 
   async function handleSearch(event) {
     event?.preventDefault();
     clearSearch();
+    if (optionsLoading || optionsError || !verifiedStaff) {
+      setError("Wait until your booking access and room filters have been checked.");
+      return;
+    }
     let stay;
     try {
       stay = validateStay(filters);
@@ -158,14 +190,29 @@ export default function RoomSearch() {
     searchRequest.current = controller;
     setLoading(true);
     try {
-      const rooms = await searchRooms({
-        ...stay,
-        branchId: filters.branch,
-        roomTypeId: filters.roomType,
-      }, controller.signal);
-      if (version === searchVersion.current) setResult({ ...stay, rooms });
+      const query = { ...stay, branchId: filters.branch, roomTypeId: filters.roomType };
+      if (staffRoute) {
+        const data = await searchStaffRooms(query, staffToken, controller.signal);
+        if (version !== searchVersion.current || controller.signal.aborted) return;
+        if (!isCurrentStaff(staffToken)) {
+          setError("Your staff session has changed. Please sign in again.");
+          return;
+        }
+        setOptions((current) => ({ ...current, scope: data.scope }));
+        if (data.scope.role === "Receptionist") {
+          setFilters((current) => ({ ...current, branch: String(data.scope.branchId) }));
+        }
+        setResult({ ...stay, rooms: data.rooms });
+      } else {
+        const rooms = await searchRooms(query, controller.signal);
+        if (version === searchVersion.current) setResult({ ...stay, rooms });
+      }
     } catch (failure) {
-      if (version === searchVersion.current && failure.name !== "AbortError") setError(failure.message);
+      if (version === searchVersion.current && !controller.signal.aborted) {
+        setError(failure.name === "AbortError"
+          ? "Your staff session has changed. Please sign in again."
+          : failure.message);
+      }
     } finally {
       if (version === searchVersion.current) {
         setLoading(false);
@@ -175,26 +222,44 @@ export default function RoomSearch() {
   }
 
   function continueToBooking() {
-    navigate("/make-booking", {
+    if (!result || selectedItems.length === 0 || !verifiedStaff) return;
+    navigate(staffRoute ? "/staff/make-booking" : "/make-booking", {
       state: {
         stay: {
           checkin: result.checkin,
           checkout: result.checkout,
           rooms: selectedItems.map(({ room, guests }) => ({ roomId: room.id, guests })),
         },
+        ...(staffRoute ? { guest: bookingFor } : {}),
       },
     });
   }
 
   const roomCount = selectedItems.length;
 
+  if (staffRoute && (!bookingFor || !isCurrentStaff(staffToken))) {
+    return (
+      <section className="room-search-page" aria-labelledby="staff-room-start-heading">
+        <div className="room-search-placeholder">
+          <span className="room-placeholder-icon"><RoomIcon /></span>
+          <div>
+            <p className="eyebrow">FRONT DESK</p>
+            <h1 id="staff-room-start-heading">Choose a guest first</h1>
+            <p>Start from the booking workspace to select the guest for this reservation.</p>
+            <Link className="button" to="/staff/bookings/new">Choose a guest</Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="room-search-page" aria-labelledby="room-search-heading">
       <header className="room-page-intro">
         <div className="room-intro-copy">
-          <p className="eyebrow">PLAN YOUR STAY</p>
-          <h1 id="room-search-heading">Find a room.<br /><em>Make it your own.</em></h1>
-          <p>Choose your destination, dates and number of guests. Your next Sri Lankan stay begins here.</p>
+          <p className="eyebrow">{staffRoute ? "FRONT DESK" : "PLAN YOUR STAY"}</p>
+          <h1 id="room-search-heading">{staffRoute ? <>Find rooms.<br /><em>Plan their stay.</em></> : <>Find a room.<br /><em>Make it your own.</em></>}</h1>
+          <p>{staffRoute ? "Choose dates and rooms for your guest, then review the stay before confirming." : "Choose your destination, dates and number of guests. Your next Sri Lankan stay begins here."}</p>
         </div>
         <div className="room-intro-image">
           <img src="/images/hotel/room-deluxe.jpg" alt="" />
@@ -213,6 +278,11 @@ export default function RoomSearch() {
         </div>
       )}
 
+      {bookingFor && (
+        <p className="room-demo-note" role="status">
+          Booking for <strong>{bookingFor.name}</strong> · <Link to="/staff/bookings/new">Change guest</Link>
+        </p>
+      )}
       <form className="room-search-form" onSubmit={handleSearch}>
         <div className="room-form-heading">
           <div>
@@ -222,21 +292,22 @@ export default function RoomSearch() {
           <span className="room-form-heading-note">A place. A date. A little time away.</span>
         </div>
         <div className="form-field">
-          <label htmlFor="room-branch">Branch</label>
+          <label htmlFor="room-branch">{assignedBranch ? "Assigned branch" : "Branch"}</label>
           <select
             id="room-branch"
             name="branch"
-            disabled={optionsLoading || Boolean(optionsError)}
+            disabled={optionsLoading || Boolean(optionsError) || Boolean(assignedBranch)}
             value={filters.branch}
             onChange={handleChange}
           >
-            <option value="">All branches</option>
-            {options.branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
+            {assignedBranch
+              ? <option value={scope.branchId}>{scope.branchName}</option>
+              : <><option value="">All branches</option>
+                {options.branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                ))}</>}
           </select>
+          {assignedBranch && <p className="room-scope-note">Bookings are limited to your assigned branch, including after clearing filters.</p>}
         </div>
 
         <div className="form-field">
@@ -303,10 +374,11 @@ export default function RoomSearch() {
           </p>
         )}
 
-        <button className="button room-search-submit" type="submit" disabled={loading || optionsLoading || Boolean(optionsError)}>
+        <button className="button room-search-submit" type="submit" disabled={loading || optionsLoading || Boolean(optionsError) || !verifiedStaff}>
           <span>{loading ? "Searching…" : error ? "Try search again" : "Search rooms"}</span>
           <span aria-hidden="true">↗</span>
         </button>
+        {staffRoute && <button className="button room-reset-filters" type="button" onClick={clearFilters} disabled={optionsLoading || Boolean(optionsError)}>Clear filters</button>}
         <p className="room-demo-note room-form-notice">
           Room availability and prices are checked for your selected dates.
           Selecting a room does not reserve it. You can add up to {MAX_ROOMS} rooms to one booking.
@@ -489,7 +561,7 @@ export default function RoomSearch() {
               Clear selection
             </button>
 
-            <button className="button" type="button" onClick={continueToBooking}>
+            <button className="button" type="button" onClick={continueToBooking} disabled={!verifiedStaff}>
               Continue to booking review
             </button>
           </div>

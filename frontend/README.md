@@ -650,3 +650,22 @@ node .\frontend\tests\page-loading-regression.mjs
 
 These are mocked client and real production-build checks, not live registration
 or browser-rendering verification.
+
+
+## Receptionist booking integration
+
+Samalee's guest search/create and staff booking flow is combined with the
+management frontend. Start at **Create a booking** on the staff home or
+reservations page. `/staff/rooms` remains room inventory; staff room selection
+uses `/staff/bookings/rooms`.
+
+The frontend checks fresh staff scope, keeps receptionists in their assigned
+branch, requires a NIC/passport of at most 30 characters for new walk-in guests,
+and retains safe recovery states for uncertain guest/booking saves. Public
+guest booking and manager property/account pages are retained.
+
+This frontend patch needs the separately reviewed newer guest endpoints for live
+use; the older `f094ec5` backend does not provide staff guest search/create.
+No backend or database files are included. See
+[`FRONTEND_RECEPTION_INTEGRATION.md`](../docs/FRONTEND_RECEPTION_INTEGRATION.md)
+for checks, limitations and the backend prerequisite.

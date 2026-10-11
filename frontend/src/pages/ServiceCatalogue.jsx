@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { loadServiceCatalogue } from "../services/serviceCatalogueApi";
+import ServicePhoto from "../components/ServicePhoto";
 import "./ServiceCatalogue.css";
 
 const money = new Intl.NumberFormat("en-LK", {
@@ -8,16 +9,6 @@ const money = new Intl.NumberFormat("en-LK", {
   currency: "LKR",
   currencyDisplay: "code",
 });
-
-function serviceImage(name) {
-  if (/dining|restaurant|food|breakfast|lunch|dinner/i.test(name)) {
-    return "/images/hotel/service-dining.jpg";
-  }
-  if (/spa|massage|wellness/i.test(name)) {
-    return "/images/hotel/service-spa.jpg";
-  }
-  return null;
-}
 
 function ServiceBell({ className }) {
   return (
@@ -171,19 +162,18 @@ export default function ServiceCatalogue() {
             <>
               <div className="card-grid">
                 {matchingServices.map((service) => {
-                  const image = serviceImage(service.ServiceName);
                   return (
                     <article className="card service-card" key={service.ServiceID}>
-                      <div className={`service-catalogue-media${image ? "" : " service-catalogue-media--graphic"}`}>
-                        {image ? (
-                          <img src={image} alt="" loading="lazy" />
-                        ) : (
+                      <ServicePhoto name={service.ServiceName}
+                        className="service-catalogue-media"
+                        fallbackClassName="service-catalogue-media--graphic"
+                        fallback={
                           <div className="service-catalogue-service-mark">
                             <ServiceMark name={service.ServiceName} />
                           </div>
-                        )}
+                        }>
                         <span className="service-catalogue-media-label">DURING YOUR STAY</span>
-                      </div>
+                      </ServicePhoto>
                       <div className="service-catalogue-card-body">
                         <h3>{service.ServiceName}</h3>
                         {service.Description && (
@@ -198,9 +188,7 @@ export default function ServiceCatalogue() {
                   );
                 })}
               </div>
-              {matchingServices.some((service) => serviceImage(service.ServiceName)) && (
-                <p className="service-catalogue-photo-note">Photography is illustrative; please refer to each service description for details.</p>
-              )}
+              <p className="service-catalogue-photo-note">Photography is illustrative; please refer to each service description for details.</p>
             </>
           )}
         </>

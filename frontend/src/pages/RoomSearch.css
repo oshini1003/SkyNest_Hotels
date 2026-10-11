@@ -660,3 +660,7 @@
   .room-search-page .room-selection-info { grid-column: 1 / -1; }
   .room-search-page .room-selection-bar { bottom: 8px; padding: 12px 16px; }
 }
+
+/* The booking desk keeps its verified branch visible on narrow screens. */
+.room-scope-note { margin: 0.55rem 0 0; color: #5b675f; font-size: 0.8rem; line-height: 1.55; }
+.room-reset-filters { background: transparent; color: #1d4938; border: 1px solid #bac4b6; }
