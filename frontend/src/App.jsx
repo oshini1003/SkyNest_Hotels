@@ -50,6 +50,8 @@ const ManagerReports = lazyPage(() => import("./pages/ManagerReports"));
 const ManagerServices = lazyPage(() => import("./pages/ManagerServices"));
 const ManagerDashboard = lazyPage(() => import("./pages/ManagerDashboard"));
 const Branches = lazyPage(() => import("./pages/Branches"));
+const StaffNewBooking = lazyPage(() => import("./pages/StaffNewBooking"));
+const StaffMakeBooking = lazyPage(() => import("./pages/StaffMakeBooking"));
 
 const showPreviews = import.meta.env.DEV;
 // This import is reachable only in development; sample pages/data stay out of production.
@@ -95,6 +97,14 @@ function SignedInStaffRedirect() {
 function StaffOnly({ session, children }) {
   const { pathname } = useLocation();
   return session ? children : <Navigate to="/staff/login" state={staffSignInState(pathname)} replace />;
+}
+
+const FRONT_DESK_ROLES = ["Admin", "Manager", "Receptionist"];
+
+function StaffRoleOnly({ session, roles, children }) {
+  const { pathname } = useLocation();
+  if (!session) return <Navigate to="/staff/login" state={staffSignInState(pathname)} replace />;
+  return roles.includes(session.staff.role) ? children : <Navigate to="/staff" replace />;
 }
 
 function App() {
@@ -280,6 +290,10 @@ function handleStaffLogout() {
               element={<StaffOnly session={staffSession}><StaffBookingList key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
             <Route
+              path="/staff/bookings/new"
+              element={<StaffRoleOnly session={staffSession} roles={FRONT_DESK_ROLES}><StaffNewBooking key={staffSession?.token} session={staffSession} /></StaffRoleOnly>}
+            />
+            <Route
               path="/staff/bookings/:id"
               element={<StaffOnly session={staffSession}><StaffBookingDetails key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
@@ -290,6 +304,14 @@ function handleStaffLogout() {
             <Route
               path="/staff/bookings/:id/bill"
               element={<StaffOnly session={staffSession}><StaffBilling key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/rooms"
+              element={<StaffRoleOnly session={staffSession} roles={FRONT_DESK_ROLES}><RoomSearch /></StaffRoleOnly>}
+            />
+            <Route
+              path="/staff/make-booking"
+              element={<StaffRoleOnly session={staffSession} roles={FRONT_DESK_ROLES}><StaffMakeBooking key={staffSession?.token} session={staffSession} /></StaffRoleOnly>}
             />
 
             <Route path="*" element={<NotFound />} />
