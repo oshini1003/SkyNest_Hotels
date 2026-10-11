@@ -24,3 +24,10 @@ BEGIN
     FROM SERVICE_USAGE WHERE BookingID = p_booking_id;
     RETURN v_total;
 END //
+
+CREATE FUNCTION fn_calculate_bill_total(p_booking_id INT)
+RETURNS DECIMAL(10,2) DETERMINISTIC READS SQL DATA
+BEGIN
+    RETURN fn_calculate_room_charges(p_booking_id) + fn_calculate_service_charges(p_booking_id);
+END //
+
