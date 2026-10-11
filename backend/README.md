@@ -545,7 +545,7 @@ fictional report layout remains at `/preview/staff/manager-reports` in developme
 |---|---|---|
 | `GET /api/reports/occupancy` | Room status counts and occupancy rates by branch (real-time snapshot or selected date/period) | `branchId`, `startDate`, `endDate`, `date` |
 | `GET /api/reports/billing-summary` | One row per saved bill with total, paid and outstanding amounts | `branchId`, `outstandingOnly=true` or `false` |
-| `GET /api/reports/service-usage` | Saved service entry counts, quantity and charges at recorded prices | `branchId` |
+| `GET /api/reports/service-usage` | Service usage breakdown per room and service type (room number, quantity and charges) | `branchId`, `roomId` |
 | `GET /api/reports/revenue` | Finalized bills grouped by branch and **bill-opened month** | `branchId`, `year`, `month` |
 | `GET /api/reports/top-services` | Services ranked by number of usage entries | `branchId`, `limit` (default 5, maximum 50) |
 

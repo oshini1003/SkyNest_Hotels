@@ -7,7 +7,7 @@ import "./ManagerReports.css";
 const reportOptions = [
   { value: "occupancy", label: "Room occupancy", description: "Occupancy rates by branch. Leave dates empty for the real-time snapshot, or select a start and end date to review occupancy for a selected period." },
   { value: "billing-summary", label: "Billing summary", description: "Saved bills with recorded payments and outstanding balances. The opened date is when each bill was generated; it is not the payment date." },
-  { value: "service-usage", label: "Service usage and charges", description: "Recorded service entries, quantities and charges at the prices saved when each service was used. These charges are not necessarily paid amounts." },
+  { value: "service-usage", label: "Service usage by room and service", description: "Recorded service entries, quantities and charges broken down per room and service type." },
   { value: "revenue", label: "Finalized bill totals", description: "Room and service charges from checked-out bookings, grouped by the month each bill was opened. These are billed amounts, not cash received by payment date or totals grouped by checkout date." },
   { value: "top-services", label: "Most used services", description: "Services ranked by the number of saved usage entries. Quantity is shown separately: one entry can contain more than one unit. This includes historical service usage." },
 ];
@@ -39,12 +39,21 @@ function ReportTable({ type, rows, title }) {
       <th scope="row">{row.Month}</th><td>{row.BranchName}</td><td>{whole(row.BillCount)}</td>
       <td className="mr-money">{formatReportMoney(row.RoomRevenue)}</td><td className="mr-money">{formatReportMoney(row.ServiceRevenue)}</td><td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
     </tr>);
+  } else if (type === "service-usage") {
+    headings = ["Room", "Service", "Branch", "Usage entries", "Total quantity", "Recorded charges"];
+    body = rows.map((row) => <tr key={`${row.RoomID ?? row.RoomNumber}:${row.ServiceID}`}>
+      <th scope="row">{row.RoomNumber ? `Room ${row.RoomNumber}` : "Unassigned"}</th>
+      <td>{row.ServiceName}</td>
+      <td>{row.BranchName}</td>
+      <td>{whole(row.TimesUsed)}</td>
+      <td>{whole(row.TotalQuantity)}</td>
+      <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
+    </tr>);
   } else {
-    headings = type === "service-usage" ? ["Service", "Usage entries", "Total quantity", "Recorded charges"] : ["Rank", "Service", "Usage entries", "Total quantity"];
+    headings = ["Rank", "Service", "Usage entries", "Total quantity"];
     body = rows.map((row, index) => <tr key={row.ServiceID}>
-      {type === "top-services" && <td>{index + 1}</td>}
+      <td>{index + 1}</td>
       <th scope="row">{row.ServiceName}</th><td>{whole(row.TimesUsed)}</td><td>{whole(row.TotalQuantity)}</td>
-      {type === "service-usage" && <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>}
     </tr>);
   }
   return <div className="mr-table-wrap" role="region" aria-label={`${title} results`} aria-describedby="manager-reports-scroll-hint" tabIndex={0}>

@@ -165,12 +165,12 @@ const billingSummary = asyncHandler(async (req, res) => {
   sendReport(res, rows);
 });
 
-function serviceQuery(filters, top) {
+function topServiceQuery(filters) {
   const params = [];
   const branchFilter = filters.branchId === undefined
     ? '' : "WHERE scope.BranchScope = 'single' AND scope.BranchID = ?";
   if (filters.branchId !== undefined) params.push(filters.branchId);
-  if (top) params.push(filters.limit);
+  params.push(filters.limit);
   return {
     sql: `SELECT sc.ServiceID, sc.ServiceName, COUNT(*) AS TimesUsed,
                  SUM(su.Quantity) AS TotalQuantity,
@@ -180,19 +180,53 @@ function serviceQuery(filters, top) {
           JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
           ${branchFilter}
           GROUP BY sc.ServiceID, sc.ServiceName
-          ${top
-    ? 'ORDER BY TimesUsed DESC, TotalQuantity DESC, sc.ServiceID ASC LIMIT ?'
-    : 'ORDER BY SUM(su.Quantity * su.PriceAtUsage) DESC, sc.ServiceID ASC'}`,
+          ORDER BY TimesUsed DESC, TotalQuantity DESC, sc.ServiceID ASC LIMIT ?`,
     params,
   };
 }
 
-// GET /api/reports/service-usage?branchId=
+// GET /api/reports/service-usage?branchId=&roomId=
 const serviceUsageBreakdown = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'services');
   if (!filters) return;
-  const { sql, params } = serviceQuery(filters, false);
-  const [rows] = await pool.query(sql, params);
+  const params = [];
+  const conditions = [];
+
+  if (filters.branchId !== undefined) {
+    conditions.push("scope.BranchScope = 'single' AND scope.BranchID = ?");
+    params.push(filters.branchId);
+  }
+  if (filters.roomId !== undefined) {
+    conditions.push('r.RoomID = ?');
+    params.push(filters.roomId);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [rows] = await pool.query(
+    `SELECT r.RoomID,
+            COALESCE(r.RoomNumber, 'Unassigned') AS RoomNumber,
+            scope.BranchID,
+            ${branchName} AS BranchName,
+            scope.BranchScope,
+            sc.ServiceID,
+            sc.ServiceName,
+            COUNT(su.UsageID) AS TimesUsed,
+            SUM(su.Quantity) AS TotalQuantity,
+            CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue
+     FROM SERVICE_USAGE su
+     JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
+     JOIN BOOKING b ON b.BookingID = su.BookingID
+     JOIN (${bookingBranches}) scope ON scope.BookingID = b.BookingID
+     LEFT JOIN BOOKED_ROOMS stay ON stay.BookingID = b.BookingID
+     LEFT JOIN ROOM r ON r.RoomID = stay.RoomID
+     LEFT JOIN BRANCH br ON br.BranchID = scope.BranchID
+     ${whereClause}
+     GROUP BY r.RoomID, r.RoomNumber, scope.BranchID, scope.BranchScope, br.Name, sc.ServiceID, sc.ServiceName
+     ORDER BY BranchName, r.RoomNumber, TotalRevenue DESC, sc.ServiceName`,
+    params
+  );
+
   sendReport(res, rows, ['TimesUsed', 'TotalQuantity']);
 });
 
@@ -240,7 +274,7 @@ const monthlyRevenueByBranch = asyncHandler(async (req, res) => {
 const topServices = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'top');
   if (!filters) return;
-  const { sql, params } = serviceQuery(filters, true);
+  const { sql, params } = topServiceQuery(filters);
   // mysql2.query safely binds the numeric LIMIT; no user text is interpolated.
   const [rows] = await pool.query(sql, params);
   sendReport(res, rows, ['TimesUsed', 'TotalQuantity']);

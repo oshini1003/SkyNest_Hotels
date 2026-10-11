@@ -69,15 +69,21 @@ function validRow(type, row) {
       count(row.BillCount) && [row.RoomRevenue, row.ServiceRevenue, row.TotalRevenue].every((value) => amount(value)) &&
       totalsAgree(row.TotalRevenue, row.RoomRevenue, row.ServiceRevenue);
   }
+  if (type === "service-usage") {
+    return staffBookingId(row.ServiceID) !== null && typeof row.ServiceName === "string" &&
+      typeof row.RoomNumber === "string" &&
+      count(row.TimesUsed) && count(row.TotalQuantity) && amount(row.TotalRevenue);
+  }
   return staffBookingId(row.ServiceID) !== null && typeof row.ServiceName === "string" &&
     count(row.TimesUsed) && count(row.TotalQuantity) &&
-    (type === "service-usage" ? amount(row.TotalRevenue) : (row.TotalRevenue === undefined || amount(row.TotalRevenue)));
+    (row.TotalRevenue === undefined || amount(row.TotalRevenue));
 }
 
 function rowKey(type, row) {
   if (type === "occupancy") return String(row.BranchID);
   if (type === "billing-summary") return String(row.BillID);
   if (type === "revenue") return `${row.BranchScope}:${row.BranchID}:${row.Month}`;
+  if (type === "service-usage") return `${row.RoomID ?? row.RoomNumber ?? 'all'}:${row.ServiceID}`;
   return String(row.ServiceID);
 }
 
@@ -143,11 +149,17 @@ export async function loadManagerReport(type, filters, token, signal) {
     if (filters?.startDate && filters?.endDate && filters.startDate > filters.endDate) {
       throw failure("Start date cannot be later than end date.", 400);
     }
-  }
-  if (type === "billing-summary") {
-    if (typeof filters?.outstandingOnly !== "boolean") throw failure("Choose whether to show outstanding bills only.", 400);
-    query.set("outstandingOnly", String(filters.outstandingOnly));
-  }
+    if (type === "service-usage") {
+    const roomId = filters?.roomId;
+    if (roomId !== "" && roomId !== undefined) {
+      if (staffBookingId(roomId) === null) throw failure("Enter a valid room ID.", 400);
+      query.set("roomId", roomId);
+    }
+    }
+    if (type === "billing-summary") {
+      if (typeof filters?.outstandingOnly !== "boolean") throw failure("Choose whether to show outstanding bills only.", 400);
+      query.set("outstandingOnly", String(filters.outstandingOnly));
+    }
   if (type === "revenue") {
     const year = String(filters?.year ?? "");
     const month = String(filters?.month ?? "");
@@ -174,4 +186,5 @@ export async function loadManagerReport(type, filters, token, signal) {
     (query.has("month") && Number(row.Month.slice(5)) !== Number(query.get("month"))))) throw failure(unexpectedMessage);
   if (type === "top-services" && data.length > Number(query.get("limit"))) throw failure(unexpectedMessage);
   return data;
+}
 }
