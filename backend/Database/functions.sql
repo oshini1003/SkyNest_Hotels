@@ -16,3 +16,11 @@ BEGIN
     RETURN v_total;
 END //
 
+CREATE FUNCTION fn_calculate_service_charges(p_booking_id INT)
+RETURNS DECIMAL(10,2) DETERMINISTIC READS SQL DATA
+BEGIN
+    DECLARE v_total DECIMAL(10,2);
+    SELECT IFNULL(SUM(Quantity * PriceAtUsage), 0) INTO v_total
+    FROM SERVICE_USAGE WHERE BookingID = p_booking_id;
+    RETURN v_total;
+END //
