@@ -8,7 +8,7 @@ import "./MakeBooking.css";
 const money = new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR", currencyDisplay: "code" });
 const guestLabel = (count) => `${count} ${count === 1 ? "guest" : "guests"}`;
 
-function ReviewProgress({ complete = false }) {
+export function ReviewProgress({ complete = false }) {
   return (
     <ol className="review-progress" aria-label="Reservation progress">
       <li><span aria-hidden="true">01</span> Choose rooms</li>
@@ -18,7 +18,7 @@ function ReviewProgress({ complete = false }) {
   );
 }
 
-function ReviewSymbol({ complete = false }) {
+export function ReviewSymbol({ complete = false }) {
   return (
     <svg className="review-symbol" viewBox="0 0 48 48" fill="none" aria-hidden="true">
       {complete ? <><circle cx="24" cy="24" r="19" /><path d="m15 24 6 6 13-13" /></>

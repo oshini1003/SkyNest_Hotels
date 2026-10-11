@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router";
 import { getLocalToday, loadRoomOptions, searchRooms, validateStay } from "../services/roomApi";
 import { MAX_ROOMS } from "../services/bookingIntent";
 import "./RoomSearch.css";
+import { Link, useLocation, useNavigate } from "react-router";
+import { MAX_ROOMS, selectedGuest } from "../services/bookingIntent";
 
 const initialFilters = {
   branch: "",
@@ -53,6 +55,7 @@ function RoomIcon() {
 export default function RoomSearch() {
   const location = useLocation();
   const navigate = useNavigate();
+  const bookingFor = selectedGuest(location.state?.bookingFor);
   const [filters, setFilters] = useState(() => initialRoomFilters(location.state));
   const [options, setOptions] = useState({ branches: [], roomTypes: [] });
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -175,16 +178,17 @@ export default function RoomSearch() {
   }
 
   function continueToBooking() {
-    navigate("/make-booking", {
-      state: {
-        stay: {
-          checkin: result.checkin,
-          checkout: result.checkout,
-          rooms: selectedItems.map(({ room, guests }) => ({ roomId: room.id, guests })),
-        },
+  navigate(bookingFor ? "/staff/make-booking" : "/make-booking", {
+    state: {
+      stay: {
+        checkin: result.checkin,
+        checkout: result.checkout,
+        rooms: selectedItems.map(({ room, guests }) => ({ roomId: room.id, guests })),
       },
-    });
-  }
+      ...(bookingFor ? { guest: bookingFor } : {}),
+    },
+  });
+}
 
   const roomCount = selectedItems.length;
 
@@ -213,6 +217,11 @@ export default function RoomSearch() {
         </div>
       )}
 
+      {bookingFor && (
+        <p className="room-demo-note" role="status">
+          Booking for <strong>{bookingFor.name}</strong> · <Link to="/staff/bookings/new">Change guest</Link>
+        </p>
+      )}
       <form className="room-search-form" onSubmit={handleSearch}>
         <div className="room-form-heading">
           <div>
