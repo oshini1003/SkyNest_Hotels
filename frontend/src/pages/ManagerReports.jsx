@@ -9,7 +9,7 @@ const reportOptions = [
   { value: "billing-summary", label: "Billing summary", description: "Saved bills with recorded payments and outstanding balances. The opened date is when each bill was generated; it is not the payment date." },
   { value: "service-usage", label: "Service usage by room and service", description: "Recorded service entries, quantities and charges broken down per room and service type." },
   { value: "revenue", label: "Finalized bill totals", description: "Room and service charges from checked-out bookings, grouped by the month each bill was opened. These are billed amounts, not cash received by payment date or totals grouped by checkout date." },
-  { value: "top-services", label: "Most used services", description: "Services ranked by the number of saved usage entries. Quantity is shown separately: one entry can contain more than one unit. This includes historical service usage." },
+  { value: "top-services", label: "Top-used services and customer preference trends", description: "Services ranked by popularity, customer preference share percentage, and demand trends." },
 ];
 const initialFilters = { type: "occupancy", branchId: "", startDate: "", endDate: "", outstandingOnly: false, year: "", month: "", limit: "5" };
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -50,10 +50,15 @@ function ReportTable({ type, rows, title }) {
       <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
     </tr>);
   } else {
-    headings = ["Rank", "Service", "Usage entries", "Total quantity"];
+    headings = ["Rank", "Service", "Usage entries", "Total quantity", "Preference share", "Demand trend", "Total charges"];
     body = rows.map((row, index) => <tr key={row.ServiceID}>
-      <td>{index + 1}</td>
-      <th scope="row">{row.ServiceName}</th><td>{whole(row.TimesUsed)}</td><td>{whole(row.TotalQuantity)}</td>
+      <td>#{index + 1}</td>
+      <th scope="row">{row.ServiceName}</th>
+      <td>{whole(row.TimesUsed)}</td>
+      <td>{whole(row.TotalQuantity)}</td>
+      <td><strong>{row.PreferenceShare || "—"}</strong></td>
+      <td><span className="mr-badge">{row.Trend || "Stable"}</span></td>
+      <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
     </tr>);
   }
   return <div className="mr-table-wrap" role="region" aria-label={`${title} results`} aria-describedby="manager-reports-scroll-hint" tabIndex={0}>

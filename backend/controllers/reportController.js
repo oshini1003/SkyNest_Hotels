@@ -174,7 +174,14 @@ function topServiceQuery(filters) {
   return {
     sql: `SELECT sc.ServiceID, sc.ServiceName, COUNT(*) AS TimesUsed,
                  SUM(su.Quantity) AS TotalQuantity,
-                 CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue
+                 CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue,
+                 COUNT(CASE WHEN su.UsageDate >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 END) AS CurrentMonthUsage,
+                 COUNT(CASE 
+                   WHEN su.UsageDate >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH) 
+                    AND su.UsageDate < DATE_FORMAT(CURDATE(), '%Y-%m-01') 
+                   THEN 1 
+                 END) AS PreviousMonthUsage,
+                 COUNT(CASE WHEN su.UsageDate >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 END) AS RecentUsage30Days
           FROM SERVICE_USAGE su
           JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
           JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
@@ -277,7 +284,50 @@ const topServices = asyncHandler(async (req, res) => {
   const { sql, params } = topServiceQuery(filters);
   // mysql2.query safely binds the numeric LIMIT; no user text is interpolated.
   const [rows] = await pool.query(sql, params);
-  sendReport(res, rows, ['TimesUsed', 'TotalQuantity']);
+
+  // Calculate overall total usage across services to compute preference share
+  const branchFilter = filters.branchId === undefined
+    ? '' : "WHERE scope.BranchScope = 'single' AND scope.BranchID = ?";
+  const branchParams = filters.branchId === undefined ? [] : [filters.branchId];
+  const [totalRows] = await pool.query(
+    `SELECT COUNT(*) AS TotalOverallUsage, COALESCE(SUM(su.Quantity), 0) AS TotalOverallQuantity
+     FROM SERVICE_USAGE su
+     JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
+     ${branchFilter}`,
+    branchParams
+  );
+
+  const totalOverall = Number(totalRows[0]?.TotalOverallUsage) || 0;
+
+  const enrichedRows = rows.map((row) => {
+    const timesUsed = Number(row.TimesUsed) || 0;
+    const currentMonth = Number(row.CurrentMonthUsage) || 0;
+    const previousMonth = Number(row.PreviousMonthUsage) || 0;
+
+    const sharePercent = totalOverall > 0
+      ? Number(((timesUsed / totalOverall) * 100).toFixed(1))
+      : 0;
+
+    let trend = 'Stable';
+    if (previousMonth === 0 && currentMonth > 0) {
+      trend = 'Rising (New)';
+    } else if (previousMonth > 0) {
+      const diff = currentMonth - previousMonth;
+      const pct = Math.round((diff / previousMonth) * 100);
+      if (pct > 0) trend = `Rising (+${pct}%)`;
+      else if (pct < 0) trend = `Declining (${pct}%)`;
+      else trend = 'Stable (0%)';
+    }
+
+    return {
+      ...row,
+      PreferenceShare: `${sharePercent}%`,
+      PreferenceShareValue: sharePercent,
+      Trend: trend,
+    };
+  });
+
+  sendReport(res, enrichedRows, ['TimesUsed', 'TotalQuantity', 'CurrentMonthUsage', 'PreviousMonthUsage', 'RecentUsage30Days']);
 });
 
 module.exports = {

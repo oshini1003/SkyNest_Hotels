@@ -547,7 +547,7 @@ fictional report layout remains at `/preview/staff/manager-reports` in developme
 | `GET /api/reports/billing-summary` | One row per saved bill with total, paid and outstanding amounts | `branchId`, `outstandingOnly=true` or `false` |
 | `GET /api/reports/service-usage` | Service usage breakdown per room and service type (room number, quantity and charges) | `branchId`, `roomId` |
 | `GET /api/reports/revenue` | Finalized bills grouped by branch and **bill-opened month** | `branchId`, `year`, `month` |
-| `GET /api/reports/top-services` | Services ranked by number of usage entries | `branchId`, `limit` (default 5, maximum 50) |
+| `GET /api/reports/top-services` | Top-used services and customer preference trends (preference share percentage, demand trend, usage counts, charges) | `branchId`, `limit` (default 5, maximum 50) |
 
 All endpoints return arrays, including an empty array when no records match.
 Unknown or malformed filters return 400 before SQL. Numeric query filters are
