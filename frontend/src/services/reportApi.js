@@ -131,6 +131,19 @@ export async function loadManagerReport(type, filters, token, signal) {
     if (staffBookingId(branchId) === null) throw failure("Select a valid branch.", 400);
     query.set("branchId", branchId);
   }
+  if (type === "occupancy") {
+    if (filters?.startDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(filters.startDate)) throw failure("Enter a valid start date in YYYY-MM-DD format.", 400);
+      query.set("startDate", filters.startDate);
+    }
+    if (filters?.endDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(filters.endDate)) throw failure("Enter a valid end date in YYYY-MM-DD format.", 400);
+      query.set("endDate", filters.endDate);
+    }
+    if (filters?.startDate && filters?.endDate && filters.startDate > filters.endDate) {
+      throw failure("Start date cannot be later than end date.", 400);
+    }
+  }
   if (type === "billing-summary") {
     if (typeof filters?.outstandingOnly !== "boolean") throw failure("Choose whether to show outstanding bills only.", 400);
     query.set("outstandingOnly", String(filters.outstandingOnly));

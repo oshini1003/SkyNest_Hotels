@@ -5,13 +5,13 @@ import { canViewReports, formatReportMoney, loadManagerReport } from "../service
 import "./ManagerReports.css";
 
 const reportOptions = [
-  { value: "occupancy", label: "Current room occupancy", description: "A snapshot of saved room statuses now. Occupancy is occupied rooms divided by all rooms, including rooms under maintenance. This does not show availability for future stay dates." },
+  { value: "occupancy", label: "Room occupancy", description: "Occupancy rates by branch. Leave dates empty for the real-time snapshot, or select a start and end date to review occupancy for a selected period." },
   { value: "billing-summary", label: "Billing summary", description: "Saved bills with recorded payments and outstanding balances. The opened date is when each bill was generated; it is not the payment date." },
   { value: "service-usage", label: "Service usage and charges", description: "Recorded service entries, quantities and charges at the prices saved when each service was used. These charges are not necessarily paid amounts." },
   { value: "revenue", label: "Finalized bill totals", description: "Room and service charges from checked-out bookings, grouped by the month each bill was opened. These are billed amounts, not cash received by payment date or totals grouped by checkout date." },
   { value: "top-services", label: "Most used services", description: "Services ranked by the number of saved usage entries. Quantity is shown separately: one entry can contain more than one unit. This includes historical service usage." },
 ];
-const initialFilters = { type: "occupancy", branchId: "", outstandingOnly: false, year: "", month: "", limit: "5" };
+const initialFilters = { type: "occupancy", branchId: "", startDate: "", endDate: "", outstandingOnly: false, year: "", month: "", limit: "5" };
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const whole = (value) => Number(value).toLocaleString("en-LK");
 
@@ -156,6 +156,10 @@ export default function ManagerReports({ session }) {
             <option value="">All branches</option>{branches.rows.map((branch) => <option key={branch.BranchID} value={branch.BranchID}>{branch.Name}</option>)}
           </select>
         </div>
+        {filters.type === "occupancy" && <>
+          <div className="mr-field"><label htmlFor="manager-report-start-date">Start date (optional)</label><input id="manager-report-start-date" type="date" value={filters.startDate} onChange={(event) => changeFilter("startDate", event.target.value)} /></div>
+          <div className="mr-field"><label htmlFor="manager-report-end-date">End date (optional)</label><input id="manager-report-end-date" type="date" value={filters.endDate} min={filters.startDate || undefined} onChange={(event) => changeFilter("endDate", event.target.value)} /></div>
+        </>}
         {filters.type === "billing-summary" && <label className="mr-checkbox" htmlFor="manager-report-outstanding"><input id="manager-report-outstanding" type="checkbox" checked={filters.outstandingOnly} onChange={(event) => changeFilter("outstandingOnly", event.target.checked)} /><span>Only bills with outstanding balances</span></label>}
         {filters.type === "revenue" && <>
           <div className="mr-field"><label htmlFor="manager-report-year">Bill opened year (optional)</label><input id="manager-report-year" type="text" inputMode="numeric" pattern="[1-9][0-9]{3}" maxLength={4} placeholder="All years" value={filters.year} onChange={(event) => changeFilter("year", event.target.value)} /></div>

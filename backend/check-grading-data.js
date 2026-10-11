@@ -11,8 +11,6 @@ function atStage(error, stage) {
   return failure;
 }
 
-// Map only controlled local messages and known driver codes to public labels.
-// Never print a driver message, SQL, configuration, stack, or returned row.
 const localCodes = new Map([
   ['Remove shell DB_* overrides before checking the file configuration.', 'SHELL_DB_OVERRIDES'],
   ['Expected explicit local integration settings and the runtime account in backend/.env.', 'RUNTIME_CONFIG_INVALID'],
@@ -46,8 +44,6 @@ Room availability is derived from rooms, bookings and stay dates; it is not a se
 This does not seed/reset data or replace check-runtime-user.js or a workflow demonstration.
 Exit codes: 0 = count minimums met; 2 = REVIEW data gaps; 1 = verification error.`;
 
-// Static aggregate statements only. Cast before crossing the driver boundary so
-// large COUNT values never pass through an imprecise JavaScript Number.
 const measures = Object.freeze([
   { key: 'branches', label: 'Branches', minimum: '3', sql: 'SELECT CAST(COUNT(*) AS CHAR) AS total FROM BRANCH' },
   { key: 'rooms', label: 'Rooms', minimum: '10', sql: 'SELECT CAST(COUNT(*) AS CHAR) AS total FROM ROOM' },

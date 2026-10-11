@@ -1,7 +1,3 @@
--- Audit integration definitions. Do not import this file over an existing database.
--- Use: node backend/Database/addAuditLog.js --backend-stopped
--- The installer checks baseline definitions, preserves definers/context, and saves backups.
--- No database selection, DROP, reset, historical backfill, or business-row writes.
 DELIMITER //
 
 CREATE TABLE AUDIT_LOG (

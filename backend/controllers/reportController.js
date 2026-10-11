@@ -51,13 +51,69 @@ function sendReport(res, rows, countFields = []) {
   res.json(result);
 }
 
-// GET /api/reports/occupancy?branchId=
+// GET /api/reports/occupancy?branchId=&startDate=&endDate=&date=
 const occupancyReport = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'occupancy');
   if (!filters) return;
   const params = [];
   const branchFilter = filters.branchId === undefined ? '' : 'WHERE br.BranchID = ?';
   if (filters.branchId !== undefined) params.push(filters.branchId);
+
+  // If a selected date or date-range is supplied
+  if (filters.startDate !== undefined) {
+    const sDate = filters.startDate;
+    const eDate = filters.endDate;
+    const queryParams = [eDate, sDate, sDate, sDate];
+    if (filters.branchId !== undefined) queryParams.push(filters.branchId);
+
+    const [roomRows] = await pool.query(
+      `SELECT br.BranchID, br.Name AS BranchName, r.RoomID, r.RoomStatus,
+              MAX(CASE 
+                WHEN b.BookingStatus != 'Cancelled' 
+                 AND DATE(stay.CheckInDateTime) <= ? 
+                 AND (DATE(stay.CheckOutDateTime) > ? OR (DATE(stay.CheckInDateTime) = ? AND DATE(stay.CheckOutDateTime) = ?))
+                THEN 1 ELSE 0 
+              END) AS IsOccupied
+       FROM BRANCH br
+       LEFT JOIN ROOM r ON r.BranchID = br.BranchID
+       LEFT JOIN BOOKED_ROOMS stay ON stay.RoomID = r.RoomID
+       LEFT JOIN BOOKING b ON b.BookingID = stay.BookingID
+       ${branchFilter}
+       GROUP BY br.BranchID, br.Name, r.RoomID, r.RoomStatus
+       ORDER BY br.Name, br.BranchID`,
+      queryParams
+    );
+
+    const branchMap = new Map();
+    for (const row of roomRows) {
+      if (!branchMap.has(row.BranchID)) {
+        branchMap.set(row.BranchID, {
+          BranchID: row.BranchID,
+          BranchName: row.BranchName,
+          Occupied: 0,
+          Available: 0,
+          Maintenance: 0,
+          TotalRooms: 0,
+        });
+      }
+      const b = branchMap.get(row.BranchID);
+      if (row.RoomID !== null) {
+        b.TotalRooms += 1;
+        if (row.IsOccupied === 1) {
+          b.Occupied += 1;
+        } else if (row.RoomStatus === 'Maintenance') {
+          b.Maintenance += 1;
+        } else {
+          b.Available += 1;
+        }
+      }
+    }
+
+    sendReport(res, Array.from(branchMap.values()), ['Occupied', 'Available', 'Maintenance', 'TotalRooms']);
+    return;
+  }
+
+  // Otherwise: Real-time current snapshot of ROOM.RoomStatus
   const [rows] = await pool.query(
     `SELECT br.BranchID, br.Name AS BranchName,
             COALESCE(SUM(r.RoomStatus = 'Occupied'), 0) AS Occupied,
