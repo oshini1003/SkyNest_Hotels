@@ -156,6 +156,11 @@ export async function loadManagerReport(type, filters, token, signal) {
       if (staffBookingId(roomId) === null) throw failure("Enter a valid room ID.", 400);
       query.set("roomId", roomId);
     }
+    const serviceId = filters?.serviceId;
+    if (serviceId !== "" && serviceId !== undefined) {
+      if (staffBookingId(serviceId) === null) throw failure("Enter a valid service ID.", 400);
+      query.set("serviceId", serviceId);
+    }
   }
   if (type === "billing-summary") {
     if (typeof filters?.outstandingOnly !== "boolean") throw failure("Choose whether to show outstanding bills only.", 400);

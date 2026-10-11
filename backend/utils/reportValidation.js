@@ -2,7 +2,7 @@ const maxSqlInteger = 2147483647;
 const filtersByReport = Object.freeze({
   occupancy: ['branchId', 'startDate', 'endDate', 'date'],
   billing: ['branchId', 'outstandingOnly'],
-  services: ['branchId', 'roomId'],
+  services: ['branchId', 'roomId', 'serviceId'],
   revenue: ['branchId', 'year', 'month'],
   top: ['branchId', 'limit'],
 });

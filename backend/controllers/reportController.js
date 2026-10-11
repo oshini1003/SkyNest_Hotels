@@ -207,6 +207,10 @@ const serviceUsageBreakdown = asyncHandler(async (req, res) => {
     conditions.push('r.RoomID = ?');
     params.push(filters.roomId);
   }
+  if (filters.serviceId !== undefined) {
+    conditions.push('sc.ServiceID = ?');
+    params.push(filters.serviceId);
+  }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
