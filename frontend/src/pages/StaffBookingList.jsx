@@ -63,6 +63,9 @@ export default function StaffBookingList({ session }) {
         <div className="sb-access">
           <span>Booking access</span>
           <strong>{scope ? (isBranchRestricted(scope.role) ? scope.branchName : "All branches") : (result.loading ? "Checking access…" : "Not verified")}</strong>
+          {canCheckIn(session.staff.role) && (
+            <Link className="sb-button" to="/staff/bookings/new" style={{ marginTop: 16 }}>New booking</Link>
+          )}
         </div>
       </header>
       {!canCheckIn(session.staff.role) && <p className="sb-notice">Your ServiceStaff account can view reservations. Reception, managers and administrators handle check-in.</p>}
