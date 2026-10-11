@@ -2,9 +2,6 @@ const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const { canReadReports, validateReportQuery } = require('../utils/reportValidation');
 
-// One row per booking, regardless of its room count. Historical multi-branch
-// bookings cannot be allocated from a single stored bill, so keep them separate.
-// Starting with BOOKING also retains bills/usage with no assigned rooms.
 const bookingBranches = `
   SELECT mapped_booking.BookingID,
          CASE WHEN COUNT(DISTINCT mapped_room.BranchID) = 1
