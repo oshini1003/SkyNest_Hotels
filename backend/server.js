@@ -16,9 +16,15 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:5174,http://localhost:4173')
+const corsOriginEnv = process.env.CORS_ORIGIN || '';
+const allowedOrigins = corsOriginEnv
   .split(',').map(origin => origin.trim()).filter(Boolean);
-app.use(cors({ origin: allowedOrigins }));
+
+if (!corsOriginEnv || corsOriginEnv === '*' || allowedOrigins.includes('*')) {
+  app.use(cors());
+} else {
+  app.use(cors({ origin: allowedOrigins, credentials: true }));
+}
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'HRGSMS backend' }));
