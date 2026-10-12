@@ -620,9 +620,9 @@ changes do not reset the page. Missing URLs provide themed recovery links.
 Branch/room-type review screens return keyboard focus to the form when Back to
 details is selected. Dashboard room totals wrap on narrow screens.
 
-See `../docs/FRONTEND_PART4_REVIEW.md` for the browser checks and remaining Part 3
-integration work. This stage does not add property editing or change the backend.
-
+See `../docs/FRONTEND_PART4_REVIEW.md` for the completion review of all four
+planned frontend parts, user-reported browser checks and verification limits.
+Property editing was outside this frontend delivery.
 
 ## Staff account creation (Part 3 frontend)
 
