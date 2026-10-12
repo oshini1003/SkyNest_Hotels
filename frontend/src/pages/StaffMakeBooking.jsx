@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { searchRooms, validateStay } from "../services/roomApi";
+import { validateStay } from "../services/roomApi";
 import { selectedGuest, selectedStay } from "../services/bookingIntent";
-import { createStaffBooking, isCurrentStaff } from "../services/staffGuestBookingApi";
+import { createStaffBooking, isCurrentStaff, loadStaffBookingAvailability } from "../services/staffGuestBookingApi";
 import { ReviewProgress, ReviewSymbol } from "./MakeBooking";
 import "./MakeBooking.css";
 
@@ -58,20 +58,21 @@ function StaffBookingReview({ selection, guest, token, alreadyAttempted }) {
     if (attemptedOnMount.current) return;
     let active = true;
     const controller = new AbortController();
-    Promise.all(requested.map(({ roomId, guests }) =>
-      searchRooms({ roomId, checkin, checkout, guests }, controller.signal),
-    )).then((results) => {
-      if (!active || !isCurrentStaff(token)) return;
-      const found = requested.map(({ roomId, guests }, index) => {
-        const room = results[index].find((item) => item.id === roomId && item.capacity >= guests);
-        return room ? { ...room, guests } : null;
+    loadStaffBookingAvailability({ checkin, checkout, rooms: requested }, token, controller.signal)
+      .then(({ rooms, unavailable, scope }) => {
+        if (!active || controller.signal.aborted) return;
+        if (!isCurrentStaff(token)) {
+          setStatus({ loading: false, error: "Your staff session has changed. Please sign in again.", rooms: [], unavailable: 0 });
+          return;
+        }
+        setStatus({ loading: false, error: "", rooms, unavailable, scope });
+      }).catch((error) => {
+        if (active && !controller.signal.aborted) {
+          setStatus({ loading: false, error: error.name === "AbortError"
+            ? "Your staff session has changed. Please sign in again."
+            : error.message, rooms: [], unavailable: 0 });
+        }
       });
-      setStatus({ loading: false, error: "", rooms: found.filter(Boolean), unavailable: found.filter((room) => !room).length });
-    }).catch((error) => {
-      if (active && isCurrentStaff(token) && error.name !== "AbortError") {
-        setStatus({ loading: false, error: error.message, rooms: [], unavailable: 0 });
-      }
-    });
     return () => { active = false; controller.abort(); };
   }, [requested, checkin, checkout, token, attempt]);
 
@@ -82,7 +83,8 @@ function StaffBookingReview({ selection, guest, token, alreadyAttempted }) {
 
   async function confirmBooking(event) {
     event.preventDefault();
-    if (pending.current || submission.kind !== "idle" || status.rooms.length !== requested.length || !isCurrentStaff(token)) return;
+    if (pending.current || submission.kind !== "idle" || status.loading || status.error || !status.scope ||
+        status.rooms.length !== requested.length || !isCurrentStaff(token)) return;
     try {
       validateStay({ checkin, checkout, guests: 1 });
     } catch (error) {
@@ -109,10 +111,17 @@ function StaffBookingReview({ selection, guest, token, alreadyAttempted }) {
       if (controller.signal.aborted || !isCurrentStaff(token)) return;
       setSubmission({ kind: "success", message: "", bookingId: result.bookingId });
     } catch (error) {
-      if (controller.signal.aborted || !isCurrentStaff(token) || error.name === "AbortError") return;
+      if (controller.signal.aborted || !isCurrentStaff(token)) return;
       const kind = error.outcomeUnknown ? "unknown" : error.status === 409 ? "conflict" : "idle";
-      setSubmission({ kind, message: error.message, bookingId: null });
-      if (!error.outcomeUnknown) navigate("/staff/make-booking", { replace: true, state: { stay: selection, guest } });
+      setSubmission({ kind, message: error.name === "AbortError"
+        ? "The booking check was interrupted. Check the selected rooms again before confirming."
+        : error.message, bookingId: null });
+      if (!error.outcomeUnknown) {
+        navigate("/staff/make-booking", { replace: true, state: { stay: selection, guest } });
+        if (error.status === 403 || error.status === 401 || error.name === "AbortError") {
+          setStatus({ loading: false, error: error.message, rooms: [], unavailable: 0 });
+        }
+      }
     } finally {
       pending.current = false;
     }
@@ -177,13 +186,13 @@ function StaffBookingReview({ selection, guest, token, alreadyAttempted }) {
           {status.loading ? <p role="status">Checking the selected {requested.length === 1 ? "room" : "rooms"} and current prices…</p>
             : status.error ? <p className="review-error" role="alert">{status.error}</p>
               : <p className="review-notice" role="status">{unavailableMessage}</p>}
-          <p>No booking request has been sent from this review.</p>
+          <p>No booking has been confirmed. Review the current details before continuing.</p>
           <div className="review-actions">
             {!status.loading && <button className="button review-button" type="button" onClick={retryAvailability}>Check again</button>}
             <Link
               className={`button review-button${status.loading ? "" : " review-button--secondary"}`}
-              to="/staff/rooms"
-              state={{ bookingFor: guest }}
+              to="/staff/bookings/rooms"
+              state={{ bookingFor: guest, roomSearch: { checkin, checkout, guests: String(requested[0].guests) } }}
             >
               Choose rooms again
             </Link>
@@ -257,7 +266,16 @@ function StaffBookingReview({ selection, guest, token, alreadyAttempted }) {
               </select>
             </div>
             {submission.message && <p className="review-error" role="alert">{submission.message}</p>}
-            {submission.kind === "conflict" && <p className="review-conflict-note">Search again to see the latest room availability.</p>}
+            {submission.kind === "conflict" && (
+              <p className="review-conflict-note">The booking was not saved. Choose rooms again to check the latest availability.</p>
+            )}
+            {submission.kind !== "pending" && (
+              <Link
+                className="review-text-link"
+                to="/staff/bookings/rooms"
+                state={{ bookingFor: guest, roomSearch: { checkin, checkout, guests: String(requested[0].guests) } }}
+              >Choose rooms again</Link>
+            )}
             <button className="button review-button" type="submit" disabled={disabled}>
               {submission.kind === "pending" ? "Confirming booking…" : rooms.length === 1 ? "Confirm booking" : `Confirm ${rooms.length} rooms`}
             </button>

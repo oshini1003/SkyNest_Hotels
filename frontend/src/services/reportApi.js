@@ -43,6 +43,18 @@ function branchScope(row) {
     (["multiple", "unassigned"].includes(row.BranchScope) && row.BranchID === null)
   );
 }
+function roomScope(row) {
+  if (row.RoomScope === "single") {
+    return staffBookingId(row.RoomID) !== null && row.BranchScope === "single" &&
+      typeof row.RoomNumber === "string" && row.RoomNumber.trim().length > 0;
+  }
+  return row.RoomID === null && (
+    (row.RoomScope === "multiple" && row.RoomNumber === "Multiple rooms" && row.BranchScope !== "unassigned") ||
+    (row.RoomScope === "unassigned" && row.RoomNumber === "Unassigned room" && row.BranchScope === "unassigned")
+  );
+}
+
+
 
 function totalsAgree(total, first, second) {
   return BigInt(moneyCents(total)) === BigInt(moneyCents(first)) + BigInt(moneyCents(second));
@@ -71,7 +83,7 @@ function validRow(type, row) {
   }
   if (type === "service-usage") {
     return staffBookingId(row.ServiceID) !== null && typeof row.ServiceName === "string" &&
-      typeof row.RoomNumber === "string" &&
+      branchScope(row) && roomScope(row) &&
       count(row.TimesUsed) && count(row.TotalQuantity) && amount(row.TotalRevenue);
   }
   return staffBookingId(row.ServiceID) !== null && typeof row.ServiceName === "string" &&
@@ -83,7 +95,7 @@ function rowKey(type, row) {
   if (type === "occupancy") return String(row.BranchID);
   if (type === "billing-summary") return String(row.BillID);
   if (type === "revenue") return `${row.BranchScope}:${row.BranchID}:${row.Month}`;
-  if (type === "service-usage") return `${row.BranchScope ?? ''}:${row.BranchID ?? ''}:${row.RoomID ?? row.RoomNumber ?? 'all'}:${row.ServiceID}`;
+  if (type === "service-usage") return `${row.BranchScope}:${row.BranchID}:${row.RoomScope}:${row.RoomID}:${row.ServiceID}`;
   return String(row.ServiceID);
 }
 
@@ -184,8 +196,13 @@ export async function loadManagerReport(type, filters, token, signal) {
   if (!Array.isArray(data) || data.some((row) => !validRow(type, row)) ||
       new Set(data.map((row) => rowKey(type, row))).size !== data.length) throw failure(unexpectedMessage);
   if (type === "billing-summary" && new Set(data.map((row) => String(row.BookingID))).size !== data.length) throw failure(unexpectedMessage);
-  if (query.has("branchId") && ["occupancy", "billing-summary", "revenue"].includes(type) &&
+  if (query.has("branchId") && ["occupancy", "billing-summary", "service-usage", "revenue"].includes(type) &&
       data.some((row) => staffBookingId(row.BranchID) !== Number(query.get("branchId")))) throw failure(unexpectedMessage);
+  if (type === "service-usage" && (
+    (query.has("serviceId") && data.some((row) => staffBookingId(row.ServiceID) !== Number(query.get("serviceId")))) ||
+    (query.has("roomId") && data.some((row) => row.RoomScope === "unassigned" ||
+      (row.RoomScope === "single" && staffBookingId(row.RoomID) !== Number(query.get("roomId")))))
+  )) throw failure(unexpectedMessage);
   if (type === "billing-summary" && filters.outstandingOnly && data.some((row) => moneyCents(row.OutstandingBalance, true) <= 0)) throw failure(unexpectedMessage);
   if (type === "revenue" && data.some((row) =>
     (query.has("year") && row.Month.slice(0, 4) !== query.get("year")) ||

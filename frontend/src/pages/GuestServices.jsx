@@ -4,16 +4,11 @@ import { isCurrentGuest } from "../services/bookingApi";
 import { formatBillMoney, guestBillId, loadGuestBill } from "../services/guestBillingApi";
 import { clearGuestServiceAttempt, guestServiceTotal, loadGuestServiceCatalogue, readGuestServiceAttempt, requestGuestService } from "../services/guestServiceApi";
 import { SESSION_CHANGED_EVENT } from "../services/session";
+import ServicePhoto from "../components/ServicePhoto";
 import "./GuestServices.css";
 
 const initialResult = { loading: true, data: null, error: "", status: 0, services: [], catalogueError: "" };
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
-
-function serviceImage(name) {
-  if (/dining|restaurant|food|breakfast|lunch|dinner/i.test(name)) return "/images/hotel/service-dining.jpg";
-  if (/spa|massage|wellness/i.test(name)) return "/images/hotel/service-spa.jpg";
-  return null;
-}
 
 function ServiceIcon({ name = "", className = "" }) {
   let drawing;
@@ -214,15 +209,14 @@ function BookingServices({ bookingId, guestId, token }) {
                 : <><label className="gs-search-label" htmlFor="gs-search">Find a service</label><div className="gs-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg><input id="gs-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Try breakfast, laundry or spa" /><span aria-live="polite">{visible.length} {visible.length === 1 ? "service" : "services"}</span></div>
                   {!result.services.length ? <div className="gs-empty"><ServiceIcon /><h3>No services available right now</h3><p>Please ask reception for assistance or refresh this stay later.</p></div> : !visible.length ? <div className="gs-empty"><h3>No matching services</h3><p>Try a different name or clear your search.</p><button className="gs-button" type="button" onClick={() => setSearch("")}>Clear search</button></div>
                     : <fieldset className="gs-service-options" disabled={blocked}><legend className="gs-sr-only">Select one service to add to this booking</legend>{visible.map((service) => {
-                      const image = serviceImage(service.ServiceName);
                       const checked = selectedId === String(service.ServiceID);
                       return <label className={`gs-service-card${checked ? " gs-service-selected" : ""}`} key={service.ServiceID}>
                         <input className="gs-service-radio" type="radio" name="service" value={service.ServiceID} checked={checked} onChange={() => selectService(service.ServiceID)} />
-                        <div className={`gs-service-media${image ? "" : " gs-service-media-icon"}`}>{image ? <img src={image} alt="" loading="lazy" /> : <ServiceIcon name={service.ServiceName} />}<span className="gs-selection-mark" aria-hidden="true">{checked ? "✓" : "+"}</span></div>
+                        <ServicePhoto name={service.ServiceName} className="gs-service-media" fallbackClassName="gs-service-media-icon" fallback={<ServiceIcon name={service.ServiceName} />}><span className="gs-selection-mark" aria-hidden="true">{checked ? "✓" : "+"}</span></ServicePhoto>
                         <div className="gs-service-body"><h3>{service.ServiceName}</h3><p>{service.Description || "Please speak with reception if you would like more details."}</p><div className="gs-service-price"><span>Per unit</span><strong>{formatBillMoney(service.UnitPrice)}</strong></div><span className="gs-select-label">{checked ? "Selected for your stay" : "Select service"}<span aria-hidden="true">{checked ? "✓" : "→"}</span></span></div>
                       </label>;
                     })}</fieldset>}
-                  {visible.some((service) => serviceImage(service.ServiceName)) && <p className="gs-photo-note">Photography is illustrative. Refer to each service description for details.</p>}
+                  {visible.length > 0 && <p className="gs-photo-note">Photography is illustrative. Refer to each service description for details.</p>}
                 </>}
             </section>
             <aside className="gs-review-column"><section className="gs-review" id="gs-review-panel" ref={reviewPanel} tabIndex="-1" aria-labelledby="gs-review-heading"><p className="gs-eyebrow">02 / REVIEW YOUR REQUEST</p><h2 id="gs-review-heading">A little extra.</h2><p className="gs-review-intro">One service at a time, added to your stay.</p>

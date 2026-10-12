@@ -92,18 +92,46 @@ CREATE TABLE STAFF_ACCOUNT (
     FOREIGN KEY (StaffID) REFERENCES STAFF(StaffID) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- BOOKING  (BookingStatus lives here; per-room stay dates live on BOOKED_ROOMS)
 
+CREATE TABLE BOOKING (
+    BookingID              INT AUTO_INCREMENT PRIMARY KEY,
+    GuestID                INT NOT NULL,
+    StaffID                INT NULL,  -- NULL = self-service booking made by the guest online
+    BookingStatus          ENUM('Booked','Checked-In','Checked-Out','Cancelled') NOT NULL DEFAULT 'Booked',
+    BookingDate            DATE NOT NULL DEFAULT (CURRENT_DATE),
+    PreferredPaymentMethod ENUM('Cash','Card','Bank Transfer') NOT NULL,
+    CreatedDate            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (GuestID) REFERENCES GUEST(GuestID),
+    FOREIGN KEY (StaffID) REFERENCES STAFF(StaffID)
+) ENGINE=InnoDB;
 
+CREATE TABLE BILL (
+    BillID          INT AUTO_INCREMENT PRIMARY KEY,
+    BookingID       INT NOT NULL UNIQUE,
+    StaffID         INT NULL,  -- staff member who processed the checkout/bill
+    RoomCharges     DECIMAL(10,2) NOT NULL,
+    ServiceCharges  DECIMAL(10,2) NOT NULL,
+    TotalAmount     DECIMAL(10,2) NOT NULL,
+    BillStatus      ENUM('Paid','Partially Paid','Unpaid') NOT NULL DEFAULT 'Unpaid',
+    GeneratedDate   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID),
+    FOREIGN KEY (StaffID)   REFERENCES STAFF(StaffID)
+) ENGINE=InnoDB;
 
+-- PAYMENT
 
-
-
-
-
-
-
-
-
+CREATE TABLE PAYMENT (
+    PaymentID       INT AUTO_INCREMENT PRIMARY KEY,
+    BookingID       INT NOT NULL,
+    BillID          INT NOT NULL,
+    PaymentType     ENUM('Full','Partial') NOT NULL,
+    Amount          DECIMAL(10,2) NOT NULL CHECK (Amount > 0),
+    PaymentDate     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PaymentMethod   ENUM('Cash','Card','Bank Transfer') NOT NULL,
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID),
+    FOREIGN KEY (BillID)    REFERENCES BILL(BillID)
+) ENGINE=InnoDB;
 
 
 

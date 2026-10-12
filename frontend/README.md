@@ -552,3 +552,120 @@ node .\frontend\tests\page-loading-regression.mjs
 These checks use mocked HTTP/database fixtures and a real production build.
 Live MySQL writes and browser rendering need the separate local checks described
 in `docs/SERVICE_CATALOGUE_MANAGEMENT.md`.
+
+## Property management, Part 1 (9 October 2026)
+
+Managers and administrators can open **Property** from staff navigation, or the
+new **Hotel branches** and **Room types** workspace cards. `/staff/branches` and
+`/staff/room-types` show live catalogues with search, responsive cards, labelled
+forms and a review step before creating an entry. The room-type form uses the
+existing amenity choices. Both pages follow the cream, deep-green and gold theme
+and load as deferred pages, bringing the production page count to twenty-one.
+
+The frontend checks the current staff scope, validates bounded text and decimal
+rates, sends each create once, and retains a pending/saved action in sessionStorage
+until the result is inspected. Interrupted saves must be checked before retrying;
+the guard is per tab and does not provide server idempotency. New capacities are
+limited to 1-100 guests for the current booking selectors; existing larger valid
+capacities can still be listed.
+
+This batch changes no backend or database code. Existing APIs support list/create
+only for branches and room types. Editing/deleting them, individual room management
+and creating amenities are not included. The existing create endpoints rely on
+token roles and minimal input validation; frontend scope checks do not replace
+server enforcement. See `docs/PROPERTY_MANAGEMENT_PART1.md` for the precise limits
+and local browser verification steps.
+
+```powershell
+node .\frontend\tests\property-management-api-regression.mjs
+node .\frontend\tests\staff-branch-api-regression.mjs
+node .\frontend\tests\service-management-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+npm --prefix frontend run build
+```
+
+The client regressions use mocked HTTP/storage and actual Vite-loaded modules.
+Build checks verify emitted assets, not browser rendering or live database writes.
+
+## Property management, Part 2 (9 October 2026)
+
+The manager/admin property workspace now includes **Rooms** (`/staff/rooms`) and
+**Amenities** (`/staff/amenities`). Rooms can be searched and filtered by branch,
+type and saved status, then added with a branch, room type and unique room number.
+Amenities can be searched and added for selection when creating a new room type.
+Both pages use the existing property design, review-before-save forms and
+session-aware interrupted-save recovery. All four property tabs are linked from
+each page; the two new pages are deferred production bundles.
+
+The existing room GET excludes maintenance rooms. The page labels its count as
+listed rooms and does not promise date availability. Manual room-status changes,
+room/amenity edit/delete and editing existing room-type amenity links are outside
+this frontend-only delivery. No backend or database files change. Read
+`docs/PROPERTY_MANAGEMENT_PART2.md` for the API limits and local browser checks.
+
+```powershell
+node .\frontend\tests\property-inventory-api-regression.mjs
+node .\frontend\tests\property-management-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+npm --prefix frontend run build
+```
+
+## Shared frontend polish (Part 4 review)
+
+Current routes use descriptive SkyNest browser-tab titles. Navigation to a new
+page focuses its main content; link navigation scrolls to the top, while browser
+history and hash navigation retain their existing behavior. Same-page form state
+changes do not reset the page. Missing URLs provide themed recovery links.
+
+Branch/room-type review screens return keyboard focus to the form when Back to
+details is selected. Dashboard room totals wrap on narrow screens.
+
+See `../docs/FRONTEND_PART4_REVIEW.md` for the browser checks and remaining Part 3
+integration work. This stage does not add property editing or change the backend.
+
+
+## Staff account creation (Part 3 frontend)
+
+Administrators can open **Staff accounts** (`/staff/accounts`) to create a staff
+profile and sign-in through the existing registration endpoint. The page includes
+role and branch selection, password confirmation, review before saving and a
+saved receipt. Receptionist and service-staff accounts require a branch. The
+administrator remains signed in after creation.
+
+Current Admin access and branch choices are checked before a save. A same-tab
+pending marker blocks repeat submissions after an uncertain response; passwords
+and email are excluded from browser storage. No write is automatically retried.
+
+This page does not offer a staff directory, editing or deletion: those endpoints
+are absent from the inspected backend. Samalee's receptionist booking creation
+is separate. No backend or database code changes are included.
+
+See `../docs/STAFF_ACCOUNT_CREATION.md` for permissions, recovery limits and local
+browser checks. The new page is loaded on demand and has its own stylesheet.
+
+```powershell
+node .\frontend\tests\staff-account-api-regression.mjs
+node .\frontend\tests\page-loading-regression.mjs
+```
+
+These are mocked client and real production-build checks, not live registration
+or browser-rendering verification.
+
+
+## Receptionist booking integration
+
+Samalee's guest search/create and staff booking flow is combined with the
+management frontend. Start at **Create a booking** on the staff home or
+reservations page. `/staff/rooms` remains room inventory; staff room selection
+uses `/staff/bookings/rooms`.
+
+The frontend checks fresh staff scope, keeps receptionists in their assigned
+branch, requires a NIC/passport of at most 30 characters for new walk-in guests,
+and retains safe recovery states for uncertain guest/booking saves. Public
+guest booking and manager property/account pages are retained.
+
+This frontend patch needs the separately reviewed newer guest endpoints for live
+use; the older `f094ec5` backend does not provide staff guest search/create.
+No backend or database files are included. See
+[`FRONTEND_RECEPTION_INTEGRATION.md`](../docs/FRONTEND_RECEPTION_INTEGRATION.md)
+for checks, limitations and the backend prerequisite.

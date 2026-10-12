@@ -52,30 +52,49 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.json({ message: 'Profile updated successfully.', guest: rows[0] });
 });
 
+const guestFields = new Set(['name', 'contactNumber', 'email', 'idNumber', 'address']);
+const controls = /[\u0000-\u001f\u007f-\u009f]/;
 
-// GET /api/guests?q= — staff search by name, phone, email or ID number
+// GET /api/guests?q= — staff search by name, phone, email or ID number.
 const searchGuests = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  if (q.length < 2 || q.length > 100) {
-    return res.status(400).json({ error: 'Enter at least 2 characters to search.' });
+  if (Object.keys(req.query).some(key => key !== 'q') || q.length < 2 || q.length > 100 || controls.test(q)) {
+    return res.status(400).json({ error: 'Enter 2 to 100 characters to search for a guest.' });
   }
-  const like = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
-  const [rows] = await pool.execute(
-    `SELECT GuestID, Name, ContactNumber, Email, IDNumber
-     FROM GUEST
-     WHERE Name LIKE ? OR ContactNumber LIKE ? OR Email LIKE ? OR IDNumber LIKE ?
-     ORDER BY Name LIMIT 20`,
-    [like, like, like, like]
-  );
-  res.json(rows);
+  // Use an explicit escape character so %, _ and ! remain literal search text.
+  const like = `%${q.replace(/[!%_]/g, '!$&')}%`;
+  try {
+    const [rows] = await pool.execute(
+      `SELECT GuestID, Name, ContactNumber, Email, IDNumber
+       FROM GUEST
+       WHERE Name LIKE ? ESCAPE '!' OR ContactNumber LIKE ? ESCAPE '!'
+          OR Email LIKE ? ESCAPE '!' OR IDNumber LIKE ? ESCAPE '!'
+       ORDER BY Name, GuestID LIMIT 20`,
+      [like, like, like, like]
+    );
+    res.json(rows);
+  } catch (error) {
+    // Keep SQL/driver details out of the shared handler's validation messages.
+    throw new Error('Guest search could not be completed.', { cause: error });
+  }
 });
 
-// POST /api/guests — staff register a walk-in guest (no login account)
+// POST /api/guests — register a walk-in guest without creating a login account.
 const createGuest = asyncHandler(async (req, res) => {
-  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  res.set('Cache-Control', 'no-store');
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+      || Object.keys(body).some(key => !guestFields.has(key))) {
+    return res.status(400).json({ error: 'Provide only name, contactNumber, email, idNumber and address.' });
+  }
   const { idNumber, ...profile } = body;
-  if (idNumber !== undefined && (typeof idNumber !== 'string' || idNumber.trim().length > 255)) {
-    return res.status(400).json({ error: 'ID number must be text of 255 characters or fewer.' });
+  if (typeof idNumber !== 'string' || !idNumber.trim()
+      || [...idNumber.trim()].length > 30 || controls.test(idNumber.trim())) {
+    return res.status(400).json({ error: 'NIC / passport number is required and must be at most 30 characters without control characters.' });
+  }
+  if (Object.values(profile).some(value => typeof value === 'string' && controls.test(value.trim()))) {
+    return res.status(400).json({ error: 'Guest details must not contain control characters.' });
   }
   const parsed = validateGuestProfile(profile);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
@@ -83,21 +102,28 @@ const createGuest = asyncHandler(async (req, res) => {
   if (!name || !contactNumber) {
     return res.status(400).json({ error: 'Name and contact number are required.' });
   }
-  const nic = idNumber?.trim() || null;
+  const nic = idNumber.trim();
+  let result;
   try {
-    const [result] = await pool.execute(
+    [result] = await pool.execute(
       'INSERT INTO GUEST (Name, ContactNumber, Email, IDNumber, Address) VALUES (?, ?, ?, ?, ?)',
       [name, contactNumber, email ?? null, nic, address ?? null]
     );
-    res.status(201).json({
-      guest: { GuestID: result.insertId, Name: name, ContactNumber: contactNumber, Email: email ?? null, IDNumber: nic },
-    });
-  } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'A guest with these details already exists. Search for them instead.' });
     }
-    throw err;
+    // A connection failure can follow a saved INSERT. Never retry automatically
+    // or return a validation rejection that suggests the write did not happen.
+    throw new Error('Guest creation could not be confirmed.', { cause: error });
   }
+  if (!result || result.affectedRows !== 1 || !Number.isInteger(result.insertId)
+      || result.insertId < 1 || result.insertId > 2147483647) {
+    throw new Error('Guest creation could not be confirmed.');
+  }
+  res.status(201).json({
+    guest: { GuestID: result.insertId, Name: name, ContactNumber: contactNumber, Email: email ?? null, IDNumber: nic },
+  });
 });
 
 module.exports = { getProfile, updateProfile, searchGuests, createGuest };

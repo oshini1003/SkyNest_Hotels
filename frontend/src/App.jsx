@@ -9,6 +9,7 @@ import {
 } from "react-router";
 import { guestReturnDestination, guestSignInState } from "./services/bookingIntent";
 import { staffReturnDestination, staffSignInState } from "./services/staffIntent";
+import { canCheckIn } from "./services/staffBookingApi";
 
 import {
   readStaffSession,
@@ -42,16 +43,21 @@ const ServiceCatalogue = lazyPage(() => import("./pages/ServiceCatalogue"));
 const GuestProfile = lazyPage(() => import("./pages/GuestProfile"));
 const StaffLogin = lazyPage(() => import("./pages/StaffLogin"));
 const StaffHome = lazyPage(() => import("./pages/StaffHome"));
+const StaffAccounts = lazyPage(() => import("./pages/StaffAccounts"));
+const StaffNewBooking = lazyPage(() => import("./pages/StaffNewBooking"));
+const StaffMakeBooking = lazyPage(() => import("./pages/StaffMakeBooking"));
 const StaffBookingList = lazyPage(() => import("./pages/StaffBookingList"));
 const StaffBookingDetails = lazyPage(() => import("./pages/StaffBookingDetails"));
 const StaffServiceUsage = lazyPage(() => import("./pages/StaffServiceUsage"));
 const StaffBilling = lazyPage(() => import("./pages/StaffBilling"));
 const ManagerReports = lazyPage(() => import("./pages/ManagerReports"));
 const ManagerServices = lazyPage(() => import("./pages/ManagerServices"));
+const ManagerBranches = lazyPage(() => import("./pages/ManagerBranches"));
+const ManagerRoomTypes = lazyPage(() => import("./pages/ManagerRoomTypes"));
+const ManagerRooms = lazyPage(() => import("./pages/ManagerRooms"));
+const ManagerAmenities = lazyPage(() => import("./pages/ManagerAmenities"));
 const ManagerDashboard = lazyPage(() => import("./pages/ManagerDashboard"));
 const Branches = lazyPage(() => import("./pages/Branches"));
-const StaffNewBooking = lazyPage(() => import("./pages/StaffNewBooking"));
-const StaffMakeBooking = lazyPage(() => import("./pages/StaffMakeBooking"));
 
 const showPreviews = import.meta.env.DEV;
 // This import is reachable only in development; sample pages/data stay out of production.
@@ -67,13 +73,22 @@ const previews = showPreviews ? {
 } : null;
 
 function NotFound() {
+  const { pathname } = useLocation();
+  const staffPage = pathname === "/staff" || pathname.startsWith("/staff/");
+  const guestPage = pathname === "/guest" || pathname.startsWith("/guest/");
+  const destination = staffPage ? "/staff" : guestPage ? "/guest/bookings" : "/rooms";
+  const destinationLabel = staffPage ? "Return to staff workspace" : guestPage ? "Go to my bookings" : "Find a room";
+
   return (
-    <section>
-      <h1>Page not found</h1>
-      <p>The page you requested does not exist.</p>
-      <Link className="button" to="/">
-        Return home
-      </Link>
+    <section className="page-status" aria-labelledby="not-found-title">
+      <span className="page-status-mark page-status-mark--code" aria-hidden="true">404</span>
+      <p className="page-status-eyebrow">SKYNEST HOTELS</p>
+      <h1 id="not-found-title">We couldn’t find this page</h1>
+      <p className="page-status-copy">The link may be out of date, or the address may have been entered incorrectly. Choose where you would like to go next.</p>
+      <div className="page-status-actions">
+        <Link className="page-status-button" to={destination}>{destinationLabel}</Link>
+        <Link className="page-status-button page-status-button--outline" to="/">Hotel home</Link>
+      </div>
     </section>
   );
 }
@@ -99,12 +114,11 @@ function StaffOnly({ session, children }) {
   return session ? children : <Navigate to="/staff/login" state={staffSignInState(pathname)} replace />;
 }
 
-const FRONT_DESK_ROLES = ["Admin", "Manager", "Receptionist"];
-
-function StaffRoleOnly({ session, roles, children }) {
-  const { pathname } = useLocation();
-  if (!session) return <Navigate to="/staff/login" state={staffSignInState(pathname)} replace />;
-  return roles.includes(session.staff.role) ? children : <Navigate to="/staff" replace />;
+function FrontDeskOnly({ session, children }) {
+  return <StaffOnly session={session}>{session && canCheckIn(session.staff.role)
+    ? children
+    : <section className="page-status"><h1>Reception access required</h1><p>Receptionists, managers and administrators can create bookings.</p><Link className="page-status-button" to="/staff">Staff workspace</Link></section>}
+  </StaffOnly>;
 }
 
 function App() {
@@ -286,12 +300,40 @@ function handleStaffLogout() {
               element={<StaffOnly session={staffSession}><ManagerServices key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
             <Route
+              path="/staff/branches"
+              element={<StaffOnly session={staffSession}><ManagerBranches key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/room-types"
+              element={<StaffOnly session={staffSession}><ManagerRoomTypes key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/rooms"
+              element={<StaffOnly session={staffSession}><ManagerRooms key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/amenities"
+              element={<StaffOnly session={staffSession}><ManagerAmenities key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
+              path="/staff/accounts"
+              element={<StaffOnly session={staffSession}><StaffAccounts key={staffSession?.token} session={staffSession} /></StaffOnly>}
+            />
+            <Route
               path="/staff/bookings"
               element={<StaffOnly session={staffSession}><StaffBookingList key={staffSession?.token} session={staffSession} /></StaffOnly>}
             />
             <Route
               path="/staff/bookings/new"
-              element={<StaffRoleOnly session={staffSession} roles={FRONT_DESK_ROLES}><StaffNewBooking key={staffSession?.token} session={staffSession} /></StaffRoleOnly>}
+              element={<FrontDeskOnly session={staffSession}><StaffNewBooking key={staffSession?.token} session={staffSession} /></FrontDeskOnly>}
+            />
+            <Route
+              path="/staff/bookings/rooms"
+              element={<FrontDeskOnly session={staffSession}><RoomSearch key={staffSession?.token} staffSession={staffSession} /></FrontDeskOnly>}
+            />
+            <Route
+              path="/staff/make-booking"
+              element={<FrontDeskOnly session={staffSession}><StaffMakeBooking key={staffSession?.token} session={staffSession} /></FrontDeskOnly>}
             />
             <Route
               path="/staff/bookings/:id"
@@ -304,14 +346,6 @@ function handleStaffLogout() {
             <Route
               path="/staff/bookings/:id/bill"
               element={<StaffOnly session={staffSession}><StaffBilling key={staffSession?.token} session={staffSession} /></StaffOnly>}
-            />
-            <Route
-              path="/staff/rooms"
-              element={<StaffRoleOnly session={staffSession} roles={FRONT_DESK_ROLES}><RoomSearch /></StaffRoleOnly>}
-            />
-            <Route
-              path="/staff/make-booking"
-              element={<StaffRoleOnly session={staffSession} roles={FRONT_DESK_ROLES}><StaffMakeBooking key={staffSession?.token} session={staffSession} /></StaffRoleOnly>}
             />
 
             <Route path="*" element={<NotFound />} />

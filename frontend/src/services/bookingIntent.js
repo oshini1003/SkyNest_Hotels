@@ -27,15 +27,6 @@ export function selectedStay(value) {
   }
 }
 
-// The guest a receptionist is booking for. Only non-sensitive display fields travel in router state.
-export function selectedGuest(value) {
-  if (!value || typeof value !== "object") return null;
-  const { guestId, name, contactNumber } = value;
-  if (!validId(guestId) || typeof name !== "string" || !name.trim()) return null;
-  return { guestId, name, contactNumber: typeof contactNumber === "string" ? contactNumber : "" };
-}
-
-
 export function guestReturnDestination(state) {
   if (guestStayPath(state?.returnTo)) return { pathname: state.returnTo };
   if (state?.returnTo === "/guest/bookings") return { pathname: "/guest/bookings" };
@@ -62,4 +53,14 @@ function guestStayPath(value) {
   if (typeof value !== "string") return false;
   const match = /^\/guest\/bookings\/([1-9]\d*)\/(?:bill|services)$/.exec(value);
   return Boolean(match && Number(match[1]) <= 2147483647);
+}
+
+// Keep only the selected guest receipt in the staff booking journey.
+// This is presentation state; the API enforces the real guest identity and access.
+export function selectedGuest(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { guestId, name, contactNumber } = value;
+  if (!validId(guestId) || typeof name !== "string" || !name.trim() || [...name].length > 100
+      || typeof contactNumber !== "string" || [...contactNumber].length > 20) return null;
+  return { guestId, name: name.trim(), contactNumber };
 }

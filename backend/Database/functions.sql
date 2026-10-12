@@ -36,7 +36,8 @@ RETURNS DECIMAL(10,2) DETERMINISTIC READS SQL DATA
 BEGIN
     DECLARE v_total DECIMAL(10,2);
     DECLARE v_paid DECIMAL(10,2);
-    SET v_total = fn_calculate_bill_total(p_booking_id);
+    SELECT MAX(TotalAmount) INTO v_total FROM BILL WHERE BookingID = p_booking_id;
+    SET v_total = COALESCE(v_total, fn_calculate_bill_total(p_booking_id));
     SELECT IFNULL(SUM(Amount), 0) INTO v_paid FROM PAYMENT WHERE BookingID = p_booking_id;
     RETURN v_total - v_paid;
 END //

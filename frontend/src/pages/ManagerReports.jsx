@@ -7,7 +7,7 @@ import "./ManagerReports.css";
 const reportOptions = [
   { value: "occupancy", label: "Room occupancy", description: "Occupancy rates by branch. Leave dates empty for the real-time snapshot, or select a start and end date to review occupancy for a selected period." },
   { value: "billing-summary", label: "Billing summary", description: "Saved bills with recorded payments and outstanding balances. The opened date is when each bill was generated; it is not the payment date." },
-  { value: "service-usage", label: "Service usage by room and service", description: "Recorded service entries, quantities and charges broken down per room and service type." },
+  { value: "service-usage", label: "Service usage by room and service", description: "Each saved service charge is counted once. Single-room bookings show their room. Multi-room bookings are grouped as Multiple rooms because services are recorded against the booking, without a room allocation." },
   { value: "revenue", label: "Finalized bill totals", description: "Room and service charges from checked-out bookings, grouped by the month each bill was opened. These are billed amounts, not cash received by payment date or totals grouped by checkout date." },
   { value: "top-services", label: "Top-used services and customer preference trends", description: "Services ranked by popularity, customer preference share percentage, and demand trends." },
 ];
@@ -40,9 +40,9 @@ function ReportTable({ type, rows, title }) {
       <td className="mr-money">{formatReportMoney(row.RoomRevenue)}</td><td className="mr-money">{formatReportMoney(row.ServiceRevenue)}</td><td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
     </tr>);
   } else if (type === "service-usage") {
-    headings = ["Room", "Service", "Branch", "Usage entries", "Total quantity", "Recorded charges"];
-    body = rows.map((row) => <tr key={`${row.BranchScope ?? ''}:${row.BranchID ?? ''}:${row.RoomID ?? row.RoomNumber ?? 'all'}:${row.ServiceID}`}>
-      <th scope="row">{row.RoomNumber ? `Room ${row.RoomNumber}` : "Unassigned"}</th>
+    headings = ["Room / booking group", "Service", "Branch", "Usage entries", "Total quantity", "Recorded charges"];
+    body = rows.map((row) => <tr key={`${row.BranchScope}:${row.BranchID}:${row.RoomScope}:${row.RoomID}:${row.ServiceID}`}>
+      <th scope="row">{row.RoomScope === "single" ? `Room ${row.RoomNumber}` : row.RoomNumber}</th>
       <td>{row.ServiceName}</td>
       <td>{row.BranchName}</td>
       <td>{whole(row.TimesUsed)}</td>

@@ -12,9 +12,9 @@ const manager = { type: 'staff', id: 2, role: 'Manager', branchId: 1 };
 const admin = { type: 'staff', id: 1, role: 'Admin', branchId: null };
 const branches = [{ id: 1, name: 'Colombo' }, { id: 2, name: 'Kandy' }, { id: 3, name: 'Empty branch' }];
 const rooms = [
-  { id: 1, branch: 1, status: 'Occupied' },
-  { id: 2, branch: 1, status: 'Available' },
-  { id: 3, branch: 2, status: 'Maintenance' },
+  { id: 1, number: '101', branch: 1, status: 'Occupied' },
+  { id: 2, number: '102', branch: 1, status: 'Available' },
+  { id: 3, number: '101', branch: 2, status: 'Maintenance' },
 ];
 const bookings = [
   { id: 10, status: 'Checked-Out', rooms: [1, 2], room: '100.00', services: '10.00', total: '110.00', payments: ['30.00', '80.00'], billStatus: 'Paid' },
@@ -81,17 +81,34 @@ function fixtureRevenue(branchId) {
     ...row, RoomRevenue: money(room), ServiceRevenue: money(services), TotalRevenue: money(total),
   })).sort((left, right) => left.BranchName.localeCompare(right.BranchName));
 }
-function fixtureServices(branchId, top, limit) {
+function roomScope(booking) {
+  const ids = [...new Set(booking.rooms)];
+  return ids.length === 1
+    ? { RoomID: ids[0], RoomNumber: rooms.find(room => room.id === ids[0]).number, RoomScope: 'single' }
+    : { RoomID: null, RoomNumber: ids.length ? 'Multiple rooms' : 'Unassigned room', RoomScope: ids.length ? 'multiple' : 'unassigned' };
+}
+function fixtureServices(branchId, top, limit, roomId, serviceId) {
   const groups = new Map();
   for (const entry of usage) {
     const booking = bookings.find(item => item.id === entry.booking);
     if (branchId && branchScope(booking).BranchID !== branchId) continue;
+    if (roomId && !booking.rooms.includes(roomId)) continue;
+    if (serviceId && entry.service !== serviceId) continue;
     const service = catalogue.find(item => item.id === entry.service);
-    const row = groups.get(service.id) || { ServiceID: service.id, ServiceName: service.name, TimesUsed: 0, TotalQuantity: 0, amount: 0n };
+    const scope = top ? {} : { ...branchScope(booking), ...roomScope(booking) };
+    const key = top ? service.id : `${scope.BranchScope}:${scope.BranchID}:${scope.RoomScope}:${scope.RoomID}:${service.id}`;
+    const periods = top ? { CurrentMonthUsage: 0, PreviousMonthUsage: 0, RecentUsage30Days: 0 } : {};
+    const row = groups.get(key) || { ...scope, ...periods, ServiceID: service.id, ServiceName: service.name, TimesUsed: 0, TotalQuantity: 0, amount: 0n };
     row.TimesUsed += 1;
     row.TotalQuantity += entry.quantity;
     row.amount += BigInt(entry.quantity) * cents(entry.savedPrice);
-    groups.set(service.id, row);
+    // Independent fixed fixture periods: bookings 10/11 are previous month,
+    // all others current month and within the most recent 30 days.
+    if (top) {
+      row[entry.booking <= 11 ? 'PreviousMonthUsage' : 'CurrentMonthUsage'] += 1;
+      if (entry.booking > 11) row.RecentUsage30Days += 1;
+    }
+    groups.set(key, row);
   }
   const result = [...groups.values()].sort((left, right) => top
     ? right.TimesUsed - left.TimesUsed || right.TotalQuantity - left.TotalQuantity || left.ServiceID - right.ServiceID
@@ -130,7 +147,13 @@ const pool = {
       const month = sql.includes('MONTH(bl.GeneratedDate) = ?') ? params[offset + 1] : undefined;
       return [(year && year !== 2026) || (month && month !== 10) ? [] : fixtureRevenue(branchId)];
     }
-    return [fixtureServices(branchId, sql.includes('LIMIT ?'), params.at(-1))];
+    if (sql.includes('AS TotalOverallUsage')) {
+      return [[{ TotalOverallUsage: usage.filter(entry => !branchId || branchScope(bookings.find(item => item.id === entry.booking)).BranchID === branchId).length }]];
+    }
+    let filterOffset = branchId ? 1 : 0;
+    const roomId = sql.includes('room_filter.RoomID = ?') ? params[filterOffset++] : undefined;
+    const serviceId = sql.includes('sc.ServiceID = ?') ? params[filterOffset] : undefined;
+    return [fixtureServices(branchId, sql.includes('LIMIT ?'), params.at(-1), roomId, serviceId)];
   },
 };
 require.cache[require.resolve('../config/db')] = { exports: pool };
@@ -263,6 +286,11 @@ async function checkHttpAuthorization() {
       assert.equal((await invoke(endpoint, query)).status, 400);
     }
   }
+    for (const key of ['roomId', 'serviceId']) {
+    for (const raw of ['', '0', '-1', '01', '1.0', '2147483648', '1 OR 1=1', 1, ['1'], {}, null]) {
+      assert.equal((await invoke('services', { [key]: raw })).status, 400);
+    }
+  }
   for (const raw of ['0', '51', '-2', '05', '5.0', '5e0', '5; DROP TABLE BILL', 5, ['5'], {}, null]) {
     assert.equal((await invoke('top', { limit: raw })).status, 400);
   }
@@ -338,23 +366,51 @@ async function checkHttpAuthorization() {
   assert.deepEqual((await invoke('revenue', { year: '9999', month: '12' })).data, []);
 
   const services = (await invoke('services')).data;
-  assert.equal(services.find(row => row.ServiceID === 1).TotalRevenue, '6.60', 'Saved historical price and retired services remain included.');
-  assert.equal(services.find(row => row.ServiceID === 1).TotalQuantity, 6);
-  assert.equal(services.find(row => row.ServiceID === 1).TimesUsed, 3);
-  assert.match(queries.at(-1).sql, /CAST\(SUM\(su.Quantity \* su.PriceAtUsage\) AS CHAR\)/);
-  assert.match(queries.at(-1).sql, /ORDER BY SUM\(su.Quantity \* su.PriceAtUsage\) DESC/);
-  assert.equal((await invoke('services', { branchId: '1' })).data[0].TotalRevenue, '3.30');
+  const serviceTotal = (rows, serviceId) => money(rows.filter(row => row.ServiceID === serviceId).reduce((sum, row) => sum + cents(row.TotalRevenue), 0n));
+  assert.equal(serviceTotal(services, 1), '6.60', 'Saved historical prices and retired services count once across room buckets.');
+  assert.equal(services.filter(row => row.ServiceID === 1).reduce((sum, row) => sum + row.TotalQuantity, 0), 6);
+  assert.equal(services.filter(row => row.ServiceID === 1).reduce((sum, row) => sum + row.TimesUsed, 0), 3);
+  assert.equal(serviceTotal(services, 3), '8.00', 'Equal-valued usage entries must both count.');
+  assert.equal(money(services.reduce((sum, row) => sum + cents(row.TotalRevenue), 0n)), '24.51');
+  assert.equal(services.find(row => row.BranchID === 1 && row.RoomScope === 'multiple').TotalRevenue, '2.20', 'The two-room booking appears once with its full saved charge.');
+  assert.equal(services.find(row => row.BranchScope === 'multiple').TotalRevenue, '3.30');
+  assert.equal(services.find(row => row.RoomScope === 'unassigned').TotalRevenue, '0.01');
+  const servicesSql = queries.at(-1).sql;
+  checkMapping(servicesSql);
+  assert.match(servicesSql, /COUNT\(DISTINCT mapped_room\.RoomID\) = 1[\s\S]*THEN MIN\(mapped_room\.RoomID\) ELSE NULL/);
+  assert.match(servicesSql, /CAST\(SUM\(su.Quantity \* su.PriceAtUsage\) AS CHAR\)/);
+  assert.match(servicesSql, /GROUP BY scope.RoomID, scope.RoomNumber, scope.RoomScope/);
+  assert.match(servicesSql, /ORDER BY BranchName, RoomNumber, TotalRevenue DESC, sc.ServiceID/);
+  assert.equal(serviceTotal((await invoke('services', { branchId: '1' })).data, 1), '3.30');
   assert.deepEqual(queries.at(-1).params, [1]);
-  assert.deepEqual((await invoke('top')).data.map(row => row.ServiceID), [1, 2, 3]);
-  assert.deepEqual(queries.at(-1).params, [5]);
-  assert.match(queries.at(-1).sql, /ORDER BY TimesUsed DESC, TotalQuantity DESC, sc.ServiceID ASC LIMIT \?/);
-  assert.equal((await invoke('top', { branchId: '1', limit: '1' })).data.length, 1);
+  const roomServices = (await invoke('services', { roomId: '1', serviceId: '1' })).data;
+  assert.equal(serviceTotal(roomServices, 1), '6.60', 'A room filter selects booking-level charges without room allocation.');
+  assert.equal(roomServices.length, 3);
   assert.deepEqual(queries.at(-1).params, [1, 1]);
+  assert.match(queries.at(-1).sql, /EXISTS \(SELECT 1 FROM BOOKED_ROOMS room_filter WHERE room_filter.BookingID = su.BookingID AND room_filter.RoomID = \?\)/);
+  checkMapping(queries.at(-1).sql);
+  assert.deepEqual((await invoke('services', { roomId: '2147483647' })).data, []);
+  assert.deepEqual((await invoke('services', { serviceId: '2147483647' })).data, []);
+  const top = (await invoke('top')).data;
+  assert.deepEqual(top.map(row => row.ServiceID), [1, 2, 3]);
+  assert.equal(top[0].TotalRevenue, '6.60');
+  assert.equal(top[0].CurrentMonthUsage, 1);
+  assert.equal(top[0].PreviousMonthUsage, 2);
+  assert.equal(top[0].PreferenceShare, '42.9%');
+  assert.equal(top[0].Trend, 'Declining (-50%)');
+  assert.equal(top[1].Trend, 'Rising (New)');
+  assert.deepEqual(queries.at(-2).params, [5]);
+  assert.match(queries.at(-2).sql, /ORDER BY TimesUsed DESC, TotalQuantity DESC, sc.ServiceID ASC LIMIT \?/);
+  checkMapping(queries.at(-2).sql);
+  assert.match(queries.at(-1).sql, /COUNT\(\*\) AS TotalOverallUsage/);
+  assert.equal((await invoke('top', { branchId: '1', limit: '1' })).data.length, 1);
+  assert.deepEqual(queries.at(-2).params, [1, 1]);
+  assert.deepEqual(queries.at(-1).params, [1]);
   await invoke('top', { limit: '50' });
-  assert.deepEqual(queries.at(-1).params, [50]);
+  assert.deepEqual(queries.at(-2).params, [50]);
 
-  overrideRows = [{ ServiceID: 1, ServiceName: 'Large exact sum', TimesUsed: '2', TotalQuantity: '3', TotalRevenue: '9999999999999999.99' }];
-  assert.deepEqual((await invoke('top')).data[0], { ...overrideRows[0], TimesUsed: 2, TotalQuantity: 3 }, 'Counts normalize safely while money remains an exact string.');
+  overrideRows = [{ ServiceID: 1, ServiceName: 'Large exact sum', TimesUsed: '2', TotalQuantity: '3', TotalRevenue: '9999999999999999.99', CurrentMonthUsage: '1', PreviousMonthUsage: '1', RecentUsage30Days: '1', TotalOverallUsage: '2' }];
+  assert.deepEqual((await invoke('top')).data[0], { ...overrideRows[0], TimesUsed: 2, TotalQuantity: 3, CurrentMonthUsage: 1, PreviousMonthUsage: 1, RecentUsage30Days: 1, PreferenceShare: '100%', PreferenceShareValue: 100, Trend: 'Stable (0%)' }, 'Counts normalize safely while money remains an exact string.');
   for (const invalid of [NaN, Infinity, -1, 1.5, '2.0', '9007199254740992', Number.MAX_SAFE_INTEGER + 1, null]) {
     overrideRows = [{ TimesUsed: 1, TotalQuantity: invalid }];
     await assert.rejects(invoke('services'), /supported numeric range/);
@@ -366,5 +422,5 @@ async function checkHttpAuthorization() {
   for (const endpoint of Object.keys(endpoints)) await assert.rejects(invoke(endpoint), /database unavailable/);
   databaseError = undefined;
   await checkHttpAuthorization();
-  console.log('PASS: real Express route authorization and current manager/admin identities; strict report filters before report SQL; parameterized read-only queries; zero-room branches; one-bill/one-booking branch mapping; exact saved amounts and payments; historical service prices; deterministic rankings; safe counts and error forwarding (mock tokens/database and independent fixtures, no live MySQL).');
+  console.log('PASS: real Express route authorization and current manager/admin identities; strict report filters before report SQL; parameterized read-only queries; zero-room branches; one-bill/one-booking branch mapping; exact saved amounts and payments; historical service prices counted once for multi-room bookings; room membership filters; equal-valued usage entries; deterministic rankings and trend fields; safe counts and error forwarding (mock tokens/database and independent fixtures, no live MySQL).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -224,5 +224,3 @@ CREATE INDEX idx_serviceusage_service_date ON SERVICE_USAGE(ServiceID, UsageDate
 CREATE INDEX idx_payment_booking        ON PAYMENT(BookingID);
 CREATE INDEX idx_payment_bill           ON PAYMENT(BillID);
 CREATE INDEX idx_payment_date           ON PAYMENT(PaymentDate);
-
-

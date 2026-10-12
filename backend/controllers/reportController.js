@@ -8,7 +8,14 @@ const bookingBranches = `
               THEN MIN(mapped_room.BranchID) ELSE NULL END AS BranchID,
          CASE WHEN COUNT(DISTINCT mapped_room.BranchID) = 0 THEN 'unassigned'
               WHEN COUNT(DISTINCT mapped_room.BranchID) = 1 THEN 'single'
-              ELSE 'multiple' END AS BranchScope
+              ELSE 'multiple' END AS BranchScope,
+         CASE WHEN COUNT(DISTINCT mapped_room.RoomID) = 1
+              THEN MIN(mapped_room.RoomID) ELSE NULL END AS RoomID,
+         CASE WHEN COUNT(DISTINCT mapped_room.RoomID) = 1
+              THEN MIN(mapped_room.RoomNumber) ELSE NULL END AS RoomNumber,
+         CASE WHEN COUNT(DISTINCT mapped_room.RoomID) = 0 THEN 'unassigned'
+              WHEN COUNT(DISTINCT mapped_room.RoomID) = 1 THEN 'single'
+              ELSE 'multiple' END AS RoomScope
   FROM BOOKING mapped_booking
   LEFT JOIN BOOKED_ROOMS mapped_stay ON mapped_stay.BookingID = mapped_booking.BookingID
   LEFT JOIN ROOM mapped_room ON mapped_room.RoomID = mapped_stay.RoomID
@@ -65,11 +72,11 @@ const occupancyReport = asyncHandler(async (req, res) => {
 
     const [roomRows] = await pool.query(
       `SELECT br.BranchID, br.Name AS BranchName, r.RoomID, r.RoomStatus,
-              MAX(CASE 
-                WHEN b.BookingStatus != 'Cancelled' 
-                 AND DATE(stay.CheckInDateTime) <= ? 
+              MAX(CASE
+                WHEN b.BookingStatus != 'Cancelled'
+                 AND DATE(stay.CheckInDateTime) <= ?
                  AND (DATE(stay.CheckOutDateTime) > ? OR (DATE(stay.CheckInDateTime) = ? AND DATE(stay.CheckOutDateTime) = ?))
-                THEN 1 ELSE 0 
+                THEN 1 ELSE 0
               END) AS IsOccupied
        FROM BRANCH br
        LEFT JOIN ROOM r ON r.BranchID = br.BranchID
@@ -173,10 +180,10 @@ function topServiceQuery(filters) {
                  SUM(su.Quantity) AS TotalQuantity,
                  CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue,
                  COUNT(CASE WHEN su.UsageDate >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 END) AS CurrentMonthUsage,
-                 COUNT(CASE 
-                   WHEN su.UsageDate >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH) 
-                    AND su.UsageDate < DATE_FORMAT(CURDATE(), '%Y-%m-01') 
-                   THEN 1 
+                 COUNT(CASE
+                   WHEN su.UsageDate >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                    AND su.UsageDate < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                   THEN 1
                  END) AS PreviousMonthUsage,
                  COUNT(CASE WHEN su.UsageDate >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 END) AS RecentUsage30Days
           FROM SERVICE_USAGE su
@@ -189,7 +196,8 @@ function topServiceQuery(filters) {
   };
 }
 
-// GET /api/reports/service-usage?branchId=&roomId=
+// GET /api/reports/service-usage?branchId=&roomId=&serviceId=
+
 const serviceUsageBreakdown = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'services');
   if (!filters) return;
@@ -201,7 +209,7 @@ const serviceUsageBreakdown = asyncHandler(async (req, res) => {
     params.push(filters.branchId);
   }
   if (filters.roomId !== undefined) {
-    conditions.push('r.RoomID = ?');
+    conditions.push('EXISTS (SELECT 1 FROM BOOKED_ROOMS room_filter WHERE room_filter.BookingID = su.BookingID AND room_filter.RoomID = ?)');
     params.push(filters.roomId);
   }
   if (filters.serviceId !== undefined) {
@@ -212,8 +220,10 @@ const serviceUsageBreakdown = asyncHandler(async (req, res) => {
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const [rows] = await pool.query(
-    `SELECT r.RoomID,
-            COALESCE(r.RoomNumber, 'Unassigned') AS RoomNumber,
+    `SELECT scope.RoomID, scope.RoomScope,
+            CASE WHEN scope.RoomScope = 'single' THEN scope.RoomNumber
+                 WHEN scope.RoomScope = 'multiple' THEN 'Multiple rooms'
+                 ELSE 'Unassigned room' END AS RoomNumber,
             scope.BranchID,
             ${branchName} AS BranchName,
             scope.BranchScope,
@@ -224,14 +234,11 @@ const serviceUsageBreakdown = asyncHandler(async (req, res) => {
             CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue
      FROM SERVICE_USAGE su
      JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
-     JOIN BOOKING b ON b.BookingID = su.BookingID
-     JOIN (${bookingBranches}) scope ON scope.BookingID = b.BookingID
-     LEFT JOIN BOOKED_ROOMS stay ON stay.BookingID = b.BookingID
-     LEFT JOIN ROOM r ON r.RoomID = stay.RoomID
+     JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
      LEFT JOIN BRANCH br ON br.BranchID = scope.BranchID
      ${whereClause}
-     GROUP BY r.RoomID, r.RoomNumber, scope.BranchID, scope.BranchScope, br.Name, sc.ServiceID, sc.ServiceName
-     ORDER BY BranchName, r.RoomNumber, TotalRevenue DESC, sc.ServiceName`,
+     GROUP BY scope.RoomID, scope.RoomNumber, scope.RoomScope, scope.BranchID, scope.BranchScope, br.Name, sc.ServiceID, sc.ServiceName
+     ORDER BY BranchName, RoomNumber, TotalRevenue DESC, sc.ServiceID`,
     params
   );
 
