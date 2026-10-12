@@ -134,18 +134,6 @@ CREATE TABLE PAYMENT (
 ) ENGINE=InnoDB;
 
 
-
-SET FOREIGN_KEY_CHECKS = 1;
-
-CREATE INDEX idx_bookedrooms_room_dates ON BOOKED_ROOMS(RoomID, CheckInDateTime, CheckOutDateTime);
-CREATE INDEX idx_bookedrooms_booking    ON BOOKED_ROOMS(BookingID);
-CREATE INDEX idx_booking_status         ON BOOKING(BookingStatus);
-CREATE INDEX idx_room_branch_type_status ON ROOM(BranchID, RoomTypeID, RoomStatus);
-CREATE INDEX idx_serviceusage_booking   ON SERVICE_USAGE(BookingID);
-CREATE INDEX idx_serviceusage_service_date ON SERVICE_USAGE(ServiceID, UsageDate);
-CREATE INDEX idx_payment_booking        ON PAYMENT(BookingID);
-CREATE INDEX idx_payment_bill           ON PAYMENT(BillID);
-CREATE INDEX idx_payment_date           ON PAYMENT(PaymentDate);
 -- ROOM_TYPE
 
 CREATE TABLE ROOM_TYPE (
@@ -214,3 +202,15 @@ CREATE TABLE BOOKED_ROOMS (
     FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID) ON DELETE CASCADE,
     FOREIGN KEY (RoomID)    REFERENCES ROOM(RoomID)
 ) ENGINE=InnoDB;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE INDEX idx_bookedrooms_room_dates ON BOOKED_ROOMS(RoomID, CheckInDateTime, CheckOutDateTime);
+CREATE INDEX idx_bookedrooms_booking    ON BOOKED_ROOMS(BookingID);
+CREATE INDEX idx_booking_status         ON BOOKING(BookingStatus);
+CREATE INDEX idx_room_branch_type_status ON ROOM(BranchID, RoomTypeID, RoomStatus);
+CREATE INDEX idx_serviceusage_booking   ON SERVICE_USAGE(BookingID);
+CREATE INDEX idx_serviceusage_service_date ON SERVICE_USAGE(ServiceID, UsageDate);
+CREATE INDEX idx_payment_booking        ON PAYMENT(BookingID);
+CREATE INDEX idx_payment_bill           ON PAYMENT(BillID);
+CREATE INDEX idx_payment_date           ON PAYMENT(PaymentDate);
