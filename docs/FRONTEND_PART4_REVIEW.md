@@ -54,12 +54,33 @@ added to the property pages.
    forms, dashboard and report tables. Tables may scroll within their panels;
    the whole page should not require horizontal scrolling.
 
-## Remaining work
+## Completion review (12 October 2026)
 
-- Samalee is implementing receptionist booking creation.
-- Staff management is still the remaining Part 3 frontend task on our side.
-- When those routes are ready, add their titles to `RoutePresentation.jsx` and
-  review the combined navigation, permissions, responsive layouts and workflows.
-- Review the final branch against the latest main before any integration.
-  Commit, push and merge only when the user requests them. No Git publishing or
-  merge is part of applying this patch.
+The four planned frontend parts are integrated into main at commit `79e411d`:
+
+- Branches and room types: viewing, searching and creation.
+- Rooms and amenities: viewing, filtering and creation.
+- Receptionist booking creation and Admin staff-account creation.
+- Shared navigation, styling, page titles and recovery screens.
+
+Matching service photographs are also included.
+
+The user reported PASS for these final browser checks:
+
+- Manager property pages, search/filter controls, navigation and refresh.
+- Review → Back preserving entered form values.
+- Manager desktop and mobile layouts.
+- Guest pages, service pictures and signed-out booking-page protection.
+- Receptionist navigation and assigned-branch room search.
+- Manager rejection and Admin access to staff-account creation.
+- Guest/staff mobile layouts and missing-page recovery.
+
+Seven targeted regression checks, including the production build, passed
+before the merge. Database/API regression checks used mocks or static SQL.
+The final browser review used existing records; it did not verify new
+bookings, payments, staff registrations or concurrent writes.
+
+Property edit/delete, manual room-status controls and staff list/edit/delete
+were outside this four-part frontend delivery.
+
+Cleanup of old merged branches is separate repository housekeeping.
