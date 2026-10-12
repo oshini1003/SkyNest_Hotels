@@ -42,6 +42,56 @@ CREATE TABLE REFRESH_TOKEN (
     INDEX idx_user_tokens (UserType, UserID)
 ) ENGINE=InnoDB;
 
+-- BRANCH
+
+CREATE TABLE BRANCH (
+    BranchID        INT AUTO_INCREMENT PRIMARY KEY,
+    Name            VARCHAR(100) NOT NULL,
+    Location        VARCHAR(150) NOT NULL,
+    ContactNumber   VARCHAR(20)  NOT NULL
+) ENGINE=InnoDB;
+
+-- SERVICE_CATALOGUE
+
+CREATE TABLE SERVICE_CATALOGUE (
+    ServiceID     INT AUTO_INCREMENT PRIMARY KEY,
+    ServiceName   VARCHAR(100)  NOT NULL,
+    Description   VARCHAR(255),
+    UnitPrice     DECIMAL(10,2) NOT NULL CHECK (UnitPrice >= 0),
+    IsActive      BOOLEAN       NOT NULL DEFAULT TRUE
+) ENGINE=InnoDB;
+
+-- SERVICE_USAGE
+
+CREATE TABLE SERVICE_USAGE (
+    UsageID        INT AUTO_INCREMENT PRIMARY KEY,
+    BookingID      INT NOT NULL,
+    ServiceID      INT NOT NULL,
+    UsageDate      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    Quantity       INT NOT NULL CHECK (Quantity > 0),
+    PriceAtUsage   DECIMAL(10,2) NOT NULL,   -- captured at insert time, never re-derived
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID),
+    FOREIGN KEY (ServiceID) REFERENCES SERVICE_CATALOGUE(ServiceID)
+) ENGINE=InnoDB;
+
+-- STAFF  +  STAFF_ACCOUNT (1-to-1 login extension)
+
+CREATE TABLE STAFF (
+    StaffID   INT AUTO_INCREMENT PRIMARY KEY,
+    BranchID  INT NULL,   -- NULL allowed for Admin/Manager overseeing all branches
+    Name      VARCHAR(100) NOT NULL,
+    Role      ENUM('Admin','Manager','Receptionist','ServiceStaff') NOT NULL,
+    Email     VARCHAR(150),
+    FOREIGN KEY (BranchID) REFERENCES BRANCH(BranchID)
+) ENGINE=InnoDB;
+
+CREATE TABLE STAFF_ACCOUNT (
+    StaffID        INT PRIMARY KEY,
+    Username       VARCHAR(60)  NOT NULL UNIQUE,
+    PasswordHash   VARCHAR(255) NOT NULL,
+    FOREIGN KEY (StaffID) REFERENCES STAFF(StaffID) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- BOOKING  (BookingStatus lives here; per-room stay dates live on BOOKED_ROOMS)
 
 CREATE TABLE BOOKING (
