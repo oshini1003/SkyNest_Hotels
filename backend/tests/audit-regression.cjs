@@ -227,7 +227,9 @@ async function testReadOnlySnapshot() {
 
 function testSqlContracts() {
   const schema = fs.readFileSync(path.join(__dirname, '../Database/schema.sql'), 'utf8').replace(/--[^\n]*/g, '');
-  assert.match(schema, /CREATE TABLE AUDIT_LOG\s*\([\s\S]*?ENGINE=InnoDB;/, 'Audit events must roll back with hotel data.');
+  const auditTable = require('../Database/setupIntegrationDb').projectScripts()
+    .flatMap(script => script.statements).find(sql => /^CREATE TABLE AUDIT_LOG\b/.test(sql));
+  assert.match(auditTable, /CREATE TABLE AUDIT_LOG\s*\([\s\S]*?ENGINE=InnoDB$/, 'Audit events must roll back with hotel data.');
   for (const kind of ['UPDATE', 'DELETE']) {
     assert.match(schema, new RegExp(`BEFORE ${kind} ON AUDIT_LOG[\\s\\S]*?SIGNAL SQLSTATE '45000'[\\s\\S]*?END \\/\\/`), 'Audit rows are append-only through ordinary DML.');
   }

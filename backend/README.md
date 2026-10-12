@@ -136,6 +136,14 @@ connected at `/staff/bookings/:id/bill`. Manager/Admin reports are live at
 | `/api/rooms` | GET | Public | Search rooms by optional `roomId`, `branchId`, `roomTypeId`, `guestCount`, `checkin` and `checkout` |
 | `/api/rooms` | POST | Admin/Manager | Create a room |
 | `/api/rooms/:id/status` | PATCH | Admin/Manager/Receptionist | Update room status |
+| `/api/branches/:id`     | PUT    | Admin/Manager | Update a branch (any of `name`, `location`, `contactNumber`) |
+| `/api/branches/:id`     | DELETE | Admin/Manager | Delete a branch (409 if rooms still belong to it) |
+| `/api/room-types/:id`   | PUT    | Admin/Manager | Update a room type (`name`, `capacity`, `dailyRate`, optional `amenityIds` list that replaces its amenities) |
+| `/api/room-types/:id`   | DELETE | Admin/Manager | Delete a room type (409 if rooms use it) |
+| `/api/amenities/:id`    | PUT    | Admin/Manager | Rename an amenity |
+| `/api/amenities/:id`    | DELETE | Admin/Manager | Delete an amenity and unlink it from room types |
+| `/api/rooms/:id`        | PUT    | Admin/Manager | Change `roomNumber` and/or `roomTypeId` (409 if the room has an active booking) |
+| `/api/rooms/:id`        | DELETE | Admin/Manager | Delete a room (409 if active booking or booking history exists) |
 
 For an availability search, supply both dates in `YYYY-MM-DD` format. Check-in
 must be today or later in the backend server's local time; check-out must be
@@ -535,23 +543,25 @@ fictional report layout remains at `/preview/staff/manager-reports` in developme
 
 | Endpoint | Meaning | Optional filters |
 |---|---|---|
-| `GET /api/reports/occupancy` | Current room status counts, including branches with no rooms | `branchId` |
+| `GET /api/reports/occupancy` | Room status counts and occupancy rates by branch (real-time snapshot or selected date/period) | `branchId`, `startDate`, `endDate`, `date` |
 | `GET /api/reports/billing-summary` | One row per saved bill with total, paid and outstanding amounts | `branchId`, `outstandingOnly=true` or `false` |
-| `GET /api/reports/service-usage` | Saved service entry counts, quantity and charges at recorded prices | `branchId` |
+| `GET /api/reports/service-usage` | Service usage breakdown per room and service type (room number, quantity and charges) | `branchId`, `roomId`, `serviceId` |
 | `GET /api/reports/revenue` | Finalized bills grouped by branch and **bill-opened month** | `branchId`, `year`, `month` |
-| `GET /api/reports/top-services` | Services ranked by number of usage entries | `branchId`, `limit` (default 5, maximum 50) |
+| `GET /api/reports/top-services` | Top-used services and customer preference trends (preference share percentage, demand trend, usage counts, charges) | `branchId`, `limit` (default 5, maximum 50) |
 
 All endpoints return arrays, including an empty array when no records match.
 Unknown or malformed filters return 400 before SQL. Numeric query filters are
 canonical positive decimal integers (no spaces, fractions, leading zeros or
 arrays). `branchId` is at most 2147483647; `year` is 1000–9999; `month` is 1–12
-and requires `year`. `limit` is 1–50. Query values are bound parameters.
+and requires `year`. `limit` is 1–50. `startDate`, `endDate` and `date` are in `YYYY-MM-DD` format (`startDate <= endDate`). Query values are bound parameters.
 
 Report definitions matter when demonstrating the database:
 
-- Occupancy is the current `ROOM.RoomStatus`, not future reservation availability
-  or historical occupancy. The displayed rate is occupied / total rooms, including
-  maintenance rooms in the denominator. A zero-room branch has no occupancy rate.
+- Occupancy: When `startDate` and `endDate` (or `date`) are provided, calculates
+  occupancy for that specific date or interval based on active bookings overlapping the
+  period. When dates are omitted, reflects the real-time snapshot of `ROOM.RoomStatus`.
+  The displayed rate is occupied / total rooms, including maintenance rooms in the denominator.
+  A zero-room branch has no occupancy rate.
 - Billing includes saved bills only; a reservation without a bill is not an
   unpaid bill. Outstanding means saved total minus saved payments, greater than
   zero. The report does not calculate charges again from today's room prices.

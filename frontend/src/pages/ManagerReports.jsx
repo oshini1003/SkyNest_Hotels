@@ -5,13 +5,13 @@ import { canViewReports, formatReportMoney, loadManagerReport } from "../service
 import "./ManagerReports.css";
 
 const reportOptions = [
-  { value: "occupancy", label: "Current room occupancy", description: "A snapshot of saved room statuses now. Occupancy is occupied rooms divided by all rooms, including rooms under maintenance. This does not show availability for future stay dates." },
+  { value: "occupancy", label: "Room occupancy", description: "Occupancy rates by branch. Leave dates empty for the real-time snapshot, or select a start and end date to review occupancy for a selected period." },
   { value: "billing-summary", label: "Billing summary", description: "Saved bills with recorded payments and outstanding balances. The opened date is when each bill was generated; it is not the payment date." },
-  { value: "service-usage", label: "Service usage and charges", description: "Recorded service entries, quantities and charges at the prices saved when each service was used. These charges are not necessarily paid amounts." },
+  { value: "service-usage", label: "Service usage by room and service", description: "Each saved service charge is counted once. Single-room bookings show their room. Multi-room bookings are grouped as Multiple rooms because services are recorded against the booking, without a room allocation." },
   { value: "revenue", label: "Finalized bill totals", description: "Room and service charges from checked-out bookings, grouped by the month each bill was opened. These are billed amounts, not cash received by payment date or totals grouped by checkout date." },
-  { value: "top-services", label: "Most used services", description: "Services ranked by the number of saved usage entries. Quantity is shown separately: one entry can contain more than one unit. This includes historical service usage." },
+  { value: "top-services", label: "Top-used services and customer preference trends", description: "Services ranked by popularity, customer preference share percentage, and demand trends." },
 ];
-const initialFilters = { type: "occupancy", branchId: "", outstandingOnly: false, year: "", month: "", limit: "5" };
+const initialFilters = { type: "occupancy", branchId: "", startDate: "", endDate: "", outstandingOnly: false, year: "", month: "", limit: "5" };
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const whole = (value) => Number(value).toLocaleString("en-LK");
 
@@ -39,12 +39,26 @@ function ReportTable({ type, rows, title }) {
       <th scope="row">{row.Month}</th><td>{row.BranchName}</td><td>{whole(row.BillCount)}</td>
       <td className="mr-money">{formatReportMoney(row.RoomRevenue)}</td><td className="mr-money">{formatReportMoney(row.ServiceRevenue)}</td><td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
     </tr>);
+  } else if (type === "service-usage") {
+    headings = ["Room / booking group", "Service", "Branch", "Usage entries", "Total quantity", "Recorded charges"];
+    body = rows.map((row) => <tr key={`${row.BranchScope}:${row.BranchID}:${row.RoomScope}:${row.RoomID}:${row.ServiceID}`}>
+      <th scope="row">{row.RoomScope === "single" ? `Room ${row.RoomNumber}` : row.RoomNumber}</th>
+      <td>{row.ServiceName}</td>
+      <td>{row.BranchName}</td>
+      <td>{whole(row.TimesUsed)}</td>
+      <td>{whole(row.TotalQuantity)}</td>
+      <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
+    </tr>);
   } else {
-    headings = type === "service-usage" ? ["Service", "Usage entries", "Total quantity", "Recorded charges"] : ["Rank", "Service", "Usage entries", "Total quantity"];
+    headings = ["Rank", "Service", "Usage entries", "Total quantity", "Preference share", "Demand trend", "Total charges"];
     body = rows.map((row, index) => <tr key={row.ServiceID}>
-      {type === "top-services" && <td>{index + 1}</td>}
-      <th scope="row">{row.ServiceName}</th><td>{whole(row.TimesUsed)}</td><td>{whole(row.TotalQuantity)}</td>
-      {type === "service-usage" && <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>}
+      <td>#{index + 1}</td>
+      <th scope="row">{row.ServiceName}</th>
+      <td>{whole(row.TimesUsed)}</td>
+      <td>{whole(row.TotalQuantity)}</td>
+      <td><strong>{row.PreferenceShare || "—"}</strong></td>
+      <td><span className="mr-badge">{row.Trend || "Stable"}</span></td>
+      <td className="mr-money">{formatReportMoney(row.TotalRevenue)}</td>
     </tr>);
   }
   return <div className="mr-table-wrap" role="region" aria-label={`${title} results`} aria-describedby="manager-reports-scroll-hint" tabIndex={0}>
@@ -156,6 +170,10 @@ export default function ManagerReports({ session }) {
             <option value="">All branches</option>{branches.rows.map((branch) => <option key={branch.BranchID} value={branch.BranchID}>{branch.Name}</option>)}
           </select>
         </div>
+        {filters.type === "occupancy" && <>
+          <div className="mr-field"><label htmlFor="manager-report-start-date">Start date (optional)</label><input id="manager-report-start-date" type="date" value={filters.startDate} onChange={(event) => changeFilter("startDate", event.target.value)} /></div>
+          <div className="mr-field"><label htmlFor="manager-report-end-date">End date (optional)</label><input id="manager-report-end-date" type="date" value={filters.endDate} min={filters.startDate || undefined} onChange={(event) => changeFilter("endDate", event.target.value)} /></div>
+        </>}
         {filters.type === "billing-summary" && <label className="mr-checkbox" htmlFor="manager-report-outstanding"><input id="manager-report-outstanding" type="checkbox" checked={filters.outstandingOnly} onChange={(event) => changeFilter("outstandingOnly", event.target.checked)} /><span>Only bills with outstanding balances</span></label>}
         {filters.type === "revenue" && <>
           <div className="mr-field"><label htmlFor="manager-report-year">Bill opened year (optional)</label><input id="manager-report-year" type="text" inputMode="numeric" pattern="[1-9][0-9]{3}" maxLength={4} placeholder="All years" value={filters.year} onChange={(event) => changeFilter("year", event.target.value)} /></div>

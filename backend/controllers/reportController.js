@@ -2,16 +2,20 @@ const pool = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const { canReadReports, validateReportQuery } = require('../utils/reportValidation');
 
-// One row per booking, regardless of its room count. Historical multi-branch
-// bookings cannot be allocated from a single stored bill, so keep them separate.
-// Starting with BOOKING also retains bills/usage with no assigned rooms.
 const bookingBranches = `
   SELECT mapped_booking.BookingID,
          CASE WHEN COUNT(DISTINCT mapped_room.BranchID) = 1
               THEN MIN(mapped_room.BranchID) ELSE NULL END AS BranchID,
          CASE WHEN COUNT(DISTINCT mapped_room.BranchID) = 0 THEN 'unassigned'
               WHEN COUNT(DISTINCT mapped_room.BranchID) = 1 THEN 'single'
-              ELSE 'multiple' END AS BranchScope
+              ELSE 'multiple' END AS BranchScope,
+         CASE WHEN COUNT(DISTINCT mapped_room.RoomID) = 1
+              THEN MIN(mapped_room.RoomID) ELSE NULL END AS RoomID,
+         CASE WHEN COUNT(DISTINCT mapped_room.RoomID) = 1
+              THEN MIN(mapped_room.RoomNumber) ELSE NULL END AS RoomNumber,
+         CASE WHEN COUNT(DISTINCT mapped_room.RoomID) = 0 THEN 'unassigned'
+              WHEN COUNT(DISTINCT mapped_room.RoomID) = 1 THEN 'single'
+              ELSE 'multiple' END AS RoomScope
   FROM BOOKING mapped_booking
   LEFT JOIN BOOKED_ROOMS mapped_stay ON mapped_stay.BookingID = mapped_booking.BookingID
   LEFT JOIN ROOM mapped_room ON mapped_room.RoomID = mapped_stay.RoomID
@@ -51,13 +55,69 @@ function sendReport(res, rows, countFields = []) {
   res.json(result);
 }
 
-// GET /api/reports/occupancy?branchId=
+// GET /api/reports/occupancy?branchId=&startDate=&endDate=&date=
 const occupancyReport = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'occupancy');
   if (!filters) return;
   const params = [];
   const branchFilter = filters.branchId === undefined ? '' : 'WHERE br.BranchID = ?';
   if (filters.branchId !== undefined) params.push(filters.branchId);
+
+  // If a selected date or date-range is supplied
+  if (filters.startDate !== undefined) {
+    const sDate = filters.startDate;
+    const eDate = filters.endDate;
+    const queryParams = [eDate, sDate, sDate, sDate];
+    if (filters.branchId !== undefined) queryParams.push(filters.branchId);
+
+    const [roomRows] = await pool.query(
+      `SELECT br.BranchID, br.Name AS BranchName, r.RoomID, r.RoomStatus,
+              MAX(CASE
+                WHEN b.BookingStatus != 'Cancelled'
+                 AND DATE(stay.CheckInDateTime) <= ?
+                 AND (DATE(stay.CheckOutDateTime) > ? OR (DATE(stay.CheckInDateTime) = ? AND DATE(stay.CheckOutDateTime) = ?))
+                THEN 1 ELSE 0
+              END) AS IsOccupied
+       FROM BRANCH br
+       LEFT JOIN ROOM r ON r.BranchID = br.BranchID
+       LEFT JOIN BOOKED_ROOMS stay ON stay.RoomID = r.RoomID
+       LEFT JOIN BOOKING b ON b.BookingID = stay.BookingID
+       ${branchFilter}
+       GROUP BY br.BranchID, br.Name, r.RoomID, r.RoomStatus
+       ORDER BY br.Name, br.BranchID`,
+      queryParams
+    );
+
+    const branchMap = new Map();
+    for (const row of roomRows) {
+      if (!branchMap.has(row.BranchID)) {
+        branchMap.set(row.BranchID, {
+          BranchID: row.BranchID,
+          BranchName: row.BranchName,
+          Occupied: 0,
+          Available: 0,
+          Maintenance: 0,
+          TotalRooms: 0,
+        });
+      }
+      const b = branchMap.get(row.BranchID);
+      if (row.RoomID !== null) {
+        b.TotalRooms += 1;
+        if (row.IsOccupied === 1) {
+          b.Occupied += 1;
+        } else if (row.RoomStatus === 'Maintenance') {
+          b.Maintenance += 1;
+        } else {
+          b.Available += 1;
+        }
+      }
+    }
+
+    sendReport(res, Array.from(branchMap.values()), ['Occupied', 'Available', 'Maintenance', 'TotalRooms']);
+    return;
+  }
+
+  // Otherwise: Real-time current snapshot of ROOM.RoomStatus
   const [rows] = await pool.query(
     `SELECT br.BranchID, br.Name AS BranchName,
             COALESCE(SUM(r.RoomStatus = 'Occupied'), 0) AS Occupied,
@@ -109,34 +169,79 @@ const billingSummary = asyncHandler(async (req, res) => {
   sendReport(res, rows);
 });
 
-function serviceQuery(filters, top) {
+function topServiceQuery(filters) {
   const params = [];
   const branchFilter = filters.branchId === undefined
     ? '' : "WHERE scope.BranchScope = 'single' AND scope.BranchID = ?";
   if (filters.branchId !== undefined) params.push(filters.branchId);
-  if (top) params.push(filters.limit);
+  params.push(filters.limit);
   return {
     sql: `SELECT sc.ServiceID, sc.ServiceName, COUNT(*) AS TimesUsed,
                  SUM(su.Quantity) AS TotalQuantity,
-                 CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue
+                 CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue,
+                 COUNT(CASE WHEN su.UsageDate >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 END) AS CurrentMonthUsage,
+                 COUNT(CASE
+                   WHEN su.UsageDate >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                    AND su.UsageDate < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                   THEN 1
+                 END) AS PreviousMonthUsage,
+                 COUNT(CASE WHEN su.UsageDate >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 END) AS RecentUsage30Days
           FROM SERVICE_USAGE su
           JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
           JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
           ${branchFilter}
           GROUP BY sc.ServiceID, sc.ServiceName
-          ${top
-    ? 'ORDER BY TimesUsed DESC, TotalQuantity DESC, sc.ServiceID ASC LIMIT ?'
-    : 'ORDER BY SUM(su.Quantity * su.PriceAtUsage) DESC, sc.ServiceID ASC'}`,
+          ORDER BY TimesUsed DESC, TotalQuantity DESC, sc.ServiceID ASC LIMIT ?`,
     params,
   };
 }
 
-// GET /api/reports/service-usage?branchId=
+// GET /api/reports/service-usage?branchId=&roomId=&serviceId=
+
 const serviceUsageBreakdown = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'services');
   if (!filters) return;
-  const { sql, params } = serviceQuery(filters, false);
-  const [rows] = await pool.query(sql, params);
+  const params = [];
+  const conditions = [];
+
+  if (filters.branchId !== undefined) {
+    conditions.push("scope.BranchScope = 'single' AND scope.BranchID = ?");
+    params.push(filters.branchId);
+  }
+  if (filters.roomId !== undefined) {
+    conditions.push('EXISTS (SELECT 1 FROM BOOKED_ROOMS room_filter WHERE room_filter.BookingID = su.BookingID AND room_filter.RoomID = ?)');
+    params.push(filters.roomId);
+  }
+  if (filters.serviceId !== undefined) {
+    conditions.push('sc.ServiceID = ?');
+    params.push(filters.serviceId);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [rows] = await pool.query(
+    `SELECT scope.RoomID, scope.RoomScope,
+            CASE WHEN scope.RoomScope = 'single' THEN scope.RoomNumber
+                 WHEN scope.RoomScope = 'multiple' THEN 'Multiple rooms'
+                 ELSE 'Unassigned room' END AS RoomNumber,
+            scope.BranchID,
+            ${branchName} AS BranchName,
+            scope.BranchScope,
+            sc.ServiceID,
+            sc.ServiceName,
+            COUNT(su.UsageID) AS TimesUsed,
+            SUM(su.Quantity) AS TotalQuantity,
+            CAST(SUM(su.Quantity * su.PriceAtUsage) AS CHAR) AS TotalRevenue
+     FROM SERVICE_USAGE su
+     JOIN SERVICE_CATALOGUE sc ON sc.ServiceID = su.ServiceID
+     JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
+     LEFT JOIN BRANCH br ON br.BranchID = scope.BranchID
+     ${whereClause}
+     GROUP BY scope.RoomID, scope.RoomNumber, scope.RoomScope, scope.BranchID, scope.BranchScope, br.Name, sc.ServiceID, sc.ServiceName
+     ORDER BY BranchName, RoomNumber, TotalRevenue DESC, sc.ServiceID`,
+    params
+  );
+
   sendReport(res, rows, ['TimesUsed', 'TotalQuantity']);
 });
 
@@ -184,10 +289,53 @@ const monthlyRevenueByBranch = asyncHandler(async (req, res) => {
 const topServices = asyncHandler(async (req, res) => {
   const filters = reportFilters(req, res, 'top');
   if (!filters) return;
-  const { sql, params } = serviceQuery(filters, true);
+  const { sql, params } = topServiceQuery(filters);
   // mysql2.query safely binds the numeric LIMIT; no user text is interpolated.
   const [rows] = await pool.query(sql, params);
-  sendReport(res, rows, ['TimesUsed', 'TotalQuantity']);
+
+  // Calculate overall total usage across services to compute preference share
+  const branchFilter = filters.branchId === undefined
+    ? '' : "WHERE scope.BranchScope = 'single' AND scope.BranchID = ?";
+  const branchParams = filters.branchId === undefined ? [] : [filters.branchId];
+  const [totalRows] = await pool.query(
+    `SELECT COUNT(*) AS TotalOverallUsage, COALESCE(SUM(su.Quantity), 0) AS TotalOverallQuantity
+     FROM SERVICE_USAGE su
+     JOIN (${bookingBranches}) scope ON scope.BookingID = su.BookingID
+     ${branchFilter}`,
+    branchParams
+  );
+
+  const totalOverall = Number(totalRows[0]?.TotalOverallUsage) || 0;
+
+  const enrichedRows = rows.map((row) => {
+    const timesUsed = Number(row.TimesUsed) || 0;
+    const currentMonth = Number(row.CurrentMonthUsage) || 0;
+    const previousMonth = Number(row.PreviousMonthUsage) || 0;
+
+    const sharePercent = totalOverall > 0
+      ? Number(((timesUsed / totalOverall) * 100).toFixed(1))
+      : 0;
+
+    let trend = 'Stable';
+    if (previousMonth === 0 && currentMonth > 0) {
+      trend = 'Rising (New)';
+    } else if (previousMonth > 0) {
+      const diff = currentMonth - previousMonth;
+      const pct = Math.round((diff / previousMonth) * 100);
+      if (pct > 0) trend = `Rising (+${pct}%)`;
+      else if (pct < 0) trend = `Declining (${pct}%)`;
+      else trend = 'Stable (0%)';
+    }
+
+    return {
+      ...row,
+      PreferenceShare: `${sharePercent}%`,
+      PreferenceShareValue: sharePercent,
+      Trend: trend,
+    };
+  });
+
+  sendReport(res, enrichedRows, ['TimesUsed', 'TotalQuantity', 'CurrentMonthUsage', 'PreviousMonthUsage', 'RecentUsage30Days']);
 });
 
 module.exports = {

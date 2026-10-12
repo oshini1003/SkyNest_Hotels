@@ -40,14 +40,65 @@ function projectStatements(source) {
   return statements;
 }
 
+function projectScripts(read = file => fs.readFileSync(path.join(__dirname, file), 'utf8')) {
+  const scripts = ['tables.sql', 'functions.sql', 'schema.sql', 'seed.sql']
+    .map(file => ({ file, statements: projectStatements(read(file)) }));
+  const definitions = new Map();
+  const keyOf = sql => {
+    const object = /^CREATE\s+(TABLE|FUNCTION|PROCEDURE|TRIGGER)\s+([A-Za-z_][A-Za-z_0-9]*)\b/i.exec(sql);
+    if (object) return `${object[1].toUpperCase()}:${object[2]}`;
+    const index = /^CREATE\s+INDEX\s+([A-Za-z_][A-Za-z_0-9]*)\s+ON\s+([A-Za-z_][A-Za-z_0-9]*)\b/i.exec(sql);
+    return index ? `INDEX:${index[2]}:${index[1]}` : null;
+  };
+
+
+  const normalize = sql => (sql.match(/'(?:''|\\.|[^'\\])*'|"(?:""|\\.|[^"\\])*"|`(?:``|[^`])*`|--(?=\s)[^\r\n]*|[A-Za-z_][A-Za-z_0-9]*|\d+|[^\s]/g) || [])
+    .filter(token => !token.startsWith('--')).join(' ');
+
+  for (const script of scripts.slice(0, -1)) {
+    for (const sql of script.statements) {
+      if (script.file === 'tables.sql' && /^SET FOREIGN_KEY_CHECKS = [01]$/i.test(sql)) continue;
+      const key = keyOf(sql);
+      const allowed = {
+        'tables.sql': /^(TABLE|INDEX):/,
+        'functions.sql': /^FUNCTION:/,
+        'schema.sql': /^(PROCEDURE|TRIGGER):/,
+      };
+      if (!key || !allowed[script.file].test(key) || definitions.has(key)) {
+        throw new Error(`Unexpected or duplicate definition in ${script.file}.`);
+      }
+      definitions.set(key, normalize(sql));
+    }
+  }
+
+  for (const [type, expected] of Object.entries({
+    TABLE: 17, INDEX: 9, FUNCTION: 4, PROCEDURE: 7, TRIGGER: 8,
+  })) {
+    if ([...definitions.keys()].filter(key => key.startsWith(type + ':')).length !== expected) {
+      throw new Error(`Expected ${expected} ${type} definitions in the fresh setup files.`);
+    }
+  }
+
+  for (const file of ['tables_indexes.sql', 'procedures.sql']) {
+    const seen = new Set();
+    for (const sql of projectStatements(read(file))) {
+      if (file === 'tables_indexes.sql' && /^SET FOREIGN_KEY_CHECKS = [01]$/i.test(sql)) continue;
+      const key = keyOf(sql);
+      if (!key || seen.has(key) || definitions.get(key) !== normalize(sql)) {
+        throw new Error(`${file} contains an unexpected, duplicate or different definition. Review the split SQL files before setup.`);
+      }
+      seen.add(key);
+    }
+  }
+  return scripts;
+}
+
+
 async function main() {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
   const mysql = require('mysql2/promise');
   const database = integrationDatabaseName(process.env.DB_NAME);
-  const scripts = ['schema.sql', 'seed.sql'].map(file => ({
-    file,
-    statements: projectStatements(fs.readFileSync(path.join(__dirname, file), 'utf8')),
-  }));
+  const scripts = projectScripts();
   if (process.env.DB_PASSWORD === 'replace-with-your-local-mysql-password') {
     throw new Error('Set your actual local MySQL password in backend/.env first.');
   }
@@ -121,4 +172,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { integrationDatabaseName, projectStatements };
+module.exports = { integrationDatabaseName, projectStatements, projectScripts, main };

@@ -1,8 +1,8 @@
 const maxSqlInteger = 2147483647;
 const filtersByReport = Object.freeze({
-  occupancy: ['branchId'],
+  occupancy: ['branchId', 'startDate', 'endDate', 'date'],
   billing: ['branchId', 'outstandingOnly'],
-  services: ['branchId'],
+  services: ['branchId', 'roomId', 'serviceId'],
   revenue: ['branchId', 'year', 'month'],
   top: ['branchId', 'limit'],
 });
@@ -32,6 +32,17 @@ function validateReportQuery(report, query) {
       value.outstandingOnly = raw === 'true';
       continue;
     }
+    if (key === 'startDate' || key === 'endDate' || key === 'date') {
+      if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return { error: `${key} must be a valid date in YYYY-MM-DD format.` };
+      }
+      const d = new Date(`${raw}T00:00:00Z`);
+      if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== raw) {
+        return { error: `${key} is not a valid calendar date.` };
+      }
+      value[key] = raw;
+      continue;
+    }
     const maximum = key === 'year' ? 9999 : key === 'month' ? 12 : key === 'limit' ? 50 : maxSqlInteger;
     const minimum = key === 'year' ? 1000 : 1;
     if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw)
@@ -39,6 +50,24 @@ function validateReportQuery(report, query) {
       return { error: `${key} must be a whole number from ${minimum} to ${maximum}, without leading zeros.` };
     }
     value[key] = Number(raw);
+  }
+  if (value.date !== undefined) {
+    if (value.startDate !== undefined || value.endDate !== undefined) {
+      return { error: 'Use either date or startDate/endDate, not both.' };
+    }
+    value.startDate = value.date;
+    value.endDate = value.date;
+  }
+  if (value.startDate !== undefined && value.endDate === undefined) {
+    value.endDate = value.startDate;
+  }
+  if (value.endDate !== undefined && value.startDate === undefined) {
+    return { error: 'startDate is required when endDate is provided.' };
+  }
+  if (value.startDate !== undefined && value.endDate !== undefined) {
+    if (value.startDate > value.endDate) {
+      return { error: 'startDate cannot be later than endDate.' };
+    }
   }
   if (value.month !== undefined && value.year === undefined) {
     return { error: 'Choose a year when filtering by month.' };
