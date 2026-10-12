@@ -136,6 +136,14 @@ connected at `/staff/bookings/:id/bill`. Manager/Admin reports are live at
 | `/api/rooms` | GET | Public | Search rooms by optional `roomId`, `branchId`, `roomTypeId`, `guestCount`, `checkin` and `checkout` |
 | `/api/rooms` | POST | Admin/Manager | Create a room |
 | `/api/rooms/:id/status` | PATCH | Admin/Manager/Receptionist | Update room status |
+| `/api/branches/:id`     | PUT    | Admin/Manager | Update a branch (any of `name`, `location`, `contactNumber`) |
+| `/api/branches/:id`     | DELETE | Admin/Manager | Delete a branch (409 if rooms still belong to it) |
+| `/api/room-types/:id`   | PUT    | Admin/Manager | Update a room type (`name`, `capacity`, `dailyRate`, optional `amenityIds` list that replaces its amenities) |
+| `/api/room-types/:id`   | DELETE | Admin/Manager | Delete a room type (409 if rooms use it) |
+| `/api/amenities/:id`    | PUT    | Admin/Manager | Rename an amenity |
+| `/api/amenities/:id`    | DELETE | Admin/Manager | Delete an amenity and unlink it from room types |
+| `/api/rooms/:id`        | PUT    | Admin/Manager | Change `roomNumber` and/or `roomTypeId` (409 if the room has an active booking) |
+| `/api/rooms/:id`        | DELETE | Admin/Manager | Delete a room (409 if active booking or booking history exists) |
 
 For an availability search, supply both dates in `YYYY-MM-DD` format. Check-in
 must be today or later in the backend server's local time; check-out must be
