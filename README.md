@@ -1,4 +1,4 @@
-# SkyNest Hotels — Hotel Reservation & Guest Services Management System (HRGSMS)
+# SkyNest Hotels — Hotel Reservation & Guest Services Management System
 
 > **CS3043 Database Systems — Group 36**  
 > A full-stack, enterprise-grade hotel reservation and guest services management platform designed for **SkyNest Hotels**, a three-branch luxury hotel chain located in Colombo, Kandy, and Galle, Sri Lanka.
@@ -9,13 +9,11 @@
 - [Executive Overview](#-executive-overview)
 - [System Architecture & Tech Stack](#-system-architecture--tech-stack)
 - [Core Features & Functional Modules](#-core-features--functional-modules)
-- [Database Architecture & Data Integrity](#-database-architecture--data-integrity)
 - [Team Member Contributions](#-team-member-contributions)
 - [Quick Start / Local Setup Guide](#-quick-start--local-setup-guide)
 - [Demo Credentials](#-demo-credentials)
 - [Verification & Automated Testing](#-verification--automated-testing)
 - [Cloud Deployment Architecture](#-cloud-deployment-architecture)
-- [Academic Declaration & License](#-academic-declaration--license)
 
 ---
 
@@ -99,33 +97,13 @@ The system ensures end-to-end data integrity through ACID-compliant MySQL stored
 
 ---
 
-## 🗄 Database Architecture & Data Integrity
-
-The database guarantees referential integrity, concurrency control, and transactional safety:
-
-* **Pessimistic Concurrency Control:** `FOR UPDATE` locking during room selection to prevent concurrent double-booking race conditions.
-* **Triggers:**
-  * `trg_prevent_overlap_booking`: Pre-insert overlap validation on `BOOKED_ROOMS`.
-  * `trg_room_status_sync`: Synchronizes `ROOM.RoomStatus` with `BOOKING.BookingStatus` on check-in/checkout.
-  * `trg_prevent_checkout_with_due`: Blocks status changes to `Checked-Out` if unpaid dues exist.
-  * `trg_audit_log_no_update` & `trg_audit_log_no_delete`: Protects the audit ledger from tampering.
-* **Stored Procedures:**
-  * `sp_make_booking`: Validates parameters and commits atomic reservations.
-  * `sp_log_service_usage`: Records service usage, captures unit prices, and triggers bill recalculations.
-  * `sp_recalculate_bill`: Recalculates total room charges and service add-ons.
-  * `sp_process_payment`: Inserts payments, updates bill statuses, and generates audit entries.
-* **User-Defined Functions:**
-  * `fn_calculate_outstanding_balance`: Returns remaining unsettled balances for any booking.
-
----
-
 ## 👥 Team Member Contributions
 
 The system was designed, developed, and tested through coordinated teamwork among the group members:
 
 ---
 
-### 1. Sharaf M.F.M. — `240619V`
+### 1. Sharaf M.F.M. — `240619V`(Sharaf0713)
 * **Backend Architecture — Booking, Billing & Payments:**
   * Implemented backend business logic for reservation handling, room charging, and payment processing.
   * Integrated payment gateways and receipt generation workflows.
@@ -138,7 +116,7 @@ The system was designed, developed, and tested through coordinated teamwork amon
 
 ---
 
-### 2. Lakshan G.D.T. — `240378E`
+### 2. Lakshan G.D.T. — `240378E`(lakshangamage15)
 * **Frontend User Interfaces:**
   * **Guest Authentication & Account:** Developed `GuestLogin.jsx`, `GuestRegister.jsx`, and `GuestProfile.jsx`.
   * **Room Booking Interface:** Built `makebooking.jsx` with real-time date selection, room type filtering, and procedure integration.
@@ -152,7 +130,7 @@ The system was designed, developed, and tested through coordinated teamwork amon
 
 ---
 
-### 3. Rathnayaka K.A.A.T. — `240561J`
+### 3. Rathnayaka K.A.A.T. — `240561J`(Anushka-Rathnayaka)
 * **Frontend Development & User Experience:**
   * Developed and enhanced guest authentication, room search, booking flow, bill history, and service ordering.
   * Improved staff interfaces: booking lists, detailed guest cards, service usage entry, and checkout screens.
@@ -172,7 +150,7 @@ The system was designed, developed, and tested through coordinated teamwork amon
 
 ---
 
-### 4. Kavindi P.V.O. — `240343T`
+### 4. Kavindi P.V.O. — `240343T`(oshini1003)
 * **Backend — Authentication & Access Control:**
   * Implemented enterprise-grade JWT authentication with **Refresh Token Rotation** (`/api/auth/refresh`).
   * Implemented Bcrypt password hashing and secure credential validation for both guests and staff.
@@ -195,7 +173,7 @@ The system was designed, developed, and tested through coordinated teamwork amon
 
 ---
 
-### 5. Nanayakkara T.S. — `240451X`
+### 5. Nanayakkara T.S. — `240451X`(semaleenanayakkara)
 * **Backend — Reservation & Stay Lifecycle:**
   * Developed complete booking lifecycle endpoints: create reservation, cancel reservation, check-in, and check-out.
   * Built booking search and detail endpoints with stay status resolution.
@@ -322,13 +300,3 @@ SkyNest Hotels is production-ready for modular cloud deployment:
 * **Database (MySQL 8):** Hosted on **Aiven.io** (or Railway) with managed SSL/TLS connection pools (`DB_SSL=true`).
 * **Backend API (Node/Express):** Hosted on **Render.com** (Web Service connecting to Aiven MySQL).
 * **Frontend Client (React/Vite):** Hosted on **Vercel** with client-side SPA route rewrites (`vercel.json`).
-
----
-
-## 📜 Academic Declaration & License
-
-This project was developed as the comprehensive group coursework submission for **CS3043: Database Systems**, Department of Computer Science & Engineering.
-
-* **Client:** SkyNest Hotels (Fictional hotel chain created for academic modeling).
-* **Academic Year:** 2026
-* **License:** Educational & Academic Use Only.
