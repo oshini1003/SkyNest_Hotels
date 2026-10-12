@@ -1,0 +1,16 @@
+.git
+**/.git
+**/node_modules
+**/dist
+**/build
+**/.env
+**/.env.*
+**/*.log
+**/*.zip
+**/*.patch
+**/coverage
+**/.DS_Store
+**/Thumbs.db
+**/.vscode
+**/.idea
+tsauth-regression.cjs
