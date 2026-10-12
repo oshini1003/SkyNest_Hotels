@@ -3,6 +3,14 @@
 > **CS3043 Database Systems — Group 36**  
 > A full-stack, enterprise-grade hotel reservation and guest services management platform designed for **SkyNest Hotels**, a three-branch luxury hotel chain located in Colombo, Kandy, and Galle, Sri Lanka.
 
+[![Live Frontend](https://img.shields.io/badge/Live_Frontend-Vercel-black?style=for-the-badge&logo=vercel)](https://sky-nest-hotels.vercel.app/)
+[![Backend API](https://img.shields.io/badge/Backend_API-Render-46E3B7?style=for-the-badge&logo=render)](https://skynest-backend.onrender.com/api/health)
+[![Database](https://img.shields.io/badge/Database-Aiven_MySQL-FF3E00?style=for-the-badge&logo=mysql)](https://aiven.io)
+
+* **🌐 Live Web Application:** [https://sky-nest-hotels.vercel.app/](https://sky-nest-hotels.vercel.app/)  
+* **⚙️ Live Backend API:** [https://skynest-backend.onrender.com](https://skynest-backend.onrender.com)  
+* **🩺 API Health Check:** [https://skynest-backend.onrender.com/api/health](https://skynest-backend.onrender.com/api/health)
+
 ---
 
 ## 📌 Table of Contents
@@ -295,8 +303,11 @@ npm run build
 
 ## ☁️ Cloud Deployment Architecture
 
-SkyNest Hotels is production-ready for modular cloud deployment:
+SkyNest Hotels is production-deployed across a modular, 3-tier cloud architecture:
 
-* **Database (MySQL 8):** Hosted on **Aiven.io** (or Railway) with managed SSL/TLS connection pools (`DB_SSL=true`).
-* **Backend API (Node/Express):** Hosted on **Render.com** (Web Service connecting to Aiven MySQL).
-* **Frontend Client (React/Vite):** Hosted on **Vercel** with client-side SPA route rewrites (`vercel.json`).
+* **Frontend Client (React 19 / Vite):** Hosted on **Vercel** with global CDN distribution and SPA rewrite routing (`vercel.json`).
+  * Live URL: [https://sky-nest-hotels.vercel.app/](https://sky-nest-hotels.vercel.app/)
+* **Backend API (Node.js / Express):** Hosted on **Render.com** as an auto-scaling web service.
+  * Live URL: [https://skynest-backend.onrender.com](https://skynest-backend.onrender.com)
+  * Health Endpoint: [https://skynest-backend.onrender.com/api/health](https://skynest-backend.onrender.com/api/health)
+* **Database (MySQL 8):** Managed cloud cluster hosted on **Aiven.io** with TLS/SSL encryption (`DB_SSL=true`), automated failover, and strict transactional integrity.

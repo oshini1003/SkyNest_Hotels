@@ -3,6 +3,12 @@
 > **React 19 & Vite Single Page Application (SPA)**  
 > Modern, responsive guest reservation portal and staff management client for **SkyNest Hotels**, communicating with the Node.js/Express backend REST API.
 
+[![Live Deployment](https://img.shields.io/badge/Deployed_on-Vercel-black?style=for-the-badge&logo=vercel)](https://sky-nest-hotels.vercel.app/)
+[![Backend Connection](https://img.shields.io/badge/API-Render-46E3B7?style=for-the-badge&logo=render)](https://skynest-backend.onrender.com)
+
+* **🌐 Live URL:** [https://sky-nest-hotels.vercel.app/](https://sky-nest-hotels.vercel.app/)  
+* **⚙️ Connected Backend:** `https://skynest-backend.onrender.com/api`
+
 ---
 
 ## 📌 Table of Contents
