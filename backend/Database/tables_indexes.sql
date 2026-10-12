@@ -85,17 +85,6 @@ CREATE TABLE PAYMENT (
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 SET FOREIGN_KEY_CHECKS = 1;
 
 CREATE INDEX idx_bookedrooms_room_dates ON BOOKED_ROOMS(RoomID, CheckInDateTime, CheckOutDateTime);
