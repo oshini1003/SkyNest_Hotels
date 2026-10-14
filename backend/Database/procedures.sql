@@ -512,4 +512,206 @@ proc_body: BEGIN
     COMMIT;
 END //
 
+-- Check-in: Booked -> Checked-In; rooms -> Occupied; opens a live BILL row
+-- (a BILL must exist before checkout so guests can make payments *during*
+-- their stay, not only at the very end)
+CREATE PROCEDURE sp_check_in(IN p_booking_id INT, IN p_staff_id INT)
+proc_body: BEGIN
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_staff_role VARCHAR(20) DEFAULT NULL;
+    DECLARE v_staff_branch_id INT DEFAULT NULL;
+    DECLARE v_scope_room_id INT DEFAULT NULL;
+    DECLARE v_foreign_room_id INT DEFAULT NULL;
+    DECLARE v_bill_id INT;
+    DECLARE v_operation_id CHAR(36);
+    DECLARE v_bill_after JSON;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    SELECT BookingStatus INTO v_status FROM BOOKING WHERE BookingID = p_booking_id FOR UPDATE;
+
+    SELECT Role, BranchID INTO v_staff_role, v_staff_branch_id
+    FROM STAFF WHERE StaffID = p_staff_id FOR SHARE;
+    IF v_staff_role IS NULL OR v_staff_role NOT IN ('Admin','Manager','Receptionist') THEN
+        SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'A permitted staff member is required.';
+    END IF;
+
+    IF v_staff_role IN ('Receptionist','ServiceStaff') THEN
+        IF v_staff_branch_id IS NULL THEN
+            SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'A permitted staff member is required.';
+        END IF;
+
+        -- The booking lock serialises room edits. Use current locking reads so
+        -- an earlier REPEATABLE READ snapshot cannot hide a committed room move.
+        -- ROOM.BranchID is immutable through the runtime account.
+        SELECT br.BookedRoomID INTO v_scope_room_id
+        FROM BOOKED_ROOMS br
+        WHERE br.BookingID = p_booking_id
+        ORDER BY br.BookedRoomID
+        LIMIT 1 FOR SHARE;
+
+        SELECT br.BookedRoomID INTO v_foreign_room_id
+        FROM BOOKED_ROOMS br
+        LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+        WHERE br.BookingID = p_booking_id
+          AND (r.BranchID IS NULL OR r.BranchID <> v_staff_branch_id)
+        ORDER BY br.BookedRoomID
+        LIMIT 1 FOR SHARE OF br;
+
+        -- Empty and mixed-branch bookings are unavailable to branch staff.
+        IF v_scope_room_id IS NULL OR v_foreign_room_id IS NOT NULL THEN
+            SIGNAL SQLSTATE '45003' SET MESSAGE_TEXT = 'Booking not found.';
+        END IF;
+    END IF;
+
+    IF v_status IS NULL OR v_status != 'Booked' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only a Booked reservation can be checked in.';
+    END IF;
+    SET v_operation_id = UUID();
+
+    -- Update the booking status to Checked-In
+    UPDATE BOOKING SET BookingStatus = 'Checked-In' WHERE BookingID = p_booking_id;
+    -- trg_room_status_sync marks the room(s) Occupied
+
+    INSERT INTO BILL (BookingID, RoomCharges, ServiceCharges, TotalAmount, BillStatus)
+    VALUES (p_booking_id, fn_calculate_room_charges(p_booking_id),
+            fn_calculate_service_charges(p_booking_id),
+            fn_calculate_bill_total(p_booking_id), 'Unpaid');
+    SET v_bill_id = LAST_INSERT_ID();
+
+    SELECT JSON_OBJECT(
+        'BillID', BillID, 'BookingID', BookingID,
+        'RoomCharges', CAST(RoomCharges AS CHAR),
+        'ServiceCharges', CAST(ServiceCharges AS CHAR),
+        'TotalAmount', CAST(TotalAmount AS CHAR),
+        'BillStatus', BillStatus, 'StaffID', StaffID
+    ) INTO v_bill_after FROM BILL WHERE BillID = v_bill_id FOR UPDATE;
+
+    INSERT INTO AUDIT_LOG
+        (OperationID, ActorType, StaffID, GuestID, BookingID, Action,
+         TableAffected, RecordID, OldValues, NewValues, Details)
+    VALUES
+        (v_operation_id, 'staff', p_staff_id, NULL, p_booking_id, 'Check-In',
+         'BOOKING', p_booking_id,
+         JSON_OBJECT('BookingID', p_booking_id, 'BookingStatus', v_status),
+         JSON_OBJECT('BookingID', p_booking_id, 'BookingStatus', 'Checked-In'),
+         'Reservation checked in.'),
+        (v_operation_id, 'staff', p_staff_id, NULL, p_booking_id, 'BillOpened',
+         'BILL', v_bill_id, NULL, v_bill_after, 'Bill opened at check-in.');
+
+    COMMIT;
+END //
+
+-- Check-out: recalculates + finalises the BILL, verifies balance is settled,
+-- frees the room(s)
+CREATE PROCEDURE sp_check_out(IN p_booking_id INT, IN p_staff_id INT)
+proc_body: BEGIN
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_staff_role VARCHAR(20) DEFAULT NULL;
+    DECLARE v_staff_branch_id INT DEFAULT NULL;
+    DECLARE v_scope_room_id INT DEFAULT NULL;
+    DECLARE v_foreign_room_id INT DEFAULT NULL;
+    DECLARE v_bill_id INT DEFAULT NULL;
+    DECLARE v_operation_id CHAR(36);
+    DECLARE v_bill_before JSON;
+    DECLARE v_bill_after JSON;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    SELECT BookingStatus INTO v_status FROM BOOKING WHERE BookingID = p_booking_id FOR UPDATE;
+
+    SELECT Role, BranchID INTO v_staff_role, v_staff_branch_id
+    FROM STAFF WHERE StaffID = p_staff_id FOR SHARE;
+    IF v_staff_role IS NULL OR v_staff_role NOT IN ('Admin','Manager','Receptionist') THEN
+        SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'A permitted staff member is required.';
+    END IF;
+
+    IF v_staff_role IN ('Receptionist','ServiceStaff') THEN
+        IF v_staff_branch_id IS NULL THEN
+            SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'A permitted staff member is required.';
+        END IF;
+
+        -- The booking lock serialises room edits. Use current locking reads so
+        -- an earlier REPEATABLE READ snapshot cannot hide a committed room move.
+        -- ROOM.BranchID is immutable through the runtime account.
+        SELECT br.BookedRoomID INTO v_scope_room_id
+        FROM BOOKED_ROOMS br
+        WHERE br.BookingID = p_booking_id
+        ORDER BY br.BookedRoomID
+        LIMIT 1 FOR SHARE;
+
+        SELECT br.BookedRoomID INTO v_foreign_room_id
+        FROM BOOKED_ROOMS br
+        LEFT JOIN ROOM r ON r.RoomID = br.RoomID
+        WHERE br.BookingID = p_booking_id
+          AND (r.BranchID IS NULL OR r.BranchID <> v_staff_branch_id)
+        ORDER BY br.BookedRoomID
+        LIMIT 1 FOR SHARE OF br;
+
+        -- Empty and mixed-branch bookings are unavailable to branch staff.
+        IF v_scope_room_id IS NULL OR v_foreign_room_id IS NOT NULL THEN
+            SIGNAL SQLSTATE '45003' SET MESSAGE_TEXT = 'Booking not found.';
+        END IF;
+    END IF;
+
+    IF v_status IS NULL OR v_status != 'Checked-In' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only a Checked-In booking can be checked out.';
+    END IF;
+
+    SELECT BillID, JSON_OBJECT(
+        'BillID', BillID, 'BookingID', BookingID,
+        'RoomCharges', CAST(RoomCharges AS CHAR),
+        'ServiceCharges', CAST(ServiceCharges AS CHAR),
+        'TotalAmount', CAST(TotalAmount AS CHAR),
+        'BillStatus', BillStatus, 'StaffID', StaffID
+    ) INTO v_bill_id, v_bill_before FROM BILL WHERE BookingID = p_booking_id FOR UPDATE;
+    IF v_bill_id IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No bill exists yet for this booking.';
+    END IF;
+    SET v_operation_id = UUID();
+
+    -- Billing stays based on the reserved window (see note in sp_check_in);
+    -- we do not overwrite CheckOutDateTime here.
+    CALL sp_recalculate_bill(p_booking_id);
+    UPDATE BILL SET StaffID = p_staff_id WHERE BookingID = p_booking_id;
+
+    -- blocked by trg_prevent_checkout_with_due if a balance remains unpaid
+    UPDATE BOOKING SET BookingStatus = 'Checked-Out' WHERE BookingID = p_booking_id;
+    -- trg_room_status_sync marks the room(s) Available
+
+    SELECT JSON_OBJECT(
+        'BillID', BillID, 'BookingID', BookingID,
+        'RoomCharges', CAST(RoomCharges AS CHAR),
+        'ServiceCharges', CAST(ServiceCharges AS CHAR),
+        'TotalAmount', CAST(TotalAmount AS CHAR),
+        'BillStatus', BillStatus, 'StaffID', StaffID
+    ) INTO v_bill_after FROM BILL WHERE BillID = v_bill_id FOR UPDATE;
+
+    INSERT INTO AUDIT_LOG
+        (OperationID, ActorType, StaffID, GuestID, BookingID, Action,
+         TableAffected, RecordID, OldValues, NewValues, Details)
+    VALUES
+        (v_operation_id, 'staff', p_staff_id, NULL, p_booking_id, 'Check-Out',
+         'BOOKING', p_booking_id,
+         JSON_OBJECT('BookingID', p_booking_id, 'BookingStatus', v_status),
+         JSON_OBJECT('BookingID', p_booking_id, 'BookingStatus', 'Checked-Out'),
+         'Reservation checked out.'),
+        (v_operation_id, 'staff', p_staff_id, NULL, p_booking_id, 'BillFinalized',
+         'BILL', v_bill_id, v_bill_before, v_bill_after, 'Bill finalized at checkout.');
+
+    COMMIT;
+END //
+
 DELIMITER ;
