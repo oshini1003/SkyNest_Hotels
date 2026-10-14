@@ -1,6 +1,5 @@
 DELIMITER //
--- Recalculates the live BILL row for a Checked-In booking. Called after any
--- service usage is logged, and again at checkout to lock in final totals.
+
 CREATE PROCEDURE sp_recalculate_bill(IN p_booking_id INT)
 proc_body: BEGIN
     DECLARE v_room_charges DECIMAL(10,2);
@@ -8,9 +7,7 @@ proc_body: BEGIN
     DECLARE v_total DECIMAL(10,2);
     DECLARE v_balance DECIMAL(10,2);
 
-    -- The room charge is fixed when check-in opens the bill. Catalogue rate
-    -- changes must not reprice this stay during service entry or checkout.
-    -- The calling procedure already holds the booking lock; lock its bill next.
+
     SELECT RoomCharges INTO v_room_charges
     FROM BILL WHERE BookingID = p_booking_id FOR UPDATE;
     IF v_room_charges IS NULL THEN
@@ -29,7 +26,6 @@ proc_body: BEGIN
     WHERE BookingID = p_booking_id;
 END //
 
--- Log service usage: only allowed while the booking is Checked-In
 CREATE PROCEDURE sp_log_service_usage(
     IN p_booking_id INT,
     IN p_service_id INT,
@@ -79,9 +75,6 @@ proc_body: BEGIN
                 SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'A permitted staff member is required.';
             END IF;
 
-            -- The booking lock serialises room edits. Use current locking reads so
-            -- an earlier REPEATABLE READ snapshot cannot hide a committed room move.
-            -- ROOM.BranchID is immutable through the runtime account.
             SELECT br.BookedRoomID INTO v_scope_room_id
             FROM BOOKED_ROOMS br
             WHERE br.BookingID = p_booking_id
@@ -193,8 +186,6 @@ proc_body: BEGIN
 
     START TRANSACTION;
 
-    -- Match the booking-first lock order used by service usage and checkout.
-    -- This keeps payments, added services and checkout from racing each other.
     SELECT BookingStatus INTO v_status FROM BOOKING WHERE BookingID = p_booking_id FOR UPDATE;
     SELECT Role, BranchID INTO v_staff_role, v_staff_branch_id
     FROM STAFF WHERE StaffID = p_staff_id FOR SHARE;
@@ -207,9 +198,6 @@ proc_body: BEGIN
             SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'A permitted staff member is required.';
         END IF;
 
-        -- The booking lock serialises room edits. Use current locking reads so
-        -- an earlier REPEATABLE READ snapshot cannot hide a committed room move.
-        -- ROOM.BranchID is immutable through the runtime account.
         SELECT br.BookedRoomID INTO v_scope_room_id
         FROM BOOKED_ROOMS br
         WHERE br.BookingID = p_booking_id
@@ -224,7 +212,6 @@ proc_body: BEGIN
         ORDER BY br.BookedRoomID
         LIMIT 1 FOR SHARE OF br;
 
-        -- Empty and mixed-branch bookings are unavailable to branch staff.
         IF v_scope_room_id IS NULL OR v_foreign_room_id IS NOT NULL THEN
             SIGNAL SQLSTATE '45003' SET MESSAGE_TEXT = 'Booking not found.';
         END IF;
@@ -364,8 +351,6 @@ proc_body: BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Guest count exceeds room capacity.';
     END IF;
 
-    -- A locking read sees bookings committed while this request waited for
-    -- the room, including under InnoDB REPEATABLE READ isolation.
     SELECT br.BookedRoomID INTO v_conflict
     FROM BOOKED_ROOMS br
     JOIN BOOKING b ON b.BookingID = br.BookingID
@@ -390,8 +375,6 @@ proc_body: BEGIN
     COMMIT;
 END //
 
--- Change the room, stay dates or guest count of one room entry on a Booked
--- reservation. NULL parameters keep the current value.
 CREATE PROCEDURE sp_update_booked_room(
     IN p_booking_id INT,
     IN p_booked_room_id INT,
@@ -428,8 +411,6 @@ proc_body: BEGIN
 
     START TRANSACTION;
 
-    -- Booking lock first, as in check-in, check-out and payments. It also
-    -- serialises this edit with cancellation and check-in.
     SELECT BookingStatus INTO v_status FROM BOOKING WHERE BookingID = p_booking_id FOR UPDATE;
     IF p_staff_id IS NOT NULL THEN
         SELECT Role, BranchID INTO v_staff_role, v_staff_branch_id
@@ -457,7 +438,6 @@ proc_body: BEGIN
             ORDER BY br.BookedRoomID
             LIMIT 1 FOR SHARE OF br;
 
-            -- Empty and mixed-branch bookings are unavailable to branch staff.
             IF v_scope_room_id IS NULL OR v_foreign_room_id IS NOT NULL THEN
                 SIGNAL SQLSTATE '45003' SET MESSAGE_TEXT = 'Booking not found.';
             END IF;
